@@ -1,0 +1,316 @@
+{
+  "$schema": "https://acme.com.br/forge/validation-rules-v1.json",
+  "validation_rules_version": "0.2.0",
+  "constitution_version": "0.2.0",
+  "rules": {
+    "C1_diagnose_before_design": {
+      "principle": "C1",
+      "name": "Diagnose-before-design",
+      "checks": [
+        {
+          "id": "C1.1",
+          "description": "Toda spec de SKU/produto em produção referencia diagnostic via frontmatter",
+          "validation": "regex_in_frontmatter",
+          "field": "linked_diagnostic",
+          "exemption_field": "is_example",
+          "exemption_value": true
+        },
+        {
+          "id": "C1.2",
+          "description": "Diagnostic referenciado existe e tem seções mínimas",
+          "validation": "file_exists_and_has_sections",
+          "required_sections": ["problema declarado", "baseline humano", "outcome proposto", "métrica de sucesso"]
+        }
+      ],
+      "status_thresholds": {
+        "pass": "100% dos agentes em produção têm diagnóstico válido",
+        "warn": "1-2 agentes sem diagnóstico mas exceção plausível",
+        "fail": ">= 3 agentes sem diagnóstico ou diagnóstico inválido"
+      }
+    },
+    "C2_outcome_first": {
+      "principle": "C2",
+      "name": "Outcome-first, never tech-first",
+      "checks": [
+        {
+          "id": "C2.1",
+          "description": "Spec tem seção §1 'Cláusula de outcome' com elementos obrigatórios",
+          "validation": "section_has_subsections",
+          "section": "Cláusula de outcome",
+          "required_subsections": [
+            "Definição em uma frase",
+            "Três exemplos POSITIVOS",
+            "Três exemplos NEGATIVOS",
+            "Janela temporal de estabilidade",
+            "Evento técnico que dispara DELIVERED"
+          ]
+        },
+        {
+          "id": "C2.2",
+          "description": "Schema de saída do código corresponde a categorias declaradas na spec",
+          "validation": "schema_matches_spec",
+          "code_path_glob": "src/{skus,products}/*/schemas/*.ts",
+          "spec_field": "categories"
+        }
+      ],
+      "status_thresholds": {
+        "pass": "100% das specs com cláusula completa",
+        "warn": "1 elemento ausente em <= 30% das specs",
+        "fail": "cláusula ausente ou múltiplos elementos faltando em qualquer spec"
+      }
+    },
+    "C3_cost_25_percent": {
+      "principle": "C3",
+      "name": "Cost <= 25% of price",
+      "checks": [
+        {
+          "id": "C3.1",
+          "description": "Spec tem unit-economics.md correspondente",
+          "validation": "file_exists",
+          "linked_field": "linked_unit_economics"
+        },
+        {
+          "id": "C3.2",
+          "description": "Razão custo/preço documentada <= 25%",
+          "validation": "numeric_comparison",
+          "field": "cost_to_price_ratio",
+          "operator": "<=",
+          "value": 0.25
+        },
+        {
+          "id": "C3.3",
+          "description": "Razão real (Langfuse 30d) <= 25%",
+          "validation": "telemetry_query",
+          "query": "SELECT AVG(cost_brl / price_brl) FROM outcomes WHERE created_at > NOW() - INTERVAL '30 days' AND status IN ('DELIVERED', 'BILLED') GROUP BY sku",
+          "operator": "<=",
+          "value": 0.25
+        },
+        {
+          "id": "C3.4",
+          "description": "Drift de custo mês N vs N-1 < 15%",
+          "validation": "drift_check",
+          "metric": "avg_cost_per_outcome",
+          "threshold_ratio": 1.15
+        }
+      ],
+      "status_thresholds": {
+        "pass": "razão real <= 25% E doc atualizado <= 90 dias",
+        "warn": "razão entre 20-25% OU doc desatualizado mas razão OK",
+        "fail": "razão > 25% em produção"
+      },
+      "shadow_exemption": true
+    },
+    "C4_shadow_before_billing": {
+      "principle": "C4",
+      "name": "SHADOW antes de cobrar",
+      "checks": [
+        {
+          "id": "C4.1",
+          "description": "Toda promoção tem gates registrados",
+          "validation": "audit_log_check",
+          "log_table": "subscription_mode_changes",
+          "required_fields": ["from_mode", "to_mode", "gate_results", "approver", "approved_at"]
+        },
+        {
+          "id": "C4.2",
+          "description": "SHADOW por >= 14 dias antes de promover",
+          "validation": "duration_check",
+          "min_days_in_mode": {"shadow": 14}
+        },
+        {
+          "id": "C4.3",
+          "description": "Eval suite passing antes de promoção",
+          "validation": "eval_threshold_met",
+          "before_promotion": true
+        }
+      ],
+      "status_thresholds": {
+        "pass": "100% das promoções com gates passing",
+        "warn": "1 promoção com gate parcial",
+        "fail": "promoção sem nenhum gate registrado"
+      }
+    },
+    "C5_three_tier_context": {
+      "principle": "C5",
+      "name": "Three-tier context",
+      "checks": [
+        {
+          "id": "C5.1",
+          "description": "Toda skill declara tier no frontmatter",
+          "validation": "frontmatter_field_exists",
+          "field_glob": "{tier,layer}",
+          "valid_values": ["1", "2", "3", "L0", "L1", "L2"],
+          "scope": ".claude/skills/**/*.md"
+        },
+        {
+          "id": "C5.2",
+          "description": "Skills Tier 1 não importam contexto Tier 2/3",
+          "validation": "import_hierarchy_check",
+          "rules": {
+            "tier_1": {"forbidden_imports_from": ["tier_2", "tier_3"]},
+            "tier_2": {"forbidden_imports_from": ["tier_3"]}
+          }
+        },
+        {
+          "id": "C5.3",
+          "description": "Cache hit rate em Tier 1 >= 50%",
+          "validation": "telemetry_metric",
+          "metric": "tier_1_cache_hit_rate",
+          "operator": ">=",
+          "value": 0.5
+        }
+      ],
+      "status_thresholds": {
+        "pass": "100% das skills com tier declarado e herança respeitada",
+        "warn": "1-2 skills com violação leve",
+        "fail": "skill Tier 1 lendo Tier 3 OU cache hit < 50%"
+      }
+    },
+    "C6_telemetry_by_default": {
+      "principle": "C6",
+      "name": "Telemetry-by-default",
+      "checks": [
+        {
+          "id": "C6.1",
+          "description": "Outcomes no DB <-> traces no Langfuse com desvio <= 1%",
+          "validation": "count_comparison",
+          "source_a": {"type": "db", "query": "SELECT COUNT(*) FROM outcomes WHERE created_at > NOW() - INTERVAL '30 days'"},
+          "source_b": {"type": "langfuse", "query": "trace.tag = 'production' AND created_at > NOW() - INTERVAL '30 days'"},
+          "max_deviation_pct": 1.0
+        },
+        {
+          "id": "C6.2",
+          "description": "Lint regex em código de produção exige instrumentação em chamadas LLM",
+          "validation": "regex_lint",
+          "scope": "src/{agents,core/pipeline,skus,products}/**/*.{ts,js,py}",
+          "must_have_near_llm_call": [
+            "langfuseTrace.observe",
+            "langfuse.trace",
+            "trace.span"
+          ],
+          "max_distance_lines": 10
+        }
+      ],
+      "status_thresholds": {
+        "pass": "desvio <= 1% E lint passa",
+        "warn": "desvio 1-5% OU lint sinaliza < 5% dos arquivos",
+        "fail": "desvio > 5% OU lint sinaliza >= 5% dos arquivos"
+      }
+    },
+    "C7_portability": {
+      "principle": "C7",
+      "name": "Portability over lock-in",
+      "checks": [
+        {
+          "id": "C7.1",
+          "description": "Imports de SDK LLM apenas em camada de abstração",
+          "validation": "import_path_restriction",
+          "forbidden_imports": [
+            "@anthropic-ai/sdk",
+            "openai",
+            "@google-ai/generativelanguage"
+          ],
+          "allowed_paths": [
+            "src/llm/**",
+            "src/infra/anthropic.ts",
+            "src/infra/openai.ts",
+            "src/infra/llm-*.ts",
+            "scripts/**"
+          ]
+        },
+        {
+          "id": "C7.2",
+          "description": "Specs/skills (markdown) não têm lógica de modelo",
+          "validation": "regex_search",
+          "scope": "{templates,docs,examples}/**/*.md",
+          "forbidden_patterns": [
+            "anthropic\\.messages\\.create",
+            "openai\\.chat\\.completions",
+            "model:\\s*['\"](claude|gpt|gemini)"
+          ]
+        }
+      ],
+      "status_thresholds": {
+        "pass": "100% dos imports em camada de abstração",
+        "warn": "1-2 arquivos fora da camada",
+        "fail": ">= 3 arquivos fora da camada"
+      }
+    },
+    "C8_anti_customization": {
+      "principle": "C8",
+      "name": "Anti-customização heroica",
+      "checks": [
+        {
+          "id": "C8.1",
+          "description": "Sem if/switch por tenant em código de produção",
+          "validation": "regex_search",
+          "scope": "src/{skus,products,core,agents}/**/*.{ts,js,py}",
+          "forbidden_patterns": [
+            "if\\s*\\(\\s*tenantId\\s*===",
+            "if\\s*\\(\\s*tenant\\.id\\s*===",
+            "switch\\s*\\(\\s*tenantName",
+            "if\\s*\\(\\s*tenant\\.name\\s*=="
+          ]
+        },
+        {
+          "id": "C8.2",
+          "description": "Sem pasta clients/{nome} ou tenants/{nome} em skills/agents",
+          "validation": "path_check",
+          "forbidden_paths": [
+            "src/skus/*/clients/*",
+            "src/products/*/clients/*",
+            "src/agents/clients/*",
+            "src/skus/*/tenants/*"
+          ]
+        },
+        {
+          "id": "C8.3",
+          "description": "Onboarding hardcode tolerável apenas <= 14 dias",
+          "validation": "file_age_check",
+          "scope_pattern": "src/skus/*/onboarding-*.ts",
+          "max_age_days": 14
+        }
+      ],
+      "status_thresholds": {
+        "pass": "0 ocorrências",
+        "warn": "1 ocorrência com justificativa de onboarding < 14d",
+        "fail": ">= 2 ocorrências OU onboarding > 14 dias"
+      }
+    }
+  },
+  "drift_thresholds": {
+    "quality": {
+      "metric": "accuracy_pct_by_sku",
+      "max_negative_delta_pp": 5.0,
+      "comparison": "month_over_month"
+    },
+    "cost": {
+      "metric": "avg_cost_per_outcome",
+      "max_ratio": 1.15,
+      "comparison": "month_over_month"
+    },
+    "volume": {
+      "metric": "outcomes_count",
+      "min_ratio": 0.7,
+      "max_ratio": 1.3,
+      "comparison": "month_over_month"
+    },
+    "latency": {
+      "metric": "p95_latency_ms",
+      "max_ratio": 1.25,
+      "comparison": "month_over_month"
+    }
+  },
+  "sampling": {
+    "outcome_sample_pct_min": 0.05,
+    "outcome_sample_pct_max": 0.10,
+    "min_samples_per_category": 3,
+    "period_days": 30
+  },
+  "issue_severity_mapping": {
+    "P0": "Constitution FAIL crítico em C1-C4 que ameaça operação ou compliance",
+    "P1": "Constitution FAIL em C5-C8 OU drift acima de limites",
+    "P2": "Constitution WARN OU achados de coerência entre artefatos",
+    "P3": "Sugestões de melhoria fora dos princípios"
+  }
+}

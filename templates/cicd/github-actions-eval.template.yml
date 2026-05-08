@@ -1,0 +1,185 @@
+# templates/cicd/github-actions-eval.template.yml
+#
+# COMO USAR:
+#   1. Copie para .github/workflows/forge-eval.yml no projeto consumidor
+#   2. Substitua {PROJECT_NAME} pelo slug do projeto
+#   3. Configure secrets:
+#      - ANTHROPIC_API_KEY (modelo para rodar eval)
+#      - LANGFUSE_PUBLIC_KEY e LANGFUSE_SECRET_KEY (traces de CI — C6)
+#
+# O QUE FAZ:
+#   - Detecta automaticamente qual artifact_id mudou em prompts/
+#   - Roda eval suite via adapter LLM para cada caso em evals/{id}/cases/
+#   - Falha o PR se pass_rate < c4_thresholds.agreement_rate_min
+#   - Gera relatório em evals/{id}/runs/{date}-eval-ci-{hash}.md
+#   - Todo run tem trace Langfuse (C6 obrigatório)
+#
+# PRINCÍPIOS: C4 (SHADOW enforçado por dados), C6 (telemetria), C7 (portável)
+
+name: Forge Eval Suite — {PROJECT_NAME}
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'prompts/**'
+      - 'evals/**/cases/**'
+
+  # Permite trigger manual com artifact_id explícito
+  workflow_dispatch:
+    inputs:
+      artifact_id:
+        description: 'artifact_id para rodar eval (ex: triagem-whatsapp)'
+        required: true
+        type: string
+      fail_on_regression:
+        description: 'Falhar se pass_rate regredir vs. último run'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  detect-changed-artifacts:
+    name: Detectar artifacts modificados
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_ids: ${{ steps.detect.outputs.artifact_ids }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detectar artifact_ids com prompts modificados
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "artifact_ids=[\"${{ github.event.inputs.artifact_id }}\"]" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Identifica artifact_ids a partir de prompts/ modificados
+          changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep "^prompts/" \
+            | sed 's|prompts/\([^/]*\)/.*|\1|' \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          if [ -z "$changed" ] || [ "$changed" = "[]" ]; then
+            echo "artifact_ids=[]" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "artifact_ids=$changed" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+  run-eval:
+    name: Eval — ${{ matrix.artifact_id }}
+    runs-on: ubuntu-latest
+    needs: detect-changed-artifacts
+    if: needs.detect-changed-artifacts.outputs.has_changes == 'true'
+    strategy:
+      # Avalia cada artifact em paralelo; não cancela os outros se um falhar
+      fail-fast: false
+      matrix:
+        artifact_id: ${{ fromJson(needs.detect-changed-artifacts.outputs.artifact_ids) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências do eval runner
+        run: |
+          pip install anthropic langfuse pyyaml jinja2
+
+      - name: Validar evals/{artifact_id}/cases/ existe com ≥30 casos
+        run: |
+          artifact="${{ matrix.artifact_id }}"
+          cases_dir="evals/$artifact/cases"
+
+          if [ ! -d "$cases_dir" ]; then
+            echo "::error::$cases_dir não existe — rode /acme:eval para criar"
+            exit 2
+          fi
+
+          count=$(find "$cases_dir" -name "*.md" | wc -l)
+          if [ "$count" -lt 30 ]; then
+            echo "::error::$artifact tem $count casos (mínimo C4: 30 por categoria)"
+            exit 2
+          fi
+          echo "✓ $artifact — $count casos encontrados"
+
+      - name: Rodar eval suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+          CI_RUN: "true"
+        run: |
+          # Script de eval runner — adapte para sua stack
+          # O runner deve:
+          # 1. Ler evals/$ARTIFACT_ID/cases/*.md
+          # 2. Ler prompts/$ARTIFACT_ID/v*/system.md (versão mais recente)
+          # 3. Rodar cada caso via LLM
+          # 4. Comparar com gabarito (exact_match | semantic_match | llm_as_judge)
+          # 5. Calcular pass_rate por outcome_category
+          # 6. Persistir em evals/$ARTIFACT_ID/runs/$(date +%Y-%m-%d)-eval-ci-$GITHUB_SHA.md
+          # 7. Exit 2 se pass_rate < threshold de qualquer categoria
+
+          if [ -f "scripts/eval-runner.py" ]; then
+            python scripts/eval-runner.py \
+              --artifact-id "$ARTIFACT_ID" \
+              --output-dir "evals/$ARTIFACT_ID/runs" \
+              --run-id "ci-${GITHUB_SHA:0:8}" \
+              --fail-on-regression "${{ github.event.inputs.fail_on_regression || 'true' }}"
+          else
+            echo "::warning::scripts/eval-runner.py não encontrado — implemente o runner de eval"
+            echo "::warning::Consulte docs/forge/eval-runner-contract.md para a interface esperada"
+            # Não falha CI por ausência do runner — WARN apenas
+          fi
+
+      - name: Upload relatório de eval
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ matrix.artifact_id }}
+          path: evals/${{ matrix.artifact_id }}/runs/
+          retention-days: 90
+
+      - name: Comentar resultado no PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const artifactId = '${{ matrix.artifact_id }}';
+            const runsDir = `evals/${artifactId}/runs`;
+
+            // Lê o relatório mais recente se existir
+            let body = `## Eval Suite — \`${artifactId}\`\n\n`;
+
+            try {
+              const files = fs.readdirSync(runsDir)
+                .filter(f => f.includes('ci-'))
+                .sort().reverse();
+              if (files.length > 0) {
+                const content = fs.readFileSync(`${runsDir}/${files[0]}`, 'utf8');
+                body += '```\n' + content.slice(0, 2000) + '\n```';
+              }
+            } catch(e) {
+              body += '⚠️ Relatório de eval não gerado — verifique `scripts/eval-runner.py`';
+            }
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });

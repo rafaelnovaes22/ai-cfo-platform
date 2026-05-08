@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+.aios/logs/
+logs/
+
+# AIOS runtime state
+.aios/memory/
+.aios/storage/
+
+# Claude Code overrides do dev (não versionar)
+.claude/settings.local.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+
+# Cache
+.cache/
+.turbo/
+.eslintcache
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Forge artefatos transitórios
+docs/forge/bypass-log/*.log
+docs/forge/session-gate-reports/*.md
+!docs/forge/session-gate-reports/.gitkeep
+
+# Pasta de imagens de referência do frontend (não versionada — referência local)
+imagens_front/

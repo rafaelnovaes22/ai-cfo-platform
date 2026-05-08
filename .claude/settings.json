@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm install*)",
+      "Bash(npm run dev*)",
+      "Bash(npm run build*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run format*)",
+      "Bash(npm run test*)",
+      "Bash(npm run test:watch*)",
+      "Bash(npm run test:coverage*)",
+      "Bash(npm run db:generate*)",
+      "Bash(npm run db:migrate*)",
+      "Bash(npm run db:push*)",
+      "Bash(npm run db:studio*)",
+      "Bash(npm run seed:*)",
+      "Bash(npm run demo:*)",
+      "Bash(npx prisma*)",
+      "Bash(npx tsc*)",
+      "Bash(npx tsx*)",
+      "Bash(npx vitest*)",
+      "Bash(docker compose*)",
+      "Bash(docker ps*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(curl http://localhost:*)",
+      "Bash(redis-cli -p 6380*)",
+      "WebSearch",
+      "WebFetch",
+      "Bash(git remote *)",
+      "Bash(git config *)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(rm -fr*)",
+      "Bash(rm --recursive --force*)",
+      "Bash(npm publish*)",
+      "Bash(prisma migrate reset --force*)",
+      "Bash(npx prisma migrate reset --force*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(docker system prune*)",
+      "Bash(docker volume rm*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/outcome-clause-guard.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/adr-approval-gate.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/secret-scan.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/any-type-guard.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/langfuse-trace-check.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/unit-economics-recalc.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/manifest-sync.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/stop/5-gates-summary.sh",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/stop/eval-suite-fresh.sh",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "_comment": "Acme Forge layer (versioned). Per-developer overrides go in settings.local.json (gitignored).",
+  "_forge_version": "0.6.0",
+  "_constitution_version": "0.2.0",
+  "_forge_features": {
+    "skills_path": ".claude/skills/{L0,L1,L2}/",
+    "agents_path": ".claude/agents/",
+    "commands_path": ".claude/commands/acme/",
+    "hooks_path": "hooks/",
+    "bypass_env_var": "ACME_FORGE_BYPASS",
+    "bypass_log_path": "docs/forge/bypass-log/",
+    "bypass_note": "Set ACME_FORGE_BYPASS=<reason> in settings.local.json or env. All bypasses are logged."
+  }
+}

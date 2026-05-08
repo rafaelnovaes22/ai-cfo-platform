@@ -1,0 +1,53 @@
+# AIOS Server — configuração canônica do projeto consumidor
+# Gerado a partir de templates/aios/config.yaml.template (Forge v0.6.0+)
+#
+# Substituições necessárias após cp:
+#   {PROJECT_NAME}    → nome do repo consumidor (ex: minha-empresa-skus)
+#   {STACK_BACKEND}   → ex: "Next.js 15 App Router" | "FastAPI" | "Rails 7"
+#   {STACK_FRONTEND}  → ex: "React 19 + Tailwind" | "Vue 3" | "—" (api-only)
+#   {STACK_DB}        → ex: "PostgreSQL 16 via Prisma" | "MySQL via SQLAlchemy" | "DynamoDB"
+#   {STACK_TESTS}     → ex: "Vitest + Playwright" | "pytest + Playwright"
+#   {TENANT_FIELD}    → nome do campo multi-tenant (default: tenantId)
+
+llm:
+  provider: anthropic
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-sonnet-4-6
+
+server:
+  host: 0.0.0.0
+  port: 8000
+
+memory:
+  backend: local
+  path: ./.aios/memory
+
+storage:
+  backend: local
+  path: ./.aios/storage
+
+log:
+  level: INFO
+  path: ./.aios/logs/kernel.log
+
+# === Forge-7 — declarações que os agentes leem para evitar hardcode ===
+
+project:
+  name: "{PROJECT_NAME}"
+  tenant_field: "{TENANT_FIELD}"  # nome do campo multi-tenant (default: tenantId)
+
+stack:
+  backend: "{STACK_BACKEND}"
+  frontend: "{STACK_FRONTEND}"
+  database: "{STACK_DB}"
+  tests: "{STACK_TESTS}"
+
+# Lista de módulos que o orchestrator processa em ordem.
+# /acme:aios-init adiciona entradas aqui automaticamente.
+# Cada item: { name: <kebab>, tier: A|B|C }
+modules: []
+  # exemplo:
+  # - name: cadastros
+  #   tier: B
+  # - name: financeiro
+  #   tier: C

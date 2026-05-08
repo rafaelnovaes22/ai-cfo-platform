@@ -1,0 +1,118 @@
+# AIOS Server — configuração do projeto Aicfo
+# Operado pelo framework agent-governance-framework (v0.6.0+)
+# Stack runtime declarada para os agentes (frontend_agent reposicionado como Contract Agent)
+
+llm:
+  provider: anthropic
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-sonnet-4-6
+
+server:
+  host: 0.0.0.0
+  port: 8000
+
+memory:
+  backend: local
+  path: ./.aios/memory
+
+storage:
+  backend: local
+  path: ./.aios/storage
+
+log:
+  level: INFO
+  path: ./.aios/logs/kernel.log
+
+# === Forge-7 — declarações que os agentes leem para evitar hardcode ===
+
+project:
+  name: "aicfo"
+  tenant_field: "tenantId"
+
+stack:
+  backend: "Node 20 + TypeScript 5.7 ESM + Fastify 5 + LangGraph 1.2 + Anthropic SDK + Langfuse 3.38 + Prisma 6 + BullMQ 5"
+  frontend: "REPO SEPARADO — frontend_agent reposicionado como Contract Agent: gera OpenAPI 3.1 + Zod schemas + handoff doc em docs/contracts/{module}.* e docs/frontend-handoff/{module}.md. NÃO gera código React."
+  database: "PostgreSQL 16 via Prisma 6"
+  tests: "Vitest 1.x"
+
+# Lista de módulos que o orchestrator processa.
+# Adicionados em ordem das ondas (0 → 8). 30 módulos totais.
+# Tier: A=autônomo, B=iterativo (default), C=Rafael-dirige (manual_implementation).
+modules:
+  # Onda 0 — Fundação (Tier C: segurança/billing crítico, Rafael implementa)
+  - name: auth-tenant
+    tier: C
+  - name: workspace-setup
+    tier: C
+  - name: billing
+    tier: C
+  - name: tenant-config
+    tier: C
+
+  # Onda 1 — SKU Piloto monthly-analysis
+  - name: ingest
+    tier: B
+  - name: classification
+    tier: B
+  - name: dre-narrative
+    tier: B
+  - name: action-plan
+    tier: B
+  - name: hub
+    tier: B
+  - name: export
+    tier: B
+
+  # Onda 2 — Operação em Tempo Real
+  - name: cashflow
+    tier: B
+  - name: kpis
+    tier: B
+  - name: score
+    tier: B
+  - name: alerts
+    tier: B
+  - name: dashboard-ceo
+    tier: B
+
+  # Onda 3 — Inteligência de Decisão
+  - name: decision-engine
+    tier: B
+  - name: scenarios
+    tier: B
+  - name: benchmarking
+    tier: B
+  - name: conversational-agent
+    tier: B
+
+  # Onda 4 — Conectividade (Tier C: integrações externas, alto risco)
+  - name: integrations-banks
+    tier: C
+  - name: integrations-erp-crm-payroll
+    tier: C
+  - name: payment-execution
+    tier: C
+  - name: revenue-forecast
+    tier: B
+
+  # Onda 5 — Tributário (Tier B com revisão extra de eval)
+  - name: tax-suite
+    tier: B
+
+  # Onda 6 — Operacional Pesado
+  - name: accounts-management
+    tier: B
+  - name: bank-reconciliation
+    tier: C
+  - name: profitability
+    tier: B
+
+  # Onda 7 — Auditoria & Detecção
+  - name: anomaly-fraud-detection
+    tier: B
+  - name: audit-governance
+    tier: B
+
+  # Onda 8 — Planejamento
+  - name: financial-planning
+    tier: B
