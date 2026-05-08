@@ -1,6 +1,8 @@
 ---
 decision: "D1+D2 — SKU piloto e cláusula contratual de outcome"
-status: "rascunho — aguarda aprovação CEO"
+status: "aprovado"
+approved_by: "CEO Acme"
+approved_at: "2026-05-08"
 constitution_version: "0.2.0"
 created_at: "2026-05-08"
 last_updated: "2026-05-08"
@@ -43,8 +45,10 @@ Espelha §1.5 do spec. Limites e garantias estão no doc do produto, não em con
 
 ## Aprovação
 
-- [ ] Mantenedor leu e aprovou
-- [ ] CEO leu e aprovou (necessário antes de promover esta D1+D2 para `aprovado`)
-- [ ] Reviewer DeepAgent foi notificado
+- [x] Mantenedor (Rafael) leu e aprovou
+- [x] CEO leu e aprovou em 2026-05-08
+- [x] Reviewer DeepAgent será notificado na próxima auditoria mensal
 
-**Aprovado por**: pendente
+**Aprovado por**: CEO Acme em 2026-05-08
+
+> Mudanças nesta cláusula exigem reaprovação CEO + bump de versão. Hook `outcome-clause-guard` bloqueia edição sem ADR.

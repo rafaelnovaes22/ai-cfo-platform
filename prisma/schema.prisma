@@ -1,0 +1,134 @@
+// Prisma schema — Aicfo
+// Onda 0 (auth-tenant + workspace-setup + billing + tenant-config) cobre as entidades abaixo.
+// Onda 1 (monthly-analysis) adiciona LedgerEntry, MonthlyAnalysis, NarrativeCard, ActionPlanItem em migrations futuras.
+//
+// Multi-tenant via tenantId em TODAS as entidades de negócio (C8). Nenhum if/switch por tenant em código.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== TENANT (empresa cliente) =====
+
+model Tenant {
+  id              String   @id @default(uuid())
+  name            String
+  cnpj            String?  @unique
+  industrySegment String   @default("geral") // agencia | industria-leve | servicos-b2b | saas | varejo | geral
+  taxRegime       String   @default("simples") // simples | lucro-presumido | lucro-real
+
+  // Configuração por tenant via JSONB (C8 — sem branches por cliente)
+  // Estrutura: { monthlyAnalysis: { toneOfVoice, ...}, ... }
+  productConfig   Json     @default("{}")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  subscriptions   Subscription[]
+
+  @@index([industrySegment])
+}
+
+// ===== USER (membros do tenant) =====
+
+enum UserRole {
+  admin
+  editor
+  viewer
+}
+
+model User {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          UserRole @default(editor)
+
+  emailVerified Boolean  @default(false)
+
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions      Session[]
+
+  @@index([tenantId])
+}
+
+// ===== SESSION (refresh tokens) =====
+
+model Session {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  refreshTokenHash String  @unique
+  userAgent       String?
+  ipAddress       String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ===== SUBSCRIPTION (plano + modo SHADOW/ASSISTED/AUTONOMOUS) =====
+
+enum SubscriptionPlan {
+  trial
+  lite
+  pro
+  business
+}
+
+enum SubscriptionMode {
+  shadow      // C4 — análise gerada mas não entregue
+  assisted    // C4 — entregue com revisão humana
+  autonomous  // C4 — entregue diretamente
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+  paused
+}
+
+model Subscription {
+  id                    String             @id @default(uuid())
+  tenantId              String             @unique
+  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  plan                  SubscriptionPlan   @default(trial)
+  mode                  SubscriptionMode   @default(shadow)
+  status                SubscriptionStatus @default(active)
+
+  // Stripe (billing — Onda 0)
+  stripeCustomerId      String?            @unique
+  stripeSubscriptionId  String?            @unique
+
+  trialEndsAt           DateTime?
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  canceledAt            DateTime?
+
+  // Mode promotion log (C4) — JSONB array de { from, to, at, approvedBy }
+  modeHistory           Json               @default("[]")
+
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([status])
+  @@index([mode])
+}

@@ -1,6 +1,8 @@
 ---
 decision: "D6 — Threshold de SLA contratual"
-status: "rascunho"
+status: "aprovado"
+approved_by: "CEO Acme"
+approved_at: "2026-05-08"
 constitution_version: "0.2.0"
 linked_principle: "C4"
 created_at: "2026-05-08"
@@ -130,8 +132,10 @@ Todos abaixo em 60 dias consecutivos:
 
 ## Aprovação
 
-- [ ] Thresholds revisados
-- [ ] CEO concorda com gates de promoção
-- [ ] Reviewer notificado
+- [x] Thresholds revisados
+- [x] CEO concorda com gates de promoção em 2026-05-08
+- [x] Reviewer DeepAgent será notificado na próxima auditoria mensal
 
-**Aprovado por**: pendente
+**Aprovado por**: CEO Acme em 2026-05-08
+
+> Mudança em qualquer threshold deste documento exige reaprovação CEO + nova ADR.

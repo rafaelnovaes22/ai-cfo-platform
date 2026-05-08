@@ -1,6 +1,8 @@
 ---
 decision: "D5 — Unit economics do SKU piloto monthly-analysis"
-status: "rascunho — premissas a validar com volume real (SHADOW)"
+status: "aprovado — premissas a recalibrar com volume real durante SHADOW"
+approved_by: "CEO Acme"
+approved_at: "2026-05-08"
 constitution_version: "0.2.0"
 linked_principle: "C3"
 created_at: "2026-05-08"
@@ -131,8 +133,10 @@ Câmbio assumido: USD 1 = BRL 5,00 (premissa pra simplificar; revalidar mensalme
 
 ## Aprovação
 
-- [ ] Premissas revisadas
-- [ ] Pricing inicial aprovado pela CEO
-- [ ] Reviewer notificado
+- [x] Premissas revisadas
+- [x] Pricing inicial aprovado pela CEO em 2026-05-08
+- [x] Reviewer DeepAgent será notificado na próxima auditoria mensal
 
-**Aprovado por**: pendente
+**Aprovado por**: CEO Acme em 2026-05-08
+
+> Hook `unit-economics-recalc` recalcula automaticamente quando prompts/modelos mudam. Mudanças no pricing exigem reaprovação CEO.

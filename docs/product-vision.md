@@ -1,8 +1,10 @@
 ---
-status: "draft"
+status: "ativo — aprovado pela CEO em 2026-05-08"
+product_owner: "CEO Acme"
 constitution_version: "0.2.0"
 created_at: "2026-05-08"
 last_updated: "2026-05-08"
+version: "0.1.0"
 total_features: 60
 total_modules: 30
 total_waves: 8
@@ -11,6 +13,13 @@ total_waves: 8
 # Aicfo — Product Vision
 
 > Visão do produto em ondas, mapeando as 60 features iniciais em 30 módulos arquiteturais.
+
+> **Product Owner**: CEO Acme. A relação de funcionalidades é dela e tende a crescer ao longo da execução. Novas features entram por:
+> 1. Adicionar feature (com número e descrição) na lista da §"Mapeamento completo das 60 features → módulo"
+> 2. Mapear pra módulo existente OU criar novo módulo com onda apropriada
+> 3. Se virar módulo novo: adicionar entry em `clickup-automation/config/aios-module-functionalities.json` + `Aicfo/aios/config.yaml` + `examples/aicfo-modules.payload.json`
+> 4. Rodar `npm run aicfo:generate` (cria/reusa) + `npm run aicfo:update-descriptions` no clickup-automation
+> 5. Bump versão deste doc (0.1.0 → 0.2.0) + CHANGELOG entry
 
 ---
 

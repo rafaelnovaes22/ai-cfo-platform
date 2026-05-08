@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aicfo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aicfo
+      POSTGRES_PASSWORD: aicfo
+      POSTGRES_DB: aicfo
+    ports:
+      - "5432:5432"
+    volumes:
+      - aicfo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aicfo -d aicfo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: aicfo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - aicfo_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  aicfo_postgres_data:
+  aicfo_redis_data:
