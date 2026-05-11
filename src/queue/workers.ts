@@ -1,8 +1,9 @@
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import { classifyAnalysis } from "@/classification/classifier.js";
+import { generateDreNarrative } from "@/dre-narrative/narrator.js";
 import { logger } from "@/observability/logger.js";
-import type { ClassificationJob } from "@/queue/index.js";
+import type { ClassificationJob, DreNarrativeJob } from "@/queue/index.js";
 
 let _redis: IORedis | null = null;
 
@@ -36,5 +37,21 @@ export function startWorkers(): void {
     logger.error({ jobId: job?.id, err }, "Classificação falhou");
   });
 
-  logger.info("Workers BullMQ iniciados: [classification]");
+  const dreNarrativeWorker = new Worker<DreNarrativeJob>(
+    "dre-narrative",
+    async (job) => {
+      logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Gerando narrativa DRE");
+      await generateDreNarrative(job.data.analysisId, job.data.tenantId);
+    },
+    { connection: getWorkerRedis(), concurrency: 2 },
+  );
+
+  dreNarrativeWorker.on("completed", (job) =>
+    logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Narrativa DRE concluída"),
+  );
+  dreNarrativeWorker.on("failed", (job, err) =>
+    logger.error({ jobId: job?.id, err }, "Narrativa DRE falhou"),
+  );
+
+  logger.info("Workers BullMQ iniciados: [classification, dre-narrative]");
 }

@@ -3,6 +3,7 @@ import { callLlm } from "@/llm/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { buildSystemPrompt, buildUserPrompt } from "@/classification/prompts.js";
 import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
+import { enqueueDreNarrative } from "@/queue/index.js";
 import { logger } from "@/observability/logger.js";
 
 const BATCH_SIZE = 20;
@@ -103,4 +104,7 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
     { analysisId, totalEntries, lowConfidenceCount, accuracy: accuracy.toFixed(2) },
     "Classificação concluída",
   );
+
+  // Encadeia próxima etapa do pipeline
+  await enqueueDreNarrative({ analysisId, tenantId });
 }

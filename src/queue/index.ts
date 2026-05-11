@@ -1,19 +1,30 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import type { DreLines } from "@/dre-narrative/aggregator.js";
 
 let _redis: IORedis | null = null;
 
 function getRedis(): IORedis {
   if (!_redis) {
     _redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
-      maxRetriesPerRequest: null, // obrigatório para BullMQ
+      maxRetriesPerRequest: null,
     });
   }
   return _redis;
 }
 
-// Fila de classificação — processada pelo módulo `classification` (Onda 1)
+const JOB_OPTIONS = {
+  attempts: 3,
+  backoff: { type: "exponential" as const, delay: 5000 },
+  removeOnComplete: { count: 100 },
+  removeOnFail: { count: 50 },
+};
+
+// ── Classification ─────────────────────────────────────────────────────────
+
 let _classificationQueue: Queue | null = null;
+
+export interface ClassificationJob { analysisId: string; tenantId: string }
 
 export function getClassificationQueue(): Queue {
   if (!_classificationQueue) {
@@ -22,16 +33,40 @@ export function getClassificationQueue(): Queue {
   return _classificationQueue;
 }
 
-export interface ClassificationJob {
-  analysisId: string;
-  tenantId: string;
+export async function enqueueClassification(job: ClassificationJob): Promise<void> {
+  await getClassificationQueue().add("classify", job, JOB_OPTIONS);
 }
 
-export async function enqueueClassification(job: ClassificationJob): Promise<void> {
-  await getClassificationQueue().add("classify", job, {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 5000 },
-    removeOnComplete: { count: 100 },
-    removeOnFail: { count: 50 },
-  });
+// ── DRE Narrative ──────────────────────────────────────────────────────────
+
+let _dreNarrativeQueue: Queue | null = null;
+
+export interface DreNarrativeJob { analysisId: string; tenantId: string }
+
+export function getDreNarrativeQueue(): Queue {
+  if (!_dreNarrativeQueue) {
+    _dreNarrativeQueue = new Queue("dre-narrative", { connection: getRedis() });
+  }
+  return _dreNarrativeQueue;
+}
+
+export async function enqueueDreNarrative(job: DreNarrativeJob): Promise<void> {
+  await getDreNarrativeQueue().add("narrate", job, JOB_OPTIONS);
+}
+
+// ── Action Plan ────────────────────────────────────────────────────────────
+
+let _actionPlanQueue: Queue | null = null;
+
+export interface ActionPlanJob { analysisId: string; tenantId: string; dre: DreLines }
+
+export function getActionPlanQueue(): Queue {
+  if (!_actionPlanQueue) {
+    _actionPlanQueue = new Queue("action-plan", { connection: getRedis() });
+  }
+  return _actionPlanQueue;
+}
+
+export async function enqueueActionPlan(job: ActionPlanJob): Promise<void> {
+  await getActionPlanQueue().add("plan", job, JOB_OPTIONS);
 }
