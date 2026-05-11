@@ -1,8 +1,10 @@
 import Fastify from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { logger } from "@/observability/logger.js";
+import rawBody from "fastify-raw-body";
 import { authRoutes } from "@/auth/routes.js";
 import { workspaceRoutes } from "@/workspace/routes.js";
+import { billingRoutes } from "@/billing/routes.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushLangfuse } from "@/observability/langfuse.js";
 
@@ -17,6 +19,9 @@ app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
 // req.auth populado por requireAuth nas rotas protegidas (null por padrão)
+// rawBody necessário para verificação de assinatura do webhook Stripe
+await app.register(rawBody, { global: false, encoding: false, runFirst: true });
+
 app.decorateRequest("auth", null);
 
 // Erros de negócio (4xx) passam a mensagem; 5xx são opacos
@@ -37,6 +42,7 @@ app.get("/health", async () => ({
 
 await app.register(authRoutes);
 await app.register(workspaceRoutes);
+await app.register(billingRoutes);
 
 const shutdown = async (): Promise<void> => {
   logger.info("Encerrando servidor...");
