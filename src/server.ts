@@ -10,6 +10,8 @@ import { ingestRoutes } from "@/ingest/routes.js";
 import { classificationRoutes } from "@/classification/routes.js";
 import { dreNarrativeRoutes } from "@/dre-narrative/routes.js";
 import { actionPlanRoutes } from "@/action-plan/routes.js";
+import { hubRoutes } from "@/hub/routes.js";
+import { exportRoutes } from "@/export/routes.js";
 import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushLangfuse } from "@/observability/langfuse.js";
@@ -54,6 +56,8 @@ await app.register(ingestRoutes);
 await app.register(classificationRoutes);
 await app.register(dreNarrativeRoutes);
 await app.register(actionPlanRoutes);
+await app.register(hubRoutes);
+await app.register(exportRoutes);
 
 startWorkers();
 
