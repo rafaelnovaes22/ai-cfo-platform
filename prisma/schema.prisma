@@ -281,6 +281,7 @@ model ActionPlanItem {
   riskLevel    String          // "low" | "medium" | "high"
   impactCents  Int             // estimativa de impacto financeiro em centavos
   deadlineDays Int?
+  doneWhen     String?         // critério mensurável de conclusão ("feita quando...")
 
   // Feedback ASSISTED
   clientApproved Boolean?

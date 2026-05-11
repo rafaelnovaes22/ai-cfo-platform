@@ -2,8 +2,9 @@ import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import { classifyAnalysis } from "@/classification/classifier.js";
 import { generateDreNarrative } from "@/dre-narrative/narrator.js";
+import { generateActionPlan } from "@/action-plan/generator.js";
 import { logger } from "@/observability/logger.js";
-import type { ClassificationJob, DreNarrativeJob } from "@/queue/index.js";
+import type { ClassificationJob, DreNarrativeJob, ActionPlanJob } from "@/queue/index.js";
 
 let _redis: IORedis | null = null;
 
@@ -53,5 +54,21 @@ export function startWorkers(): void {
     logger.error({ jobId: job?.id, err }, "Narrativa DRE falhou"),
   );
 
-  logger.info("Workers BullMQ iniciados: [classification, dre-narrative]");
+  const actionPlanWorker = new Worker<ActionPlanJob>(
+    "action-plan",
+    async (job) => {
+      logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Gerando plano de ação");
+      await generateActionPlan(job.data.analysisId, job.data.tenantId, job.data.dre);
+    },
+    { connection: getWorkerRedis(), concurrency: 2 },
+  );
+
+  actionPlanWorker.on("completed", (job) =>
+    logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Plano de ação gerado"),
+  );
+  actionPlanWorker.on("failed", (job, err) =>
+    logger.error({ jobId: job?.id, err }, "Plano de ação falhou"),
+  );
+
+  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan]");
 }
