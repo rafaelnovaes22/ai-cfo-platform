@@ -1,5 +1,8 @@
 // Parser de PDF contábil — extrai texto e aplica heurísticas para detectar linhas de lançamento
-import pdfParse from "pdf-parse";
+// pdf-parse é CJS; import com createRequire para compatibilidade ESM
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 import { normalizeDate, normalizeAmountCents, normalizeDirection } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
