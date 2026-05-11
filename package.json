@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.21.0",
     "@langchain/langgraph": "^1.2.0",
     "@prisma/client": "^6.0.0",
     "bullmq": "^5.0.0",
