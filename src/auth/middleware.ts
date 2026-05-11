@@ -29,3 +29,12 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Pro
     await reply.status(401).send({ message: "Token inválido ou expirado" });
   }
 }
+
+// Encadear após requireAuth: { preHandler: [requireAuth, requireRole("admin")] }
+export function requireRole(...roles: string[]) {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!req.auth || !roles.includes(req.auth.role)) {
+      await reply.status(403).send({ message: "Permissão insuficiente" });
+    }
+  };
+}

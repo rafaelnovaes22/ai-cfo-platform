@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { logger } from "@/observability/logger.js";
 import { authRoutes } from "@/auth/routes.js";
+import { workspaceRoutes } from "@/workspace/routes.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushLangfuse } from "@/observability/langfuse.js";
 
@@ -35,6 +36,7 @@ app.get("/health", async () => ({
 }));
 
 await app.register(authRoutes);
+await app.register(workspaceRoutes);
 
 const shutdown = async (): Promise<void> => {
   logger.info("Encerrando servidor...");
