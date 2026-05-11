@@ -7,6 +7,8 @@ import { workspaceRoutes } from "@/workspace/routes.js";
 import { billingRoutes } from "@/billing/routes.js";
 import { tenantConfigRoutes } from "@/tenant-config/routes.js";
 import { ingestRoutes } from "@/ingest/routes.js";
+import { classificationRoutes } from "@/classification/routes.js";
+import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushLangfuse } from "@/observability/langfuse.js";
 
@@ -47,6 +49,9 @@ await app.register(workspaceRoutes);
 await app.register(billingRoutes);
 await app.register(tenantConfigRoutes);
 await app.register(ingestRoutes);
+await app.register(classificationRoutes);
+
+startWorkers();
 
 const shutdown = async (): Promise<void> => {
   logger.info("Encerrando servidor...");

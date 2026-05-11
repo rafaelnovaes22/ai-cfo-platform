@@ -196,10 +196,11 @@ model LedgerEntry {
   direction   LedgerDirection
 
   // Flywheel de treinamento — pares rotulados gerados pelo pipeline SHADOW/ASSISTED
-  predictedCategory  String?  // saída do modelo atual
-  correctedCategory  String?  // correção do humano (Rafael ou cliente)
-  confirmedCategory  String?  // categoria final aceita
-  correctionSource   String?  // "rafael" | "client" | "auto-approved"
+  predictedCategory      String?  // saída do modelo atual
+  classificationConfidence Float? // 0.0-1.0; <0.7 → revisão necessária
+  correctedCategory      String?  // correção do humano (Rafael ou cliente)
+  confirmedCategory      String?  // categoria final aceita
+  correctionSource       String?  // "rafael" | "client" | "auto-approved" | "needs_review"
 
   importedAt  DateTime       @default(now())
   createdAt   DateTime       @default(now())
