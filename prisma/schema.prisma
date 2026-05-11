@@ -33,6 +33,7 @@ model Tenant {
   subscriptions    Subscription[]
   ledgerEntries    LedgerEntry[]
   monthlyAnalyses  MonthlyAnalysis[]
+  apiTokens        ApiToken[]
 
   @@index([industrySegment])
 }
@@ -133,6 +134,26 @@ model Subscription {
 
   @@index([status])
   @@index([mode])
+}
+
+// ===== API TOKENS (tenant-config — Onda 0) =====
+
+model ApiToken {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name        String
+  tokenHash   String    @unique  // SHA-256 — token real retornado uma vez e nunca armazenado
+  scopes      String[]  @default([])  // ex: ["analysis:read", "webhook:write"]
+
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
 }
 
 // ===== ONDA 1 — monthly-analysis =====
