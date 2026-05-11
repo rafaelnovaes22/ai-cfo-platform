@@ -1,5 +1,9 @@
 import Fastify from "fastify";
+import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { logger } from "@/observability/logger.js";
+import { authRoutes } from "@/auth/routes.js";
+import { disconnectPrisma } from "@/persistence/prisma.js";
+import { flushLangfuse } from "@/observability/langfuse.js";
 
 const port = Number(process.env.PORT ?? 3000);
 
@@ -8,12 +12,39 @@ const app = Fastify({
   trustProxy: true,
 });
 
+app.setValidatorCompiler(validatorCompiler);
+app.setSerializerCompiler(serializerCompiler);
+
+// req.auth populado por requireAuth nas rotas protegidas (null por padrão)
+app.decorateRequest("auth", null);
+
+// Erros de negócio (4xx) passam a mensagem; 5xx são opacos
+app.setErrorHandler(async (err, _req, reply) => {
+  if ("statusCode" in err && typeof err.statusCode === "number" && err.statusCode < 500) {
+    return reply.status(err.statusCode).send({ message: err.message });
+  }
+  logger.error({ err }, "Erro interno");
+  return reply.status(500).send({ message: "Erro interno do servidor" });
+});
+
 app.get("/health", async () => ({
   status: "ok",
   service: "aicfo",
   version: "0.1.0",
   timestamp: new Date().toISOString(),
 }));
+
+await app.register(authRoutes);
+
+const shutdown = async (): Promise<void> => {
+  logger.info("Encerrando servidor...");
+  await app.close();
+  await disconnectPrisma();
+  await flushLangfuse();
+};
+
+process.once("SIGTERM", shutdown);
+process.once("SIGINT", shutdown);
 
 const start = async (): Promise<void> => {
   try {
