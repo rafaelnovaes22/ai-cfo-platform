@@ -4,7 +4,11 @@ import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { requireAuth } from "@/auth/middleware.js";
 import { generateReport } from "@/export/generator.js";
+import { logger } from "@/observability/logger.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
+
+// referenceMonth válido = "YYYY-MM" — defesa contra filename injection via dado persistido.
+const REFERENCE_MONTH_RE = /^\d{4}-\d{2}$/;
 
 const REPORT_TYPES = ["monthly", "investors", "partners"] as const;
 
@@ -26,6 +30,7 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
     handler: async (req, reply) => {
       const db = getPrisma();
       const { analysisId, type } = req.params;
+      const startedAt = Date.now();
 
       const analysis = await db.monthlyAnalysis.findFirst({
         where: { id: analysisId, tenantId: req.auth!.tenantId },
@@ -54,7 +59,9 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!analysis.dreJson) return reply.status(422).send({ message: "DRE ainda não gerada" });
 
-      const filename = `aicfo-${analysis.referenceMonth}-${type}.pdf`;
+      // C8 — sanitização de filename: referenceMonth tem que casar com YYYY-MM antes de virar nome de arquivo.
+      const safeMonth = REFERENCE_MONTH_RE.test(analysis.referenceMonth) ? analysis.referenceMonth : "invalid";
+      const filename = `aicfo-${safeMonth}-${type}.pdf`;
       reply.type("application/pdf");
       reply.header("Content-Disposition", `attachment; filename="${filename}"`);
 
@@ -67,6 +74,22 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
           actions:        analysis.actionItems,
         },
         type,
+      );
+
+      // C6 + auditoria (LGPD) — log estruturado de cada download. TODO Onda C+: persistir em export_audit.
+      logger.info(
+        {
+          event: "export_download",
+          tenantId:       req.auth!.tenantId,
+          userId:         req.auth!.userId,
+          analysisId,
+          referenceMonth: analysis.referenceMonth,
+          type,
+          status:         analysis.status,
+          mode:           analysis.mode,
+          latencyMs:      Date.now() - startedAt,
+        },
+        "PDF exportado",
       );
 
       return reply.send(stream);

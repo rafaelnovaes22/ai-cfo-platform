@@ -4,15 +4,18 @@ import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { requireAuth, requireMode } from "@/auth/middleware.js";
 
+// Alinhado com ActionSchema do generator.ts — horizon e níveis fechados em enum (C2 spec §1).
 const ActionItemSchema = z.object({
   id:           z.string(),
-  horizon:      z.string(),
+  horizon:      z.enum(["short", "medium", "long"]),
   title:        z.string(),
   description:  z.string(),
-  effortLevel:  z.string(),
-  riskLevel:    z.string(),
+  effortLevel:  z.enum(["low", "medium", "high"]),
+  riskLevel:    z.enum(["low", "medium", "high"]),
   impactCents:  z.number(),
   deadlineDays: z.number().nullable(),
+  // Spec exige doneWhen obrigatório em novos planos (generator.ts impõe via Zod refinement).
+  // Mantido nullable no response até migration backfillar registros legados (TODO Onda C+).
   doneWhen:     z.string().nullable(),
   clientApproved: z.boolean().nullable(),
   clientComment:  z.string().nullable(),
@@ -53,8 +56,10 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
       const sum = (h: string) =>
         items.filter((i) => i.horizon === h).reduce((acc, i) => acc + i.impactCents, 0);
 
+      // Prisma gera horizon/effortLevel/riskLevel como nativeEnum; valores são idênticos
+      // ao z.enum() do response schema, mas TS não infere essa equivalência.
       return reply.send({
-        items,
+        items: items as z.infer<typeof ActionItemSchema>[],
         summary: {
           shortImpact:  sum("short"),
           mediumImpact: sum("medium"),

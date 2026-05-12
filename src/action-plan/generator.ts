@@ -7,23 +7,29 @@ import type { DreLines } from "@/dre-narrative/aggregator.js";
 
 const ActionSchema = z.object({
   horizon:     z.enum(["short", "medium", "long"]),
-  title:       z.string(),
-  description: z.string(),
+  title:       z.string().min(3),
+  description: z.string().min(10),
   effortLevel: z.enum(["low", "medium", "high"]),
   riskLevel:   z.enum(["low", "medium", "high"]),
   impactCents: z.number().int().positive(),
   deadlineDays: z.number().int().positive().optional(),
-  doneWhen:    z.string().optional(),
+  // C2 — doneWhen é critério executável; sem ele a ação não é mensurável (spec action-plan.md §1).
+  doneWhen:    z.string().min(5),
 });
 
+// PlanResponseSchema enforce mínimos por horizonte como Zod refinement (não apenas total).
 const PlanResponseSchema = z.object({
-  actions: z.array(ActionSchema).min(5), // mínimo: 3 short + 1 medium + 1 long
-});
-
-function validateMinimums(actions: z.infer<typeof ActionSchema>[]): boolean {
-  const byHorizon = (h: string) => actions.filter((a) => a.horizon === h).length;
-  return byHorizon("short") >= 3 && byHorizon("medium") >= 1 && byHorizon("long") >= 1;
-}
+  actions: z.array(ActionSchema).min(5),
+}).refine(
+  ({ actions }) => actions.filter((a) => a.horizon === "short").length >= 3,
+  { message: "Mínimo 3 ações 'short' obrigatório", path: ["actions"] },
+).refine(
+  ({ actions }) => actions.filter((a) => a.horizon === "medium").length >= 1,
+  { message: "Mínimo 1 ação 'medium' obrigatório", path: ["actions"] },
+).refine(
+  ({ actions }) => actions.filter((a) => a.horizon === "long").length >= 1,
+  { message: "Mínimo 1 ação 'long' obrigatório", path: ["actions"] },
+);
 
 function calcImpactSummary(actions: z.infer<typeof ActionSchema>[]) {
   const sum = (h: string) =>
@@ -75,19 +81,23 @@ export async function generateActionPlan(
     jsonMode: true,
   });
 
-  let parsed = PlanResponseSchema.parse(JSON.parse(llmResponse.content));
-
-  // Retry único se mínimos não atendidos
-  if (!validateMinimums(parsed.actions)) {
-    logger.warn({ analysisId }, "Plano não atendeu mínimos — retry com instrução reforçada");
+  // Schema enforce mínimos por horizonte via refinement; parse falha → tenta retry único.
+  let parsed: z.infer<typeof PlanResponseSchema>;
+  let totalCostCents = llmResponse.costCents;
+  try {
+    parsed = PlanResponseSchema.parse(JSON.parse(llmResponse.content));
+  } catch (err) {
+    logger.warn({ analysisId, err: String(err) }, "Plano não passou no schema — retry com instrução reforçada");
 
     const retryResponse = await callLlm({
       task: "action-plan",
       systemPrompt,
-      userPrompt: userPrompt + "\n\nATENÇÃO: O plano DEVE ter no mínimo 3 ações 'short', 1 'medium' e 1 'long'.",
+      userPrompt: userPrompt + "\n\nATENÇÃO: O plano DEVE ter no mínimo 3 ações 'short', 1 'medium' e 1 'long'. Cada ação DEVE ter 'doneWhen' descrevendo critério executável de conclusão.",
       tenantId,
       jsonMode: true,
     });
+    totalCostCents += retryResponse.costCents;
+    // Se o retry também falhar, propaga o erro — NÃO persistir plano inválido (spec §1, C2).
     parsed = PlanResponseSchema.parse(JSON.parse(retryResponse.content));
   }
 
@@ -106,7 +116,7 @@ export async function generateActionPlan(
         riskLevel:   a.riskLevel,
         impactCents: a.impactCents,
         deadlineDays: a.deadlineDays ?? null,
-        doneWhen:    a.doneWhen ?? null,
+        doneWhen:    a.doneWhen,
       })),
     });
 
@@ -116,7 +126,7 @@ export async function generateActionPlan(
       where: { id: analysisId },
       data: {
         actionPlanJson: { ...impact, actions: parsed.actions },
-        costCents:      (analysis.costCents ?? 0) + llmResponse.costCents,
+        costCents:      (analysis.costCents ?? 0) + totalCostCents,
         status:         isAutonomous ? "delivered" : "ready",
         deliveredAt:    isAutonomous ? new Date() : null,
       },
@@ -128,7 +138,7 @@ export async function generateActionPlan(
       analysisId,
       actionCount: parsed.actions.length,
       totalImpactCents: impact.totalImpact,
-      costCents: llmResponse.costCents,
+      costCents: totalCostCents,
       mode: analysis.mode,
     },
     "Plano de ação gerado",
