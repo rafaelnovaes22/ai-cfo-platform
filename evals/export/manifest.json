@@ -1,0 +1,21 @@
+{
+  "module": "export",
+  "outcomes": ["report_exported_monthly", "report_exported_investors", "report_exported_partners"],
+  "eval_method": "assertion_binary_pdf",
+  "assertions": ["http_code", "content_type", "magic_bytes_pdf", "filename_regex", "content_length_min"],
+  "pass_rate_threshold": 1.00,
+  "source_distribution": {
+    "real": ">=0.40",
+    "synthetic": "<=0.40",
+    "edge": ">=0.10",
+    "adversarial": ">=0.10"
+  },
+  "min_cases_per_outcome": 10,
+  "total_cases": 30,
+  "c4_thresholds": {
+    "agreement_rate": 1.00,
+    "latency_p95_ms": 3000,
+    "cost_per_outcome_brl": 0.00
+  },
+  "last_updated": "2026-05-12"
+}

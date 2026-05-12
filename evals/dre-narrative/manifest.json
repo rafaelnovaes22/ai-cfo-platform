@@ -1,0 +1,22 @@
+{
+  "module": "dre-narrative",
+  "outcomes": ["dre_aggregated", "dre_narrated"],
+  "eval_methods": {
+    "dre_aggregated": "assertion_shape",
+    "dre_narrated": "llm_as_judge"
+  },
+  "judge_dimensions": ["clareza", "acionabilidade", "factualidade"],
+  "judge_threshold_per_dim": 4,
+  "judge_scale": "1-5",
+  "pass_rate_threshold": 0.90,
+  "source_distribution": {
+    "real": ">=0.40",
+    "synthetic": "<=0.40",
+    "edge": ">=0.10",
+    "adversarial": ">=0.10"
+  },
+  "min_cases_per_outcome": 15,
+  "total_cases": 32,
+  "models_under_test": ["gemini-2.5-flash", "claude-sonnet-4-6"],
+  "last_updated": "2026-05-12"
+}

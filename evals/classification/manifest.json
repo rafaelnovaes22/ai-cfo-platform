@@ -1,0 +1,21 @@
+{
+  "module": "classification",
+  "outcomes": ["ledger_classified", "classification_confidence_low"],
+  "eval_method": "exact_match_category",
+  "secondary_metric": "confidence_calibration",
+  "pass_rate_threshold": 0.95,
+  "confidence_threshold": 0.70,
+  "source_distribution": {
+    "real": ">=0.40",
+    "synthetic": "<=0.40",
+    "edge": ">=0.10",
+    "adversarial": ">=0.10"
+  },
+  "min_cases_per_outcome": 15,
+  "total_cases": 32,
+  "models_under_test": ["gemini-2.0-flash", "claude-haiku-4-5"],
+  "taxonomy_source": "src/classification/taxonomy.ts",
+  "taxonomy_version": "v1",
+  "notes": "Eval suite cobre 22 casos ledger_classified (pelo menos 1 por categoria principal das 23 da taxonomia) + 10 casos classification_confidence_low (descrições ambíguas que devem cair em revisão humana, confidence <0.70). Fonte primária: exact_match na categoria predita vs ground truth. Métrica secundária: calibração de confidence (boundary estrito 0.6999 vs 0.7000).",
+  "last_updated": "2026-05-12"
+}
