@@ -6,6 +6,10 @@ export const ProductConfigBody = z.object({
     .object({
       toneOfVoice: z.enum(["formal", "informal"]).optional(),
       customInstructions: z.string().max(500).optional(),
+      // Mínimo de lançamentos para acionar pipeline de classificação.
+      // Abaixo desse número o outcome do ingest fica em "partial" sem enfileirar.
+      // Default 50 (DEFAULT_MIN_INGEST_ENTRIES em src/ingest/service.ts).
+      minEntries: z.number().int().min(1).max(10_000).optional(),
     })
     .optional(),
 });

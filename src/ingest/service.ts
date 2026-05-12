@@ -4,9 +4,11 @@ import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdf } from "@/ingest/parsers/pdf.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
+import { createTrace } from "@/observability/langfuse.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 
-const MIN_ENTRIES = 50;
+// Default — pode ser sobrescrito por tenant em productConfig.monthlyAnalysis.minEntries (C8).
+const DEFAULT_MIN_INGEST_ENTRIES = 50;
 
 export type IngestSource = "excel" | "csv" | "text" | "pdf" | "manual";
 
@@ -20,21 +22,47 @@ export async function ingest(params: {
 }): Promise<IngestResult> {
   const { tenantId, referenceMonth, source } = params;
 
+  // C6 — trace do pipeline de ingest. Cada fase abre um span próprio.
+  const trace = createTrace({
+    name: "ingest",
+    tenantId,
+    metadata: { referenceMonth, source },
+  });
+
   // 1. Parse conforme o formato
+  const parseSpan = trace.span({ name: "parse", input: { source } });
   let parseResult: ParseResult;
   try {
     parseResult = await dispatch(params);
-  } catch {
+    parseSpan.end({
+      output: { entryCount: parseResult.entries.length, orphanCount: parseResult.orphanCount },
+    });
+  } catch (err) {
+    parseSpan.end({ level: "ERROR", output: { error: String(err) } });
+    await trace.update({ metadata: { outcome: "failed", reason: "parse_error" } });
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
   const { entries, orphanCount } = parseResult;
-  if (entries.length === 0) return buildResult("failed", tenantId, referenceMonth, 0, orphanCount);
+  if (entries.length === 0) {
+    await trace.update({ metadata: { outcome: "failed", reason: "no_entries", orphanCount } });
+    return buildResult("failed", tenantId, referenceMonth, 0, orphanCount);
+  }
 
-  // 2. Upsert MonthlyAnalysis (re-import apaga lançamentos anteriores do mesmo mês)
+  // 2. Upsert MonthlyAnalysis + ler threshold por tenant (C8) na mesma transação
   const db = getPrisma();
+  const persistSpan = trace.span({ name: "persist", input: { entryCount: entries.length } });
 
-  const analysis = await db.$transaction(async (tx) => {
+  const { analysis, minEntries } = await db.$transaction(async (tx) => {
+    const tenant = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { productConfig: true },
+    });
+    const tenantConfig = (tenant.productConfig as Record<string, unknown> | null)?.monthlyAnalysis as
+      Record<string, unknown> | undefined;
+    const threshold =
+      (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
+
     const existing = await tx.monthlyAnalysis.findUnique({
       where: { tenantId_referenceMonth: { tenantId, referenceMonth } },
     });
@@ -47,13 +75,14 @@ export async function ingest(params: {
         where: { id: existing.id },
         data: { status: "pending", generatedAt: null, deliveredAt: null, approvedAt: null },
       });
-      return existing;
+      return { analysis: existing, minEntries: threshold };
     }
 
     const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
-    return tx.monthlyAnalysis.create({
+    const created = await tx.monthlyAnalysis.create({
       data: { tenantId, referenceMonth, status: "pending", mode: subscription.mode },
     });
+    return { analysis: created, minEntries: threshold };
   });
 
   // 3. Bulk insert LedgerEntry
@@ -67,17 +96,22 @@ export async function ingest(params: {
       direction: e.direction,
     })),
   });
+  persistSpan.end({ output: { analysisId: analysis.id, minEntries } });
 
   // 4. Determinar outcome e enfileirar classificação se possível
-  const outcome = entries.length >= MIN_ENTRIES ? "completed" : "partial";
+  const outcome = entries.length >= minEntries ? "completed" : "partial";
 
   if (outcome === "completed") {
-    await enqueueClassification({ analysisId: analysis.id, tenantId });
+    await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
     await db.monthlyAnalysis.update({
       where: { id: analysis.id },
       data: { status: "generating" },
     });
   }
+
+  await trace.update({
+    metadata: { outcome, analysisId: analysis.id, entryCount: entries.length, orphanCount, minEntries },
+  });
 
   return {
     analysisId: analysis.id,

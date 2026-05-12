@@ -24,7 +24,7 @@ const JOB_OPTIONS = {
 
 let _classificationQueue: Queue | null = null;
 
-export interface ClassificationJob { analysisId: string; tenantId: string }
+export interface ClassificationJob { analysisId: string; tenantId: string; traceId?: string }
 
 export function getClassificationQueue(): Queue {
   if (!_classificationQueue) {
@@ -41,7 +41,7 @@ export async function enqueueClassification(job: ClassificationJob): Promise<voi
 
 let _dreNarrativeQueue: Queue | null = null;
 
-export interface DreNarrativeJob { analysisId: string; tenantId: string }
+export interface DreNarrativeJob { analysisId: string; tenantId: string; traceId?: string }
 
 export function getDreNarrativeQueue(): Queue {
   if (!_dreNarrativeQueue) {
@@ -58,7 +58,7 @@ export async function enqueueDreNarrative(job: DreNarrativeJob): Promise<void> {
 
 let _actionPlanQueue: Queue | null = null;
 
-export interface ActionPlanJob { analysisId: string; tenantId: string; dre: DreLines }
+export interface ActionPlanJob { analysisId: string; tenantId: string; dre: DreLines; traceId?: string }
 
 export function getActionPlanQueue(): Queue {
   if (!_actionPlanQueue) {
