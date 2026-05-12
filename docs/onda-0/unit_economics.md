@@ -1,13 +1,15 @@
 ---
 decision: "D5 — Unit economics do SKU piloto monthly-analysis"
-status: "aprovado — premissas a recalibrar com volume real durante SHADOW"
+status: "recalculado 2026-05-12 com Gemini Flash (ADR-002) — premissas a confirmar com volume real durante SHADOW"
 approved_by: "CEO Acme"
 approved_at: "2026-05-08"
+recalc_at: "2026-05-12"
 constitution_version: "0.2.0"
 linked_principle: "C3"
 created_at: "2026-05-08"
-last_updated: "2026-05-08"
+last_updated: "2026-05-12"
 linked_spec: "src/skus/monthly-analysis/spec.md"
+linked_adrs: ["002-llm-model-strategy"]
 ---
 
 # Onda 0 / D5 — Unit Economics do SKU `monthly-analysis`
@@ -140,3 +142,95 @@ Câmbio assumido: USD 1 = BRL 5,00 (premissa pra simplificar; revalidar mensalme
 **Aprovado por**: CEO Acme em 2026-05-08
 
 > Hook `unit-economics-recalc` recalcula automaticamente quando prompts/modelos mudam. Mudanças no pricing exigem reaprovação CEO.
+
+---
+
+## Recálculo 2026-05-12 — Gemini Flash (ADR-002)
+
+**Motivação**: implementação real da Onda 1 usa **Gemini 2.5/2.0 Flash** (ratificado em [ADR-002](../adr/002-llm-model-strategy.md)), não Sonnet 4.6 como originalmente planejado. C3 precisa ser revalidada com os preços vigentes do modelo em uso. Anthropic permanece como fallback automático via `src/llm/router.ts`.
+
+### Modelos LLM em uso (preços vigentes 2026)
+
+| Modelo | Input ($/MTok) | Output ($/MTok) | Uso real |
+|---|---|---|---|
+| Gemini 2.0 Flash | $0,075 | $0,30 | `classification` (taxonomia DRE) |
+| Gemini 2.5 Flash | $0,15 | $0,60 | `dre-narrative`, `action-plan` |
+| Claude Haiku 4.5 | $0,80 | $4,00 | Fallback de `classification` |
+| Claude Sonnet 4.6 | $3,00 | $15,00 | Fallback de `dre-narrative`/`action-plan` (raro) |
+
+Câmbio: USD 1 = BRL 5,00.
+
+### Cálculo recalculado por etapa (cliente mediano 142 lançamentos)
+
+#### 2. `classification` (Gemini 2.0 Flash)
+- 8 calls × (3.000 input + 1.500 output) tokens por batch de 20
+- Custo por call: 3.000 × $0,075/MTok + 1.500 × $0,30/MTok = $0,000225 + $0,00045 = **$0,000675**
+- Custo classificação: 8 × $0,000675 = $0,0054 ≈ **R$ 0,027**
+
+#### 3. `dre-narrative.narrator` (Gemini 2.5 Flash)
+- 1 call: 8.000 input + 2.500 output
+- Custo: 8.000 × $0,15/MTok + 2.500 × $0,60/MTok = $0,0012 + $0,0015 = $0,0027 ≈ **R$ 0,014**
+
+#### 4. `action-plan.generator` (Gemini 2.5 Flash)
+- 1 call: 10.000 input + 4.000 output
+- Custo: 10.000 × $0,15/MTok + 4.000 × $0,60/MTok = $0,0015 + $0,0024 = $0,0039 ≈ **R$ 0,020**
+
+### Total recalculado por análise
+
+| Item | Sonnet (original) | Gemini Flash (atual) | Redução |
+|---|---|---|---|
+| Classificação | R$ 0,60 | R$ 0,027 | **-95%** |
+| DRE narrativa | R$ 0,31 | R$ 0,014 | **-95%** |
+| Action plan | R$ 0,45 | R$ 0,020 | **-95%** |
+| Overhead (+25%) | R$ 0,34 | R$ 0,015 | — |
+| **Custo total p50** | **R$ 1,70** | **R$ 0,076** | **-95,5%** |
+| **Custo total p95** (500 lançamentos) | **R$ 5,80** | **R$ 0,19** | **-96,7%** |
+
+### Razão custo/preço recalculada
+
+| Plano | Custo p50/mês (Gemini) | ARPU | Razão | Status C3 |
+|---|---|---|---|---|
+| Lite | R$ 0,08 | R$ 99 | **0,08%** | ✅ <<<25% |
+| Pro | R$ 0,23 (3 análises) | R$ 249 | **0,09%** | ✅ <<<25% |
+| Business | R$ 0,76 (10 análises) | R$ 599 | **0,13%** | ✅ <<<25% |
+
+### Folga adicional desbloqueada pela mudança de modelo
+
+A razão custo/preço cai de 1,7-4,2% (Sonnet) para 0,08-0,13% (Gemini). Isso abre 3 possibilidades:
+
+1. **Preço mais agressivo no Lite**: poderia cair para R$ 49/mês mantendo C3 < 5% (estratégia de aquisição via SEO).
+2. **Inclusão de eval automático sem violar C3**: ~10 evals/análise/mês ainda fica abaixo de 5%.
+3. **Cliente fora-do-plano absorve sem dor**: PME com 1.500 lançamentos/mês no plano Lite custaria R$ 0,30 (vs R$ 6,00 com Sonnet) — quase indolor.
+
+### Sensibilidade — quando C3 entra em risco (recalc Gemini)
+
+| Cenário | Razão estimada (Gemini) | Antes (Sonnet) |
+|---|---|---|
+| Fallback total Anthropic Sonnet (Gemini fora do ar 1 mês) | ~4,2% | — |
+| Re-processing massivo (10× calls) | ~1,5% | ~17% |
+| Plano Lite com 1.000 lançamentos | ~0,5% | ~9% |
+| Migração para Vertex AI (LGPD pré-ASSISTED) | ~0,1% (mesmo preço Studio) | — |
+
+### Triggers de re-avaliação dessa recalc (per ADR-002 §2.2.1)
+
+Este cálculo será refeito automaticamente quando:
+- Cost-per-outcome real medido (Langfuse trace) > 1.3× projetado em 2 meses consecutivos
+- Provider mudar de Studio para Vertex AI (LGPD)
+- Provider mudar de Gemini para outro (resultado de benchmark §2.2.4 ADR-002)
+- Wave 2+ habilitada (decision-engine, scenarios — podem requerer Gemini 2.5 Pro)
+
+### Custo real medido (validação empírica)
+
+| Data | Tenant test | Lançamentos | Custo medido | Custo projetado |
+|---|---|---|---|---|
+| 2026-05-11 | Rafael (dev) | 62 | < R$ 0,30 (Langfuse) | R$ 0,05 projetado |
+
+> Custo medido inclui retries e iterações de teste; em pipeline limpo deve cair próximo da projeção. Confirmar com SHADOW de 30 dias.
+
+### Aprovação do recálculo
+
+- [ ] CEO aprovou novo pricing-floor (Lite poderia cair de R$ 99 → R$ 49)
+- [ ] Unit Economist validou tabelas
+- [ ] Recálculo commitado em `docs/onda-0/unit_economics.md` (esta seção)
+
+**Recálculo aprovado por**: pendente
