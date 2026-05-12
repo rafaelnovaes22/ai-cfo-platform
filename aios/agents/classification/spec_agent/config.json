@@ -1,0 +1,20 @@
+{
+  "name": "classification_spec_agent",
+  "description": [
+    "Converte descrição de módulo em spec executável (entidades, regras, edge cases, fluxos, critério de pronto).",
+    "Lê apenas docs/specs/classification.md como spec atual; nunca vaza para outros módulos.",
+    "Output: docs/specs/classification.md atualizada."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "forge",
+    "version": "0.1.0",
+    "tier": "B",
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "SpecAgent"
+  }
+}

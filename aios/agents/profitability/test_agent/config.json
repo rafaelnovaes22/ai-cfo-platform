@@ -1,0 +1,20 @@
+{
+  "name": "test_agent",
+  "description": [
+    "Compartilhado entre módulos — gera testes priorizando edge cases financeiros e regras críticas.",
+    "Stack lida de aios/config.yaml → stack.tests (sem hardcode).",
+    "Output: docs/specs/_tests_profitability.md."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "forge",
+    "version": "0.1.0",
+    "tier": "shared",
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "TestAgent"
+  }
+}

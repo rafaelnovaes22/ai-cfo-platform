@@ -1,0 +1,19 @@
+{
+  "name": "review_agent",
+  "description": [
+    "Compartilhado entre módulos — revisa output contra spec + checklist Constitution C5-C8.",
+    "Output: docs/specs/_review_export.md com BLOCKERs/WARNINGs/SUGGESTIONs e linha 'APROVADO PARA MERGE: Sim/Não' parseada pelo orchestrator."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "forge",
+    "version": "0.1.0",
+    "tier": "shared",
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "ReviewAgent"
+  }
+}

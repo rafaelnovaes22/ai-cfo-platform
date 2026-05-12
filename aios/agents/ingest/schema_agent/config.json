@@ -1,0 +1,21 @@
+{
+  "name": "schema_agent",
+  "description": [
+    "Compartilhado entre módulos — propõe schema do banco baseado em todas as specs aprovadas.",
+    "Stack-agnostic: lê aios/config.yaml → stack.database. Se vazio, propõe stacks com tradeoffs.",
+    "Output: docs/specs/_schema_proposal.md (modo GERAR_SCHEMA) ou _schema_stack_proposal.md (modo PROPOR_STACK)."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "forge",
+    "version": "0.1.0",
+    "tier": "shared",
+    "stack_agnostic": true,
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "SchemaAgent"
+  }
+}
