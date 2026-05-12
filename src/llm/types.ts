@@ -23,4 +23,5 @@ export interface LlmResponse {
   inputTokens: number;
   outputTokens: number;
   costCents: number;
+  traceId: string | null;
 }

@@ -48,8 +48,10 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
     metadata: { costCents: response.costCents },
   });
 
+  response.traceId = trace.id ?? null;
+
   logger.debug(
-    { task: req.task, model: response.model, costCents: response.costCents },
+    { task: req.task, model: response.model, costCents: response.costCents, traceId: response.traceId },
     "LLM call concluída",
   );
 

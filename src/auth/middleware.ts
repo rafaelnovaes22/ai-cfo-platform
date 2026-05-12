@@ -63,3 +63,28 @@ export function requireRole(...roles: string[]) {
     }
   };
 }
+
+// C4 — bloqueia mutações fora dos modos permitidos da subscription.
+// Encadear após requireAuth: { preHandler: [requireAuth, requireMode("assisted")] }
+export function requireMode(...allowedModes: string[]) {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!req.auth) {
+      await reply.status(401).send({ message: "Não autenticado" });
+      return;
+    }
+    const db = getPrisma();
+    const subscription = await db.subscription.findUnique({
+      where: { tenantId: req.auth.tenantId },
+      select: { mode: true },
+    });
+    const mode = subscription?.mode ?? "shadow";
+    if (!allowedModes.includes(mode)) {
+      await reply.status(403).send({
+        type: "https://api.aicfo.com.br/errors/mode-not-allowed",
+        title: "Operação não permitida no modo atual",
+        status: 403,
+        detail: `Esta operação requer modo ${allowedModes.join(" ou ")}; subscription está em ${mode}.`,
+      });
+    }
+  };
+}

@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
-import { requireAuth } from "@/auth/middleware.js";
+import { requireAuth, requireMode } from "@/auth/middleware.js";
 
 const EvidenceSchema = z.object({
   metric: z.string(),
@@ -41,7 +41,7 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  // Cards de narrativa
+  // Cards de narrativa — em SHADOW o cliente NÃO vê (C4: gerada mas não entregue).
   f.get("/analysis/:analysisId/narrative", {
     schema: {
       params: z.object({ analysisId: z.string() }),
@@ -52,8 +52,12 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
       const db = getPrisma();
       const analysis = await db.monthlyAnalysis.findFirst({
         where: { id: req.params.analysisId, tenantId: req.auth!.tenantId },
+        select: { id: true, mode: true },
       });
       if (!analysis) return reply.status(404).send({ message: "Análise não encontrada" });
+      if (analysis.mode === "shadow") {
+        return reply.status(404).send({ message: "Análise não encontrada" });
+      }
 
       const cards = await db.narrativeCard.findMany({
         where: { analysisId: req.params.analysisId },
@@ -73,7 +77,7 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
       }),
       response: { 200: z.object({ id: z.string() }) },
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {
       const db = getPrisma();
       const card = await db.narrativeCard.findFirst({

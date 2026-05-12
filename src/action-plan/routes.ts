@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
-import { requireAuth } from "@/auth/middleware.js";
+import { requireAuth, requireMode } from "@/auth/middleware.js";
 
 const ActionItemSchema = z.object({
   id:           z.string(),
@@ -75,7 +75,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
       }),
       response: { 200: z.object({ id: z.string() }) },
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {
       const db = getPrisma();
       const item = await db.actionPlanItem.findFirst({
@@ -100,7 +100,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ analysisId: z.string() }),
       response: { 200: z.object({ status: z.string(), approvedAt: z.string() }) },
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {
       const db = getPrisma();
       const analysis = await db.monthlyAnalysis.findFirst({

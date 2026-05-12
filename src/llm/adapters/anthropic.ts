@@ -48,5 +48,6 @@ export async function callAnthropic(config: RouteConfig, req: LlmRequest): Promi
     inputTokens,
     outputTokens,
     costCents: calculateCostCents(config.model, inputTokens, outputTokens),
+    traceId: null,
   };
 }

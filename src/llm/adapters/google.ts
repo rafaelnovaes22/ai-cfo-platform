@@ -42,5 +42,6 @@ export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<
     inputTokens,
     outputTokens,
     costCents: calculateCostCents(config.model, inputTokens, outputTokens),
+    traceId: null,
   };
 }

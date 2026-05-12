@@ -8,6 +8,10 @@ import type { DreLines } from "@/dre-narrative/aggregator.js";
 
 const REPORT_TYPES = ["monthly", "investors", "partners"] as const;
 
+// C4 — em SHADOW a análise nunca sai do status "ready"; só pode exportar
+// depois que humano revisou e mode transitou para entrega ao cliente.
+const EXPORTABLE_STATUS = ["delivered", "approved"] as const;
+
 export const exportRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
 
@@ -42,6 +46,12 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
       });
 
       if (!analysis) return reply.status(404).send({ message: "Análise não encontrada" });
+      if (!(EXPORTABLE_STATUS as readonly string[]).includes(analysis.status)) {
+        return reply.status(422).send({
+          message: "Análise ainda não disponível para exportação",
+          status: analysis.status,
+        });
+      }
       if (!analysis.dreJson) return reply.status(422).send({ message: "DRE ainda não gerada" });
 
       const filename = `aicfo-${analysis.referenceMonth}-${type}.pdf`;

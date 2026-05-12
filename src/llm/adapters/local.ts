@@ -35,5 +35,5 @@ export async function callLocal(_config: RouteConfig, req: LlmRequest): Promise<
   const inputTokens = data.usage?.prompt_tokens ?? 0;
   const outputTokens = data.usage?.completion_tokens ?? 0;
 
-  return { content, provider: "local", model, inputTokens, outputTokens, costCents: 0 };
+  return { content, provider: "local", model, inputTokens, outputTokens, costCents: 0, traceId: null };
 }

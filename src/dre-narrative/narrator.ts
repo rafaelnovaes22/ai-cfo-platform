@@ -82,7 +82,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
         dreJson:       dre,
         narrativeJson: parsed.cards,
         costCents:     (analysis.costCents ?? 0) + llmResponse.costCents,
-        langfuseTraceId: llmResponse.costCents.toString(), // trace referenciado no log
+        langfuseTraceId: llmResponse.traceId,
       },
     });
   });

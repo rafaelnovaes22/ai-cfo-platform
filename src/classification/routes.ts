@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
-import { requireAuth } from "@/auth/middleware.js";
+import { requireAuth, requireMode } from "@/auth/middleware.js";
 import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
 
 const CorrectBody = z.object({
@@ -57,7 +57,7 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
       body: CorrectBody,
       response: { 200: z.object({ id: z.string(), confirmedCategory: z.string() }) },
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {
       const db = getPrisma();
 
