@@ -246,7 +246,11 @@ Operações reversíveis e locais (edição em `src/skus/`, criação de eval ca
 
 ## Pipeline AIOS por módulo
 
-Para cada módulo (exceto Tier C): `spec → backend → contract (frontend_agent) → tests → review → merge`
+Para cada módulo (exceto Tier C): `spec → tests (TDD-RED) → backend → contract (frontend_agent) → review → merge`
+
+**Pipeline TDD-first**: o `test_agent` roda imediatamente após a spec aprovada — antes do backend. Os testes gerados são o contrato executável da spec e devem falhar no primeiro run (RED). O `backend_agent` então implementa para fazer cada teste passar (GREEN). Modos do `test_agent`:
+- **TDD-RED** (preferencial): backend ainda não existe; testes saem da spec
+- **REINFORCE** (legado): backend já implementado; testes reforçam contra `_backend_{module}.md`, mas a spec continua sendo fonte das regras
 
 Comandos:
 - `/acme:aios-init --module {key} --tier {A|B|C}` — scaffolda agentes do módulo

@@ -1,7 +1,8 @@
 {
   "name": "test_agent",
   "description": [
-    "Compartilhado entre módulos — gera testes priorizando edge cases financeiros e regras críticas.",
+    "Compartilhado entre módulos — gera testes TDD-first a partir da spec (modo TDD-RED) ou reforça testes contra backend já implementado (modo REINFORCE).",
+    "Em TDD-RED: os testes precedem o código e falham até a implementação existir.",
     "Stack lida de aios/config.yaml → stack.tests (sem hardcode).",
     "Output: docs/specs/_tests_cashflow.md."
   ],
