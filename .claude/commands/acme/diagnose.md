@@ -1,5 +1,5 @@
 ---
-description: Conduz Fase 0 (diagnóstico cobrável) com decisor do cliente — qualifica problema, mede baseline humano, propõe outcome contratual, valida ICP fit, e produz relatório estruturado em docs/clients/{client_id}/diagnostic.md. Implementa C1 e abre C2.
+description: Conduz Fase 0 (diagnóstico cobrável) com decisor do cliente — qualifica problema, mede baseline humano, propõe outcome contratual, valida ICP fit, e produz relatório estruturado em docs/clients/{client_id}/diagnostic.md. Implementa C1 e abre C2. v0.2.0 (Forge-9): aceita --project_type ∈ {agentic_saas, platform, automation, hybrid}.
 allowed-tools: [Read, Write, Glob, Grep]
 arguments:
   required:
@@ -10,7 +10,9 @@ arguments:
     - session_minutes
     - industry
     - referrer
-forge_command_version: 0.1.0
+    - project_type
+    - ai_enabled
+forge_command_version: 0.2.0
 linked_principles: [C1, C2]
 invokes_skills:
   - "@company-dna"
@@ -19,6 +21,7 @@ invokes_skills:
   - "@diagnostic-runner"
 output_artifact: docs/clients/{client_id}/diagnostic.md
 trace_required: true
+project_type_aware: true
 ---
 
 # /acme:diagnose — Fase 0 cobrável
@@ -51,7 +54,11 @@ declared_problem: <1 frase, ipsis literis do interlocutor>
 session_minutes: <duração planejada, default 90>
 industry: <vertical>
 referrer: <como chegou>
+project_type: <agentic_saas | platform | automation | hybrid>  # default: lê de docs/forge/project.json; se ausente, agentic_saas
+ai_enabled: <true | false>                                       # default: lê de project.json; se ausente, true
 ```
+
+> **Resolução de project_type** (v0.2.0): se `--project_type` ausente, command tenta `docs/forge/project.json`. Se também ausente, aplica defaults retroativos `agentic_saas` + `ai_enabled=true` e emite WARN sugerindo criar `project.json` a partir de `templates/project.template.json`.
 
 ## Execução
 
@@ -63,17 +70,29 @@ referrer: <como chegou>
    - Se __forge_cache.icp vazio → invocar @icp-loader
    - Se __forge_cache.offerings vazio → invocar @offerings-loader
 
-3. Conduzir @diagnostic-runner com os 10 blocos do roteiro:
+3. Resolver project_type:
+   - Se --project_type fornecido → usar
+   - Senão, ler docs/forge/project.json → project.type / project.ai_enabled
+   - Senão, defaults legados (agentic_saas + ai_enabled=true) e WARN
+
+4. Conduzir @diagnostic-runner com os 10 blocos do roteiro (interpretação por project_type):
    1. Problema declarado
-   2. Custo do não-resolvido
-   3. Baseline humano (handoff de inputs para @baseline-cost-builder)
+   2. Custo do não-resolvido (humano OU operacional, conforme tipo)
+   3. Baseline (humano para agentic; ferramenta atual + horas operacionais para platform)
    4. Tentativas anteriores
-   5. Outcome candidato (3 exemplos positivos + 3 negativos + trigger event)
-   6. Métrica de sucesso
+   5. Outcome candidato:
+      - agentic_saas → 3 exemplos positivos + 3 negativos + trigger event de DELIVERED
+      - platform → 3 exemplos positivos + 3 negativos + evento de COMPLETED + audit log entry esperado
+      - automation → idem platform; foco em job/integração
+      - hybrid → declarar por módulo
+   6. Métrica de sucesso (acurácia para IA; pass rate de aceite humano para platform)
    7. Tolerância a erro
-   8. ICP fit (interno — comparar com __forge_cache.icp)
-   9. Catálogo fit (interno — comparar com __forge_cache.offerings)
-   10. Próximos passos (GO/NO-GO + valor diagnóstico)
+   8. ICP fit (interno)
+   9. Catálogo fit (interno)
+   10. Próximos passos (GO/NO-GO + valor diagnóstico) + tipo de spec a gerar:
+       - agentic_saas → /acme:spec --type=platform-sku|product
+       - platform → /acme:spec --type=platform-module
+       - automation → /acme:spec --type=automation-job (futuro: alias de platform-module)
 
 4. Persistir docs/clients/{client_id}/diagnostic.md
    (template: templates/diagnostic-spec.template.md)
@@ -90,22 +109,27 @@ command: /acme:diagnose
 status: ok | partial | error
 client_id: <>
 artifact_path: docs/clients/<>/diagnostic.md
+project_type: agentic_saas | platform | automation | hybrid       # NOVO v0.2.0
+ai_enabled: true | false                                            # NOVO v0.2.0
 session_minutes_actual: <N>
 icp_fit: fit | edge | out_of_icp
 catalog_fit: existing-sku | variant | new
 go_no_go: go | no-go | needs-paid-diagnostic
 proposed_outcome:
+  kind: classified_outcome | operational_action | execution_event   # NOVO v0.2.0 (depende de project_type)
   clause: "<1 frase>"
   positive_examples: [...]
   negative_examples: [...]
   trigger_event: <evento técnico>
+  audit_log_event_expected: "<event_name>"                          # NOVO v0.2.0 (obrigatório se ai_enabled=false)
 baseline_handoff:
-  ready_for: "/acme:unit-economics"
-  fields_collected: [volume_monthly, actors, hours_per_unit, error_rate, rework_rate]
+  model: human_baseline | platform_baseline                          # NOVO v0.2.0
+  ready_for: "/acme:unit-economics" | "/acme:spec --type=platform-module"
+  fields_collected: [volume_monthly, actors, hours_per_unit, error_rate, rework_rate, current_tool, infra_monthly_brl]
   fields_missing: []
 trace_id: <>
 generated_at: 2026-04-30T...
-next_step: "/acme:unit-economics --client_id=<> --process_id=<>"
+next_step: "/acme:spec --type=<tipo-resolvido> --client_id=<> --artifact_id=<>"
 ```
 
 ## Verification gate (não-negociável)
@@ -158,3 +182,4 @@ trace_id: <ou null se erro pré-trace>
 | Versão | Data | Mudança |
 |---|---|---|
 | 0.1.0 | 2026-04-30 | Versão inicial — Forge-2 onda 1 (spec/economics) |
+| 0.2.0 | 2026-05-08 | **Delivery-type aware** — aceita `--project_type` ∈ {agentic_saas, platform, automation, hybrid} e `--ai_enabled`. Bloco 5 do roteiro adapta ao tipo (operational_action para platform; classified_outcome para agentic). Output emite `project_type`, `ai_enabled`, `proposed_outcome.kind`, `audit_log_event_expected`, `baseline_handoff.model`. Backwards compatible (defaults legados quando ausente). Forge-9. |

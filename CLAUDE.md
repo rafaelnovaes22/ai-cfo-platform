@@ -1,7 +1,10 @@
 # Aicfo — Guia para Claude Code
 
 > CFO-IA / Plataforma de gestão financeira inteligente para PMEs. Produto self-serve do guarda-chuva **Acme SaaS²**.
-> Operado pelo framework **Acme Forge** ([`docs/forge/README.md`](docs/forge/README.md)).
+> Operado pelo framework **Acme Forge v0.15.0** ([`docs/forge/README.md`](docs/forge/README.md)).
+>
+> **Prompt de orquestração**: [`MASTER_PROMPT.md`](MASTER_PROMPT.md) — lifecycle, Constitution e stack.
+> **Onboarding não-técnico**: [`HELLO.md`](HELLO.md) | **Dev novo**: [`QUICKSTART_DEV.md`](QUICKSTART_DEV.md) | **Erros comuns**: [`COMMON_ERRORS.md`](COMMON_ERRORS.md)
 
 ---
 

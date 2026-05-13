@@ -34,7 +34,18 @@
       "WebSearch",
       "WebFetch",
       "Bash(git remote *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(awk -F/ '{print $1}')",
+      "Bash(git push *)",
+      "Read(//c/c/Users/Rafael/Projetos/clickup-automation/**)",
+      "Bash(npm run *)",
+      "Read(//c/Users/Rafael/AppData/Local/Temp/claude/c--Users-Rafael-Projetos-Aicfo/d0eaeb45-1006-44ca-8cc8-929829ef2f9d/tasks/**)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation status --short)",
+      "Bash(git check-ignore *)",
+      "Read(//c/Users/Rafael/AppData/Local/Temp/claude/c--Users-Rafael-Projetos-Aicfo/c2d20a00-a974-4d71-9715-723ce0842406/tasks/**)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation add config/aios-module-functionalities.json scripts/update-aicfo-descriptions.mjs package.json)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation commit -m ' *)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation push origin master)"
     ],
     "deny": [
       "Bash(rm -rf*)",
@@ -53,8 +64,15 @@
   "hooks": {
     "PreToolUse": [
       {
+        "_forge_hooks": "active-forge-14",
+        "_ids": ["persona-detect", "outcome-clause-guard", "adr-approval-gate", "secret-scan", "any-type-guard"],
         "matcher": "Edit|Write",
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/persona-detect.sh",
+            "timeout": 2000
+          },
           {
             "type": "command",
             "command": "bash hooks/pre-tool-use/outcome-clause-guard.sh",
@@ -80,6 +98,8 @@
     ],
     "PostToolUse": [
       {
+        "_forge_hooks": "active-forge-4",
+        "_ids": ["langfuse-trace-check", "unit-economics-recalc", "manifest-sync", "friendly-errors"],
         "matcher": "Edit|Write",
         "hooks": [
           {
@@ -96,12 +116,19 @@
             "type": "command",
             "command": "bash hooks/post-tool-use/manifest-sync.sh",
             "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/friendly-errors.sh",
+            "timeout": 3000
           }
         ]
       }
     ],
     "Stop": [
       {
+        "_forge_hooks": "active-forge-4",
+        "_ids": ["five-gates-summary", "eval-suite-fresh"],
         "hooks": [
           {
             "type": "command",
@@ -118,8 +145,8 @@
     ]
   },
   "_comment": "Acme Forge layer (versioned). Per-developer overrides go in settings.local.json (gitignored).",
-  "_forge_version": "0.6.0",
-  "_constitution_version": "0.2.0",
+  "_forge_version": "0.15.0",
+  "_constitution_version": "0.3.0",
   "_forge_features": {
     "skills_path": ".claude/skills/{L0,L1,L2}/",
     "agents_path": ".claude/agents/",

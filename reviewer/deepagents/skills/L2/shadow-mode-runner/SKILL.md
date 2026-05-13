@@ -14,6 +14,8 @@ metadata:
 
 # Skill: shadow-mode-runner — Tier 3 Operational (Forge)
 
+> **applies_when**: `project.ai_enabled = true` — SHADOW mode is an agentic governance pattern (LLM runs in parallel, output never delivered, measures agreement_rate). For platform modules (`ai_enabled=false`), there is no SHADOW; the equivalent lifecycle gate is `STAGING → PILOT`, governed by `platform-pilot-state.template.md` with a minimum observation window (14 days for critical, 7 for standard, 3 for simple) and `platform-acceptance-report.template.md` sign-off before CANONICAL.
+
 Runs an agent in **SHADOW mode** — parallel to current human process, **without delivering/billing output**, instrumenting all runs and measuring human/agent **agreement_rate**. SHADOW is the **mandatory gate** of C4 before any ASSISTED or AUTONOMOUS promotion.
 
 > Skill **does not decide** promotion alone. Produces report; humans (PO Guardian + Promotion Officer) sign off.

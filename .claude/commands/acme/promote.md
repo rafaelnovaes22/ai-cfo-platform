@@ -1,24 +1,44 @@
 ---
-description: Promove modo de uma subscription (start_shadow | shadow_to_assisted | assisted_to_autonomous | rollback). Valida 6 gates obrigatórios (C2 pass, C3 viable, SLA pré-contratada, eval suite passing, aprovação cruzada PO + Promotion Officer, CI/CD pipeline ativo). Invoca @shadow-mode-runner conforme transição. Persiste em subscriptions/{id}/promotions.md com signature_hash.
+description: Promove estado/modo de uma subscription ou módulo. Para agentic_saas (ai_enabled=true): start_shadow | shadow_to_assisted | assisted_to_autonomous | rollback. Para platform/automation (ai_enabled=false): to_staging | to_pilot | to_canonical | to_deprecated | rollback. Valida 6 gates obrigatórios. Persiste em subscriptions/{id}/promotions.md (agentic) ou docs/specs/{module}.pilot-state.md (platform) com signature_hash. v0.3.0 (Forge-9): delivery-type aware.
 allowed-tools: [Read, Write, Glob, Grep]
 arguments:
   required:
-    - subscription_id
+    - subscription_id_or_module_id
     - to_mode
   optional:
     - artifact_id
     - approver_po
     - approver_promotion_officer
+    - approver_decisor_cliente   # mandatório para platform criticality=critical to_canonical
     - rollback_reason
-forge_command_version: 0.1.0
+    - project_type
+    - criticality                 # critical | standard | simple (platform)
+forge_command_version: 0.3.0
 linked_principles: [C1, C2, C3, C4, C6]
 invokes_skills:
   - "@offerings-loader"
-  - "@shadow-mode-runner"
-output_artifact: subscriptions/{subscription_id}/promotions.md
+  - "@shadow-mode-runner"        # apenas se ai_enabled=true
+output_artifact_by_type:
+  agentic_saas: subscriptions/{subscription_id}/promotions.md
+  platform: docs/specs/{module_id}.pilot-state.md
+  automation: docs/specs/{module_id}.pilot-state.md
 trace_required: true
 human_approval_required: true
 gate_count: 6
+project_type_aware: true
+
+agentic_transitions:
+  - start_shadow            # none → SHADOW
+  - shadow_to_assisted      # SHADOW → ASSISTED
+  - assisted_to_autonomous  # ASSISTED → AUTONOMOUS
+  - rollback                # qualquer → uma camada abaixo
+
+platform_transitions:
+  - to_staging              # DRAFT → STAGING
+  - to_pilot                # STAGING → PILOT
+  - to_canonical            # PILOT → CANONICAL
+  - to_deprecated           # CANONICAL → DEPRECATED
+  - rollback                # qualquer → estado anterior estável
 ---
 
 # /acme:promote — Transição de modo (C4 enforcement)
@@ -27,7 +47,9 @@ gate_count: 6
 
 Único caminho legítimo para mudar `subscription.mode`. Implementa o gate completo de **C4 (SHADOW antes de cobrar)** com 5 validações e **aprovação cruzada humana** mandatória. Esta é a command que pode iniciar SHADOW (a única — nem `/acme:implement` nem qualquer skill faz isso).
 
-Transições suportadas:
+Transições suportadas (resolução por `project_type` / `ai_enabled`):
+
+### Para `agentic_saas` (ou módulo `ai_enabled=true` em hybrid)
 
 | Transição (`to_mode`) | De | Validações específicas |
 |---|---|---|
@@ -35,6 +57,16 @@ Transições suportadas:
 | `shadow_to_assisted` | `shadow` | Janela ≥ window_days E agreement >= threshold E eval pass |
 | `assisted_to_autonomous` | `assisted` | Tempo mínimo ASSISTED + auditoria de aprovação humana ≥ X% + CI/CD pipeline ativo (Gate 6) |
 | `rollback` | qualquer | Reason obrigatória; rebaixa um nível |
+
+### Para `platform` / `automation` (ou módulo `ai_enabled=false` em hybrid)
+
+| Transição (`to_mode`) | De | Validações específicas |
+|---|---|---|
+| `to_staging` | `DRAFT` | Spec aprovada com C2 §1 + diagnostic linkado + smoke test E2E em ambiente isolado |
+| `to_pilot` | `STAGING` | Testes E2E passando + delivery-economics.md presente + audit log instrumentado |
+| `to_canonical` | `PILOT` | Janela mínima cumprida (14d crítico / 7d standard / 3d simple) + acceptance-report.md assinado + sample audit log íntegro + bug rate aceitável |
+| `to_deprecated` | `CANONICAL` | Migration path documentado + plano de sunset + comunicação a clientes ativos |
+| `rollback` | qualquer | Reason obrigatória; volta ao estado anterior estável |
 
 ## Pre-conditions
 
@@ -86,13 +118,41 @@ A command **não** executa transição se qualquer gate falhar:
 - `signature_hash` do PO + `signature_hash` do Promotion Officer registrados
 - Para `assisted_to_autonomous`: + assinatura do `security-privacy-guardian` (Forge-3)
 
-### Gate 6 — CI/CD pipeline ativo (obrigatório apenas para `assisted_to_autonomous`)
+### Gate 6 — CI/CD pipeline ativo (obrigatório apenas para `assisted_to_autonomous` ou `to_canonical` críticos)
 - `docs/cicd-checklist-{artifact_id}.md` existe com `gate_6_status: pass`
 - Todos os itens obrigatórios (🔴) do checklist marcados como implementados
 - `ci_pipeline_url` preenchido com link verificável para pipeline ativo
 - `last_ci_run_status: passing` — última execução do CI passou
-- Workflows obrigatórios presentes no repo: `forge-validate` + `forge-eval` + `forge-audit`
+- Workflows obrigatórios presentes no repo: `forge-validate` + (`forge-eval` se ai_enabled=true OU `forge-tests` se ai_enabled=false) + `forge-audit`
 - Branch protection ativa em `main`/`master` com status checks forge exigidos
+
+---
+
+## Os 6 gates — variante platform / automation (`ai_enabled=false`)
+
+Quando `to_mode` é uma das transições platform (`to_staging`, `to_pilot`, `to_canonical`, `to_deprecated`), os gates 1-6 são reinterpretados:
+
+### Gate 1 (platform) — C2 outcome operacional
+- `spec.c2_validation: pass`; §1 com critério de aceite operacional
+- `spec.outcome_clause_hash` consistente com `acceptance-report.md` (sem drift)
+
+### Gate 2 (platform) — C3 platform_margin viável
+- `delivery-economics-{module}.md` presente com `ratio ≤ project.economics.cost_to_price_ratio_max`
+- `last_recalculated_at` ≤ 90 dias
+
+### Gate 3 (platform) — SLA pré-contratada
+- `spec.c4_thresholds` declarado para o módulo (mesmo schema; campos relevantes: `acceptance_pass_rate_min`, `bug_rate_max`, `latency_p95_ms`, `min_window_days`)
+
+### Gate 4 (platform) — Testes E2E + acceptance-report
+- `tests/e2e/reports/{module}-{date}.json` com `status: pass` e ≤ 7 dias
+- Para `to_canonical`: `acceptance-report.md` assinado com `signature_hash` do PO + decisor cliente (se `criticality: critical`)
+
+### Gate 5 (platform) — Aprovação cruzada humana
+- `approver_po != approver_promotion_officer` (sem self-approval)
+- Para `to_canonical` com `criticality: critical`: + assinatura do `approver_decisor_cliente`
+
+### Gate 6 (platform) — CI/CD pipeline ativo (obrigatório para `to_canonical`)
+- Mesma regra do agentic, com workflow alternativo `forge-tests` em vez de `forge-eval`
 
 ## Execução
 
@@ -242,3 +302,4 @@ trace_id: <>
 |---|---|---|
 | 0.1.0 | 2026-04-30 | Versão inicial — Forge-2 onda 3 (validation) |
 | 0.2.0 | 2026-05-07 | Gate 6 CI/CD pipeline ativo (obrigatório para assisted_to_autonomous); gate_count 5→6; Forge-8 |
+| 0.3.0 | 2026-05-08 | **Delivery-type aware** — adiciona transições platform (`to_staging`, `to_pilot`, `to_canonical`, `to_deprecated`); 6 gates reinterpretados quando `ai_enabled=false` (testes E2E + acceptance-report.md em vez de eval suite + shadow-mode-runner); persistência alternativa em `pilot-state.md`; assinatura do decisor cliente obrigatória para `to_canonical` com `criticality: critical`. Forge-9. |

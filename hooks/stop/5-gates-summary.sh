@@ -2,6 +2,20 @@
 # Hook: 5-gates-summary
 # At session end, generates a quick Forge gate health report for the current branch.
 
+_get_ai_enabled() {
+  if [ -f "docs/forge/project.json" ]; then
+    if command -v jq &>/dev/null; then
+      jq -r '.project.ai_enabled // true' docs/forge/project.json 2>/dev/null || echo "true"
+    else
+      python3 -c "import json; d=json.load(open('docs/forge/project.json')); print(str(d.get('project',{}).get('ai_enabled',True)).lower())" 2>/dev/null || echo "true"
+    fi
+  else
+    echo "true"
+  fi
+}
+
+AI_ENABLED=$(_get_ai_enabled)
+
 REPORT_DIR="docs/forge/session-gate-reports"
 mkdir -p "$REPORT_DIR"
 REPORT="$REPORT_DIR/$(date +%Y-%m-%dT%H-%M-%S).md"
@@ -36,8 +50,30 @@ else
   WARN=$((WARN+1))
 fi
 
-# G3 — evals têm ≥ 30 casos por SKU
-if [ -d "evals" ]; then
+# G3 — evals ≥ 30 casos por SKU (agentic) OU pilot-state.md presente por módulo (platform)
+if [ "$AI_ENABLED" = "false" ]; then
+  # Platform: check pilot-state.md exists for modules in PILOT/CANONICAL
+  if [ -d "docs/modules" ]; then
+    MISSING_STATES=""
+    for mod_dir in docs/modules/*/; do
+      [ -d "$mod_dir" ] || continue
+      MOD=$(basename "$mod_dir")
+      if [ ! -f "${mod_dir}pilot-state.md" ]; then
+        MISSING_STATES="$MISSING_STATES $MOD"
+      fi
+    done
+    if [ -z "$MISSING_STATES" ]; then
+      LINES+=("| G3 | pilot-state.md presente por módulo | ✅ PASS |")
+      PASS=$((PASS+1))
+    else
+      LINES+=("| G3 | pilot-state.md presente por módulo | ⚠️ WARN — faltando:$MISSING_STATES |")
+      WARN=$((WARN+1))
+    fi
+  else
+    LINES+=("| G3 | pilot-state.md por módulo | ⏭ SKIP — docs/modules/ não existe |")
+    WARN=$((WARN+1))
+  fi
+elif [ -d "evals" ]; then
   LOW_EVALS=""
   for eval_dir in evals/*/cases/; do
     [ -d "$eval_dir" ] || continue

@@ -148,10 +148,51 @@ jobs:
           echo "::error::Pre-merge check falhou — corrija os gates antes de mergear"
           exit 2
 
+  # ─── Gate TDD-RED — todo módulo modificado em src/ tem tests/ correspondente ─
+  tdd-red-phase-check:
+    name: TDD-RED Phase Check (G6)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verificar que todo módulo tocado em src/ tem tests/ correspondente
+        shell: bash
+        run: |
+          # G6: Para cada caminho src/modules/{module}/* ou src/{features|domains}/{module}/*
+          # modificado, exigir que exista tests/{module}/unit/ com pelo menos 1 arquivo.
+          # Isto enforce o ciclo TDD: o test_agent --mode red deve ter rodado ANTES do build.
+
+          base="${{ github.base_ref }}"
+          changed=$(git diff --name-only "origin/$base...HEAD" | grep -E '^src/(modules|features|domains)/' || true)
+          if [ -z "$changed" ]; then
+            echo "Nenhum módulo de domínio modificado — gate TDD-RED N/A"
+            exit 0
+          fi
+
+          # Extrai nomes únicos de módulos do path src/{modules|features|domains}/{nome}/...
+          modules=$(echo "$changed" | sed -E 's|^src/(modules|features|domains)/([^/]+)/.*|\2|' | sort -u)
+          missing=""
+          for mod in $modules; do
+            if [ ! -d "tests/$mod/unit" ] || [ -z "$(ls -A tests/$mod/unit 2>/dev/null)" ]; then
+              missing="$missing $mod"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "::error::G6 TDD-RED FAIL — módulos modificados sem tests/{module}/unit/:$missing"
+            echo "::error::  Rode: python aios/orchestrator.py test --module <nome> --mode red"
+            echo "::error::  ANTES de implementar o backend/frontend (Forge v0.9.0+ exige TDD)."
+            exit 2
+          fi
+          echo "✓ G6 PASS — todos os módulos modificados têm tests/{module}/unit/ presente"
+
   summary:
     name: Resumo CI
     runs-on: ubuntu-latest
-    needs: [forge-doctor, skill-security-scan, pre-merge-check]
+    needs: [forge-doctor, skill-security-scan, pre-merge-check, tdd-red-phase-check]
     if: always()
     steps:
       - name: Status dos gates
@@ -159,7 +200,12 @@ jobs:
           echo "forge-doctor: ${{ needs.forge-doctor.result }}"
           echo "skill-security-scan: ${{ needs.skill-security-scan.result }}"
           echo "pre-merge-check: ${{ needs.pre-merge-check.result }}"
+          echo "tdd-red-phase-check: ${{ needs.tdd-red-phase-check.result }}"
           if [ "${{ needs.forge-doctor.result }}" = "failure" ]; then
             echo "::error::Forge Doctor falhou — merge bloqueado"
+            exit 1
+          fi
+          if [ "${{ needs.tdd-red-phase-check.result }}" = "failure" ]; then
+            echo "::error::TDD-RED gate (G6) falhou — merge bloqueado"
             exit 1
           fi

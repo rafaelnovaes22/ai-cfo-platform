@@ -1,22 +1,25 @@
 ---
 name: baseline-cost-builder
-description: "Calculates baseline human cost (volume × time × hourly_rate) and derives min_price_per_outcome to satisfy C3 (cost ≤ 25% of price). Tier 2 tactical skill — reads Tier 1 cache + per-client inputs, persists docs/clients/{client_id}/baseline-cost-{process_id}.md."
+description: "Calculates baseline economics for C3 gate. For agentic (ai_enabled=true): human cost × volume → min_price_per_outcome via cost_per_outcome model. For platform (ai_enabled=false): (infra + support + maintenance) / revenue → platform_margin model. Persists docs/clients/{client_id}/baseline-cost-{process_id}.md or docs/modules/{module_id}/delivery-economics-{module_id}.md."
 metadata:
   converted-from: claude-code
   source-path: .claude/skills/L1/baseline-cost-builder.md
   converter-version: "2.1"
   deep-agents-compat: ">=0.0.34"
   forge-tier: 2
-  forge-version: "0.1.0"
+  forge-version: "0.2.0"
   linked-principles: [C1, C2, C3]
   helper-pattern: none
 ---
 
 # Skill: baseline-cost-builder — Tier 2 Tactical (Forge)
 
-Measures human cost of a client process and derives the minimum sale price to keep the AI agent within C3 hard gate (cost ≤ 25% of price). Output is the canonical input of `templates/unit-economics.template.md`.
+Measures economics for C3 compliance. Operates in two modes based on `project.ai_enabled`:
 
-> **Does not estimate** — receives inputs declared by the client. Estimation kills C3 silently in production.
+- **`ai_enabled=true` (agentic)**: measures human cost of process → derives minimum sale price → C3 gate: `inference_cost / price ≤ 25%`. Output: `templates/unit-economics.template.md`.
+- **`ai_enabled=false` (platform)**: measures operational cost → derives platform margin → C3 gate: `(infra + support + maintenance) / revenue ≤ 25%`. Output: `templates/delivery-economics.template.md`.
+
+> **Does not estimate** — receives inputs declared by the client or operator. Estimation kills C3 silently in production.
 
 ---
 
@@ -30,7 +33,13 @@ Measures human cost of a client process and derives the minimum sale price to ke
 
 ---
 
-## Execution Plan
+## Execution Plan — mode detection
+
+- [ ] 0. Read `docs/forge/project.json` → `project.ai_enabled` (default `true` if absent)
+- [ ] **If `ai_enabled=true`** → follow **agentic path** (Steps 1-9 below)
+- [ ] **If `ai_enabled=false`** → follow **platform path** (Steps P1-P7 below)
+
+### Agentic path (ai_enabled=true)
 
 - [ ] 1. Verify Tier 1 cache present (`.deepagents/cache/offerings.yaml`)
 - [ ] 2. Validate required parameters (client_id, process_id, volume_monthly, actors[], quality_baseline)
@@ -39,8 +48,18 @@ Measures human cost of a client process and derives the minimum sale price to ke
 - [ ] 5. Compute `human_cost_per_unit`
 - [ ] 6. Derive `min_price_per_outcome = inferred_inference_cost / target_cost_ratio`
 - [ ] 7. Determine `c3_check.status` ∈ {viable, tight, unviable}
-- [ ] 8. Render markdown from template + write file
+- [ ] 8. Render markdown from `templates/unit-economics.template.md` + write `docs/clients/{client_id}/baseline-cost-{process_id}.md`
 - [ ] 9. Return summary YAML
+
+### Platform path (ai_enabled=false)
+
+- [ ] P1. Validate required parameters (module_id, infra_monthly_brl, support_monthly_brl, maintenance_monthly_brl, revenue_monthly_brl)
+- [ ] P2. Compute `total_cost_monthly = infra_monthly_brl + support_monthly_brl + maintenance_monthly_brl`
+- [ ] P3. Compute `platform_margin = total_cost_monthly / revenue_monthly_brl`
+- [ ] P4. Determine `c3_check.status`: `viable` if ≤0.20, `tight` if ≤0.25, `unviable` if >0.25
+- [ ] P5. Identify cost reduction levers if `unviable` or `tight`
+- [ ] P6. Render markdown from `templates/delivery-economics.template.md` + write `docs/modules/{module_id}/delivery-economics-{module_id}.md`
+- [ ] P7. Return summary YAML
 
 ---
 
@@ -59,6 +78,8 @@ command -v python3 >/dev/null 2>&1 || { echo "ERROR: Need python3"; exit 1; }
 ---
 
 ## Input parameters
+
+### Agentic inputs (ai_enabled=true)
 
 ```yaml
 # required
@@ -81,6 +102,23 @@ peak_factor: 1.0
 sla_currently_paid: <float>
 target_cost_ratio: 0.25
 artifact_id: <slug>
+```
+
+### Platform inputs (ai_enabled=false)
+
+```yaml
+# required
+module_id: <slug>
+infra_monthly_brl: <float>      # hosting, DB, storage, CDN
+support_monthly_brl: <float>    # customer success, helpdesk allocation
+maintenance_monthly_brl: <float> # dev hours × rate for maintenance/bug fixes
+revenue_monthly_brl: <float>    # MRR attributed to this module (or proportional share)
+data_source: <text>
+data_confidence: high | medium | low
+
+# optional
+target_margin_max: 0.25         # default 0.25 (C3 hard gate)
+cost_reduction_levers: [<text>] # optional: known ways to reduce costs
 ```
 
 ---
@@ -134,6 +172,37 @@ out = {
     'c3_status': status
 }
 yaml.safe_dump(out, open('.deepagents/cache/baseline-result.yaml','w'))
+print(yaml.safe_dump(out))
+PY
+```
+
+---
+
+## Step P — Platform margin compute (ai_enabled=false only)
+
+```bash
+python3 - <<'PY'
+import json, yaml, sys
+i = json.loads(open('.deepagents/cache/baseline-inputs.json').read())
+infra = i['infra_monthly_brl']
+support = i['support_monthly_brl']
+maint = i['maintenance_monthly_brl']
+revenue = i['revenue_monthly_brl']
+limit = i.get('target_margin_max', 0.25)
+total_cost = infra + support + maint
+margin = total_cost / revenue if revenue > 0 else float('inf')
+if margin <= 0.20: status = 'viable'
+elif margin <= limit: status = 'tight'
+else: status = 'unviable'
+out = {
+    'total_cost_monthly': total_cost,
+    'revenue_monthly': revenue,
+    'platform_margin': round(margin, 4),
+    'platform_margin_pct': f"{margin*100:.1f}%",
+    'c3_status': status,
+    'c3_limit': limit
+}
+yaml.safe_dump(out, open('.deepagents/cache/platform-economics-result.yaml', 'w'))
 print(yaml.safe_dump(out))
 PY
 ```

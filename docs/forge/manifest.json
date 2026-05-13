@@ -3,10 +3,10 @@
   "manifest_version": "0.7.0",
   "framework": {
     "name": "Acme Forge",
-    "version": "0.7.0",
-    "phase": "Forge-8 CI/CD esteira completa — 4 templates em templates/cicd/ (validate/eval/audit/checklist), Gate 6 obrigatório no /acme:promote para assisted_to_autonomous, Wave 6 no /acme:tasks, F25 em decisions. Forge-5 playbook content still pending first SKU in AUTONOMOUS.",
-    "last_updated": "2026-05-07",
-    "constitution_version": "0.2.0",
+    "version": "0.15.0",
+    "phase": "Forge-14 consumer upgrade v0.7.0 to v0.15.0",
+    "last_updated": "2026-05-13",
+    "constitution_version": "0.3.0",
     "constitution_path": ".claude/CONSTITUTION.md",
     "constitution_sha256": null,
     "owner": "Acme / Novais Digital",
@@ -36,7 +36,10 @@
       "frequency": "monthly",
       "contract_path": "docs/forge/reviewer-contract.md",
       "implementation_status": "infrastructure-complete (10 skills converted; runtime invocation pending in consumer project)",
-      "implementation_decisions": ["F17", "F18"],
+      "implementation_decisions": [
+        "F17",
+        "F18"
+      ],
       "converter_repo": "https://github.com/andersonamaral2/Claude-Code-to-Deep-Agents-Skills-Converter",
       "artifacts": {
         "prompt": "reviewer/prompt.template.md",
@@ -59,17 +62,54 @@
           "reviewer/deepagents/skills/reviewer/forge-auditor/SKILL.md"
         ]
       }
-    }
+    },
+    "framework_version_required": "0.15.0",
+    "last_synced_at": "2026-05-13"
   },
   "principles": [
-    {"id": "C1", "name": "Diagnose-before-design", "scope": "all-categories"},
-    {"id": "C2", "name": "Outcome-first, never tech-first", "scope": "all-categories"},
-    {"id": "C3", "name": "Cost ≤ 25% of price", "scope": "all-categories", "shadow_exemption": true},
-    {"id": "C4", "name": "SHADOW antes de cobrar", "scope": "platform-skus", "products_alternative": "Beta declared"},
-    {"id": "C5", "name": "Three-tier context", "scope": "all-categories"},
-    {"id": "C6", "name": "Telemetry-by-default", "scope": "all-categories"},
-    {"id": "C7", "name": "Portability over lock-in", "scope": "all-categories", "products_relax": "stack divergente em Beta com plano de migração"},
-    {"id": "C8", "name": "Anti-customização heroica", "scope": "all-categories"}
+    {
+      "id": "C1",
+      "name": "Diagnose-before-design",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C2",
+      "name": "Outcome-first, never tech-first",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C3",
+      "name": "Cost ≤ 25% of price",
+      "scope": "all-categories",
+      "shadow_exemption": true
+    },
+    {
+      "id": "C4",
+      "name": "SHADOW antes de cobrar",
+      "scope": "platform-skus",
+      "products_alternative": "Beta declared"
+    },
+    {
+      "id": "C5",
+      "name": "Three-tier context",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C6",
+      "name": "Telemetry-by-default",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C7",
+      "name": "Portability over lock-in",
+      "scope": "all-categories",
+      "products_relax": "stack divergente em Beta com plano de migração"
+    },
+    {
+      "id": "C8",
+      "name": "Anti-customização heroica",
+      "scope": "all-categories"
+    }
   ],
   "principle_extensions_path": "examples/acme/constitution-extension.md",
   "artifacts": {
@@ -79,7 +119,11 @@
           "id": "readme",
           "path": "README.md",
           "type": "documentation",
-          "audience": ["human-developer", "deep-agent", "framework-maintainer"],
+          "audience": [
+            "human-developer",
+            "deep-agent",
+            "framework-maintainer"
+          ],
           "version": "0.4.1",
           "sha256": null,
           "description": "Multi-consumer overview e ponteiros — atualizado para v0.4.1 (badges, status, estrutura expandida)"
@@ -88,7 +132,9 @@
           "id": "quickstart",
           "path": "QUICKSTART.md",
           "type": "documentation",
-          "audience": ["human-developer"],
+          "audience": [
+            "human-developer"
+          ],
           "version": "0.2.0",
           "sha256": null,
           "description": "Instalar Forge em projeto novo em <5 min"
@@ -97,7 +143,10 @@
           "id": "architecture",
           "path": "ARCHITECTURE.md",
           "type": "documentation",
-          "audience": ["human-developer", "framework-maintainer"],
+          "audience": [
+            "human-developer",
+            "framework-maintainer"
+          ],
           "version": "0.2.0",
           "sha256": null,
           "description": "Visão estrutural, fluxos, camadas de governança"
@@ -106,7 +155,9 @@
           "id": "install",
           "path": "INSTALL.md",
           "type": "documentation",
-          "audience": ["human-developer"],
+          "audience": [
+            "human-developer"
+          ],
           "version": "0.1.0",
           "sha256": null,
           "description": "Instalação manual detalhada"
@@ -115,7 +166,9 @@
           "id": "contributing",
           "path": "CONTRIBUTING.md",
           "type": "documentation",
-          "audience": ["framework-maintainer"],
+          "audience": [
+            "framework-maintainer"
+          ],
           "version": "0.2.0",
           "sha256": null,
           "description": "Como evoluir o framework"
@@ -124,7 +177,9 @@
           "id": "deepagent-guide",
           "path": "DEEPAGENT_GUIDE.md",
           "type": "documentation",
-          "audience": ["deep-agent"],
+          "audience": [
+            "deep-agent"
+          ],
           "version": "0.2.0",
           "sha256": null,
           "description": "Como agente autônomo navega e audita projetos Forge"
@@ -133,7 +188,11 @@
           "id": "glossary",
           "path": "GLOSSARY.md",
           "type": "documentation",
-          "audience": ["human-developer", "deep-agent", "framework-maintainer"],
+          "audience": [
+            "human-developer",
+            "deep-agent",
+            "framework-maintainer"
+          ],
           "version": "0.2.0",
           "sha256": null,
           "description": "Vocabulário compartilhado"
@@ -142,7 +201,9 @@
           "id": "claude-md-meta",
           "path": "CLAUDE.md",
           "type": "documentation",
-          "audience": ["framework-maintainer"],
+          "audience": [
+            "framework-maintainer"
+          ],
           "version": "0.1.0",
           "sha256": null,
           "description": "Meta-doc para devs do framework"
@@ -151,7 +212,9 @@
           "id": "claude-md-template",
           "path": "CLAUDE.md.template",
           "type": "template",
-          "audience": ["human-developer"],
+          "audience": [
+            "human-developer"
+          ],
           "version": "0.1.0",
           "sha256": null,
           "description": "Template para projeto consumidor adaptar como CLAUDE.md raiz"
@@ -160,7 +223,9 @@
           "id": "changelog",
           "path": "CHANGELOG.md",
           "type": "documentation",
-          "audience": ["all"],
+          "audience": [
+            "all"
+          ],
           "version": "0.6.0",
           "sha256": null,
           "description": "Histórico de versões (entradas até v0.6.0 — Forge-7)"
@@ -173,7 +238,16 @@
           "type": "documentation",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Overview interno do framework"
         },
         {
@@ -198,7 +272,11 @@
           "type": "documentation",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6", "C7", "C8"],
+          "linked_principles": [
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Padrão oficial de telemetria Langfuse para agentes AIOS — campos obrigatórios, mock fallback, integração com hook langfuse-trace-check"
         },
         {
@@ -207,7 +285,9 @@
           "type": "documentation",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6"],
+          "linked_principles": [
+            "C6"
+          ],
           "description": "Contrato formal com reviewer DeepAgent"
         },
         {
@@ -224,7 +304,9 @@
           "type": "manifest",
           "version": "0.6.0",
           "sha256": null,
-          "linked_principles": ["C6"],
+          "linked_principles": [
+            "C6"
+          ],
           "description": "Este arquivo - inventory machine-readable"
         },
         {
@@ -233,7 +315,9 @@
           "type": "documentation",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5"],
+          "linked_principles": [
+            "C5"
+          ],
           "description": "Helper pattern (BMAD) — cache strategy para skills Tier 1 com meta de ≥70% redução de tokens"
         }
       ]
@@ -263,7 +347,12 @@
         "type": "template",
         "version": "0.2.0",
         "sha256": null,
-        "linked_principles": ["C1", "C2", "C3", "C4"],
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4"
+        ],
         "use_case": "platform-sku",
         "description": "Spec de SKU vertical em plataforma high-touch (cliente não loga, entrega async). Renomeado de sku-spec na v0.2.0."
       },
@@ -273,7 +362,12 @@
         "type": "template",
         "version": "0.2.0",
         "sha256": null,
-        "linked_principles": ["C1", "C2", "C3", "C8"],
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C8"
+        ],
         "use_case": "self-serve-product",
         "description": "Spec de produto self-serve (cliente loga, mensalidade fixa) — Acme Fin, Acme Educacional, etc."
       },
@@ -283,7 +377,10 @@
         "type": "template",
         "version": "0.2.0",
         "sha256": null,
-        "linked_principles": ["C1", "C2"],
+        "linked_principles": [
+          "C1",
+          "C2"
+        ],
         "use_case": "diagnostic-fase-0",
         "description": "Spec de Diagnóstico/Fase 0 cobrável"
       },
@@ -293,7 +390,9 @@
         "type": "template",
         "version": "0.1.0",
         "sha256": null,
-        "linked_principles": ["C7"],
+        "linked_principles": [
+          "C7"
+        ],
         "description": "Architecture Decision Record"
       },
       {
@@ -302,7 +401,9 @@
         "type": "template",
         "version": "0.1.0",
         "sha256": null,
-        "linked_principles": ["C4"],
+        "linked_principles": [
+          "C4"
+        ],
         "description": "Caso de eval suite por SKU/produto"
       },
       {
@@ -311,7 +412,9 @@
         "type": "template",
         "version": "0.1.0",
         "sha256": null,
-        "linked_principles": ["C3"],
+        "linked_principles": [
+          "C3"
+        ],
         "description": "Validação de unit economics (regra C3)"
       },
       {
@@ -329,7 +432,16 @@
         "type": "template",
         "version": "0.2.0",
         "sha256": null,
-        "linked_principles": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"],
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C5",
+          "C6",
+          "C7",
+          "C8"
+        ],
         "description": "Output do reviewer DeepAgent — relatório mensal de auditoria"
       },
       {
@@ -338,7 +450,9 @@
         "type": "template",
         "version": "0.2.0",
         "sha256": null,
-        "linked_principles": ["C5"],
+        "linked_principles": [
+          "C5"
+        ],
         "description": "Estrutura ClickUp aplicando Three-tier (Sincra) — opcional"
       },
       {
@@ -347,7 +461,9 @@
         "type": "template",
         "version": "0.1.0",
         "sha256": null,
-        "linked_principles": ["C6"],
+        "linked_principles": [
+          "C6"
+        ],
         "use_case": "consumer-adr-002",
         "description": "Template para ADR-002 do projeto consumidor — runtime do reviewer DeepAgent (D1-D7: local de execução, modelo, telemetry, cadência, output, auto-rollback, credenciais)"
       },
@@ -357,7 +473,13 @@
         "type": "template",
         "version": "0.1.0",
         "sha256": null,
-        "linked_principles": ["C1", "C2", "C3", "C4", "C8"],
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C8"
+        ],
         "use_case": "vertical-playbook",
         "description": "Template para playbook vertical — blocos reutilizáveis, padrões de integração e métricas de esforço. Meta: cliente 2 custa ≤30% do cliente 1."
       },
@@ -367,7 +489,13 @@
         "type": "template",
         "version": "0.1.0",
         "sha256": null,
-        "linked_principles": ["C1", "C2", "C3", "C4", "C6"],
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C6"
+        ],
         "use_case": "sku-retrospective",
         "description": "Template de retrospectiva por SKU pós-AUTONOMOUS — compliance C1-C8, gate failures, métricas reais, lições aprendidas."
       }
@@ -375,7 +503,12 @@
     "templates_aios": {
       "_status": "Forge-7 — 6/6 agentes portáveis + orchestrator + config (v0.6.0). Boilerplate canônico copiado pelo /acme:aios-init v0.2.0.",
       "root": "templates/aios/",
-      "linked_principles": ["C5", "C6", "C7", "C8"],
+      "linked_principles": [
+        "C5",
+        "C6",
+        "C7",
+        "C8"
+      ],
       "files": [
         {
           "id": "template-aios-readme",
@@ -391,7 +524,12 @@
           "type": "template",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C4",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Pipeline multiagente para o projeto consumidor — lê módulos de aios/config.yaml (sem hardcode). Gates humanos C4 obrigatórios em pipeline completo."
         },
         {
@@ -400,7 +538,10 @@
           "type": "template",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C7", "C8"],
+          "linked_principles": [
+            "C7",
+            "C8"
+          ],
           "description": "Config canônica AIOS — llm/server/memory/storage + project.* + stack.{backend,frontend,database,tests} + modules[]."
         },
         {
@@ -411,7 +552,12 @@
           "version": "0.1.0",
           "sha256": null,
           "shared": false,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Especializado por módulo — converte descrição em spec executável. Tier configurável (A/B/C)."
         },
         {
@@ -422,7 +568,12 @@
           "version": "0.1.0",
           "sha256": null,
           "shared": false,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Especializado por módulo — implementa API + service layer. Stack lida de aios/config.yaml → stack.backend."
         },
         {
@@ -433,7 +584,12 @@
           "version": "0.1.0",
           "sha256": null,
           "shared": false,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Especializado por módulo — implementa UI/telas. Stack lida de aios/config.yaml → stack.frontend."
         },
         {
@@ -445,7 +601,12 @@
           "sha256": null,
           "shared": true,
           "stack_agnostic": true,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Compartilhado e stack-agnostic — gera schema na stack declarada em aios/config.yaml → stack.database; se vazia, propõe 1-3 stacks com tradeoffs."
         },
         {
@@ -456,7 +617,12 @@
           "version": "0.1.0",
           "sha256": null,
           "shared": true,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Compartilhado — gera testes priorizando edge cases financeiros e regras críticas. Stack de testes lida de aios/config.yaml → stack.tests."
         },
         {
@@ -467,7 +633,12 @@
           "version": "0.1.0",
           "sha256": null,
           "shared": true,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Compartilhado — revisa output contra spec + checklist Constitution C5-C8. Output parseável (linha 'APROVADO PARA MERGE: Sim/Não')."
         }
       ]
@@ -475,7 +646,12 @@
     "templates_cicd": {
       "_status": "Forge-8 — 4 templates de CI/CD entregues (v0.7.0). Copie para .github/workflows/ e docs/ no projeto consumidor. Gate 6 do /acme:promote lê docs/cicd-checklist-{artifact_id}.md antes de autorizar assisted_to_autonomous.",
       "root": "templates/cicd/",
-      "linked_principles": ["C1", "C4", "C6", "C7"],
+      "linked_principles": [
+        "C1",
+        "C4",
+        "C6",
+        "C7"
+      ],
       "files": [
         {
           "id": "template-cicd-validate",
@@ -483,7 +659,10 @@
           "type": "template",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6", "C7"],
+          "linked_principles": [
+            "C6",
+            "C7"
+          ],
           "use_case": "pr-validation",
           "description": "Workflow GitHub Actions para todo PR — forge-doctor (7 checks), skill-security-scan (S1-S5), pre-merge G1-G5 (C7/C8/C6/manifest/eval). Copiar para .github/workflows/forge-validate.yml."
         },
@@ -493,7 +672,11 @@
           "type": "template",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4", "C6", "C7"],
+          "linked_principles": [
+            "C4",
+            "C6",
+            "C7"
+          ],
           "use_case": "eval-automation",
           "description": "Workflow GitHub Actions para eval automático em mudanças de prompts/ — detecta artifact_id, roda eval por categoria, falha PR se pass_rate < threshold, trace Langfuse obrigatório. Copiar para .github/workflows/forge-eval.yml."
         },
@@ -503,7 +686,11 @@
           "type": "template",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C4", "C6"],
+          "linked_principles": [
+            "C1",
+            "C4",
+            "C6"
+          ],
           "use_case": "monthly-audit",
           "description": "Workflow GitHub Actions com cron mensal (1ª seg. 06:00 UTC) — invoca forge-auditor DeepAgent, commit automático do relatório em docs/forge/audits/, Issue se SLA breach. Copiar para .github/workflows/forge-audit.yml."
         },
@@ -513,7 +700,12 @@
           "type": "template",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C4", "C6", "C7"],
+          "linked_principles": [
+            "C1",
+            "C4",
+            "C6",
+            "C7"
+          ],
           "use_case": "gate-6-evidence",
           "description": "Checklist platform-agnostic com 27 itens (18 obrigatórios 🔴, 9 recomendados 🟡). Preencher em docs/cicd-checklist-{artifact_id}.md — campo gate_6_status lido pelo promotion-officer antes de assinar assisted_to_autonomous."
         }
@@ -526,7 +718,10 @@
         "type": "reviewer-asset",
         "version": "0.4.1",
         "sha256": null,
-        "audience": ["deep-agent", "human-developer"],
+        "audience": [
+          "deep-agent",
+          "human-developer"
+        ],
         "description": "Índice do diretório reviewer/ — ordem de leitura, links para assets e deepagents/"
       },
       {
@@ -535,7 +730,9 @@
         "type": "reviewer-asset",
         "version": "0.2.0",
         "sha256": null,
-        "audience": ["deep-agent"],
+        "audience": [
+          "deep-agent"
+        ],
         "description": "System prompt para DeepAgent reviewer"
       },
       {
@@ -544,7 +741,9 @@
         "type": "reviewer-asset",
         "version": "0.2.0",
         "sha256": null,
-        "audience": ["deep-agent"],
+        "audience": [
+          "deep-agent"
+        ],
         "description": "JSON schema do output da auditoria mensal"
       },
       {
@@ -553,7 +752,9 @@
         "type": "reviewer-asset",
         "version": "0.2.0",
         "sha256": null,
-        "audience": ["deep-agent"],
+        "audience": [
+          "deep-agent"
+        ],
         "description": "Validation rules machine-readable para os 8 princípios"
       },
       {
@@ -562,7 +763,10 @@
         "type": "reviewer-asset",
         "version": "0.2.0",
         "sha256": null,
-        "audience": ["deep-agent", "framework-maintainer"],
+        "audience": [
+          "deep-agent",
+          "framework-maintainer"
+        ],
         "description": "Exemplo sintético de output bem-feito"
       }
     ],
@@ -575,15 +779,42 @@
         "version": "0.1.0",
         "description": "Caso Acme — projeto que originou o Forge",
         "subartifacts": [
-          {"path": "examples/acme/README.md", "description": "Overview do caso"},
-          {"path": "examples/acme/portfolio.md", "description": "Portfolio em 3 categorias (Diagnóstico/Plataforma/Produtos)"},
-          {"path": "examples/acme/constitution-extension.md", "description": "C9, C10, C11 específicas Acme"},
-          {"path": "examples/acme/clickup-blueprint.md", "description": "ClickUp interno Acme"},
-          {"path": "examples/acme/methodology/metodologia.md", "description": "Metodologia Acme clássica"},
-          {"path": "examples/acme/methodology/metodologia_acme.md", "description": "Metodologia Acme SaaS²"},
-          {"path": "examples/acme/methodology/metodologia_sincra.md", "description": "Metodologia Sincra (origem do C5)"},
-          {"path": "examples/acme/products/acme-fin.md", "description": "Spec do Acme Fin (Beta em produção)"},
-          {"path": "examples/acme/products/acme-educacional.md", "description": "Acme Educacional (Discovery)"}
+          {
+            "path": "examples/acme/README.md",
+            "description": "Overview do caso"
+          },
+          {
+            "path": "examples/acme/portfolio.md",
+            "description": "Portfolio em 3 categorias (Diagnóstico/Plataforma/Produtos)"
+          },
+          {
+            "path": "examples/acme/constitution-extension.md",
+            "description": "C9, C10, C11 específicas Acme"
+          },
+          {
+            "path": "examples/acme/clickup-blueprint.md",
+            "description": "ClickUp interno Acme"
+          },
+          {
+            "path": "examples/acme/methodology/metodologia.md",
+            "description": "Metodologia Acme clássica"
+          },
+          {
+            "path": "examples/acme/methodology/metodologia_acme.md",
+            "description": "Metodologia Acme SaaS²"
+          },
+          {
+            "path": "examples/acme/methodology/metodologia_sincra.md",
+            "description": "Metodologia Sincra (origem do C5)"
+          },
+          {
+            "path": "examples/acme/products/acme-fin.md",
+            "description": "Spec do Acme Fin (Beta em produção)"
+          },
+          {
+            "path": "examples/acme/products/acme-educacional.md",
+            "description": "Acme Educacional (Discovery)"
+          }
         ]
       }
     ],
@@ -596,11 +827,19 @@
           "tier": 1,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C7"],
+          "linked_principles": [
+            "C5",
+            "C7"
+          ],
           "helper_pattern": "bmad",
           "cache_strategy": "ephemeral-strong",
-          "reads_from_tier": [1],
-          "must_not_read": [2, 3],
+          "reads_from_tier": [
+            1
+          ],
+          "must_not_read": [
+            2,
+            3
+          ],
           "description": "Carrega DNA da organização (purpose, mission, values, north-star) em YAML compacto cacheável."
         },
         {
@@ -610,11 +849,19 @@
           "tier": 1,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C7"],
+          "linked_principles": [
+            "C5",
+            "C7"
+          ],
           "helper_pattern": "bmad",
           "cache_strategy": "ephemeral-strong",
-          "reads_from_tier": [1],
-          "must_not_read": [2, 3],
+          "reads_from_tier": [
+            1
+          ],
+          "must_not_read": [
+            2,
+            3
+          ],
           "description": "Carrega ICP (Ideal Customer Profile) com sinais de qualificação e anti-ICP."
         },
         {
@@ -624,11 +871,20 @@
           "tier": 1,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2", "C5", "C7"],
+          "linked_principles": [
+            "C2",
+            "C5",
+            "C7"
+          ],
           "helper_pattern": "bmad",
           "cache_strategy": "ephemeral-strong",
-          "reads_from_tier": [1],
-          "must_not_read": [2, 3],
+          "reads_from_tier": [
+            1
+          ],
+          "must_not_read": [
+            2,
+            3
+          ],
           "description": "Carrega catálogo de ofertas (produtos, SKUs, diagnósticos) com lifecycle_stage e pricing_model."
         }
       ],
@@ -640,12 +896,24 @@
           "tier": 2,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C3"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3"
+          ],
           "helper_pattern": "none",
           "cache_strategy": "none",
-          "reads_from_tier": [1, 2],
-          "must_not_read": [3],
-          "requires_helper": ["company-dna", "offerings-loader"],
+          "reads_from_tier": [
+            1,
+            2
+          ],
+          "must_not_read": [
+            3
+          ],
+          "requires_helper": [
+            "company-dna",
+            "offerings-loader"
+          ],
           "description": "Calcula custo humano baseline (volume × tempo × custo-hora) e deriva preço de venda mínimo para cumprir hard gate C3."
         },
         {
@@ -655,12 +923,24 @@
           "tier": 2,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2"],
+          "linked_principles": [
+            "C1",
+            "C2"
+          ],
           "helper_pattern": "none",
           "cache_strategy": "none",
-          "reads_from_tier": [1, 2],
-          "must_not_read": [3],
-          "requires_helper": ["company-dna", "icp-loader", "offerings-loader"],
+          "reads_from_tier": [
+            1,
+            2
+          ],
+          "must_not_read": [
+            3
+          ],
+          "requires_helper": [
+            "company-dna",
+            "icp-loader",
+            "offerings-loader"
+          ],
           "description": "Executa roteiro estruturado de diagnóstico Fase 0 (10 blocos) — produz docs/clients/{client}/diagnostic.md. Critério: relatório em ≤10 min."
         },
         {
@@ -670,12 +950,23 @@
           "tier": 2,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C5", "C7"],
+          "linked_principles": [
+            "C1",
+            "C5",
+            "C7"
+          ],
           "helper_pattern": "none",
           "cache_strategy": "none",
-          "reads_from_tier": [1, 2],
-          "must_not_read": [3],
-          "requires_helper": ["offerings-loader"],
+          "reads_from_tier": [
+            1,
+            2
+          ],
+          "must_not_read": [
+            3
+          ],
+          "requires_helper": [
+            "offerings-loader"
+          ],
           "description": "Mapeia processo as-is em formato agent-ready (trigger, steps, decision points, métricas, automatable hypotheses + agent_readiness_score)."
         }
       ],
@@ -687,12 +978,25 @@
           "tier": 3,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2", "C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C2",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "helper_pattern": "none",
           "cache_strategy": "none",
-          "reads_from_tier": [1, 2, 3],
+          "reads_from_tier": [
+            1,
+            2,
+            3
+          ],
           "must_not_read": [],
-          "requires_helper": ["company-dna", "offerings-loader"],
+          "requires_helper": [
+            "company-dna",
+            "offerings-loader"
+          ],
           "description": "Constrói system prompt versionado em 9 seções canônicas com prompt_hash, instrumentação C6 obrigatória e zero hardcode por tenant. Disparou recalc_unit_economics_required."
         },
         {
@@ -702,12 +1006,22 @@
           "tier": 3,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2", "C4", "C6"],
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6"
+          ],
           "helper_pattern": "none",
           "cache_strategy": "none",
-          "reads_from_tier": [1, 2, 3],
+          "reads_from_tier": [
+            1,
+            2,
+            3
+          ],
           "must_not_read": [],
-          "requires_helper": ["offerings-loader"],
+          "requires_helper": [
+            "offerings-loader"
+          ],
           "description": "Gera eval cases (real/synthetic/edge/adversarial) com sanitização PII, gabarito justificado e cobertura por outcome_category (≥30 para passar C4)."
         },
         {
@@ -717,12 +1031,21 @@
           "tier": 3,
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4", "C6"],
+          "linked_principles": [
+            "C4",
+            "C6"
+          ],
           "helper_pattern": "none",
           "cache_strategy": "none",
-          "reads_from_tier": [1, 2, 3],
+          "reads_from_tier": [
+            1,
+            2,
+            3
+          ],
           "must_not_read": [],
-          "requires_helper": ["offerings-loader"],
+          "requires_helper": [
+            "offerings-loader"
+          ],
           "description": "Coordena modo SHADOW (start/tick/report) com mínimo 14 dias mandatórios, output isolado em runs/{client}/shadow/, métricas de concordância e recomendação de promoção (decisão humana)."
         }
       ],
@@ -737,7 +1060,11 @@
           "model": "claude-opus-4-7",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C8"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C8"
+          ],
           "description": "Product Owner — valida outcome clause, ICP fit, scope. Cross-approver of /acme:promote (par com promotion-officer)."
         },
         {
@@ -747,7 +1074,11 @@
           "model": "claude-opus-4-7",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C7",
+            "C8"
+          ],
           "description": "Technical architect — valida agent_readiness, layers, abstractions. Renomeado de sku-architect (v0.2.0)."
         },
         {
@@ -757,7 +1088,9 @@
           "model": "claude-opus-4-7",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C3"],
+          "linked_principles": [
+            "C3"
+          ],
           "description": "Economic firewall — c3_check, baseline-cost, recalc_unit_economics. Bloqueia /acme:sla-threshold se unviable."
         },
         {
@@ -767,7 +1100,9 @@
           "model": "claude-opus-4-7",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4"],
+          "linked_principles": [
+            "C4"
+          ],
           "description": "Promotion authority — assina transição de modo (Gate 5 do /acme:promote). Cross-approval mandatório com po-guardian."
         }
       ],
@@ -779,7 +1114,11 @@
           "model": "claude-sonnet-4-6",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2", "C4", "C6"],
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6"
+          ],
           "description": "Eval suite quality — coverage por outcome_category, source_mode breakdown, ground-truth justification, regressão por prompt_hash."
         },
         {
@@ -789,7 +1128,9 @@
           "model": "claude-sonnet-4-6",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C8"],
+          "linked_principles": [
+            "C8"
+          ],
           "description": "Anti-customização — TenantContext schema, lint regex C8 em src/skus, src/products, src/skills."
         },
         {
@@ -799,7 +1140,9 @@
           "model": "claude-sonnet-4-6",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6"],
+          "linked_principles": [
+            "C6"
+          ],
           "description": "Telemetry coverage — Section 8 dos prompts, observe() wrapper, trace_coverage ≥99%, prompt_hash drift detection."
         },
         {
@@ -809,7 +1152,10 @@
           "model": "claude-sonnet-4-6",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6", "C8"],
+          "linked_principles": [
+            "C6",
+            "C8"
+          ],
           "description": "PII/LGPD/secrets — lint em eval-cases, prompts, traces. Assinatura terceira mandatória para assisted_to_autonomous."
         }
       ],
@@ -821,7 +1167,12 @@
           "model": "claude-sonnet-4-6",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Code review nativo Claude — focado em PR diff (src/, prompts/, evals/) com checks C5-C8."
         },
         {
@@ -831,7 +1182,16 @@
           "model": "claude-haiku-4-5-20251001",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "delegates_to": "forge-auditor (DeepAgent skill)",
           "description": "Bridge Claude Code → LangChain DeepAgent. Não revisa código diretamente — invoca deepagents CLI e traduz output. F17/F18."
         }
@@ -846,8 +1206,16 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2"],
-          "invokes_skills": ["company-dna", "icp-loader", "offerings-loader", "diagnostic-runner"],
+          "linked_principles": [
+            "C1",
+            "C2"
+          ],
+          "invokes_skills": [
+            "company-dna",
+            "icp-loader",
+            "offerings-loader",
+            "diagnostic-runner"
+          ],
           "trace_required": true,
           "description": "Conduz Fase 0 cobrável (10 blocos) — porta de entrada do pipeline. Output: docs/clients/{client_id}/diagnostic.md."
         },
@@ -857,8 +1225,16 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C8"],
-          "invokes_skills": ["company-dna", "offerings-loader", "process-mapper"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C8"
+          ],
+          "invokes_skills": [
+            "company-dna",
+            "offerings-loader",
+            "process-mapper"
+          ],
           "trace_required": true,
           "description": "Gera spec do artefato com cláusula de outcome literal. --type ∈ {platform-sku, product, diagnostic} resolve template. Renomeada de /acme:spec-sku."
         },
@@ -868,8 +1244,15 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C3"],
-          "invokes_skills": ["offerings-loader", "baseline-cost-builder"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3"
+          ],
+          "invokes_skills": [
+            "offerings-loader",
+            "baseline-cost-builder"
+          ],
           "trace_required": true,
           "description": "Calcula baseline humano e deriva preço mínimo C3. Bloqueia /acme:sla-threshold se c3_check.status == unviable."
         },
@@ -879,8 +1262,14 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2", "C3", "C4"],
-          "invokes_skills": ["offerings-loader"],
+          "linked_principles": [
+            "C2",
+            "C3",
+            "C4"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
           "trace_required": true,
           "human_approval_required": true,
           "description": "Pré-contrata SLA mensurável (agreement_rate, latency_p95, cost_per_outcome, min_run_count, min_window_days). Persiste em spec.c4_thresholds com signature_hash."
@@ -893,8 +1282,15 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
-          "invokes_skills": ["offerings-loader"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
           "trace_required": true,
           "description": "Plano técnico em 8 seções canônicas (escopo, camadas, fluxo, instrumentação, tenant, cronograma, riscos, critérios). Não escolhe modelo final."
         },
@@ -904,7 +1300,11 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C5", "C6"],
+          "linked_principles": [
+            "C1",
+            "C5",
+            "C6"
+          ],
           "invokes_skills": [],
           "trace_required": true,
           "description": "Quebra plan em DAG de tasks ordenadas em 5 ondas (scaffolding → prompt → eval seed → SHADOW prep → metrics) com gate de pronto por task."
@@ -915,8 +1315,17 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
-          "invokes_skills": ["artifact-prompt-builder", "eval-case-author", "offerings-loader"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "artifact-prompt-builder",
+            "eval-case-author",
+            "offerings-loader"
+          ],
           "trace_required": true,
           "description": "Executa as 5 ondas do tasks.md, gera scaffolding com instrumentação obrigatória e camada de abstração; pausa em gates subjetivos. NÃO inicia SHADOW (responsabilidade de /acme:promote)."
         }
@@ -928,8 +1337,14 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2", "C4", "C6"],
-          "invokes_skills": ["offerings-loader"],
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
           "trace_required": true,
           "description": "Executa eval suite contra prompt atual; pass rate por outcome_category, source_mode breakdown, regressão vs último run com mesmo prompt_hash. Output: evals/{id}/runs/{date}-eval-{prompt_hash}.md."
         },
@@ -939,8 +1354,17 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C3", "C4", "C6"],
-          "invokes_skills": ["offerings-loader", "shadow-mode-runner"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C6"
+          ],
+          "invokes_skills": [
+            "offerings-loader",
+            "shadow-mode-runner"
+          ],
           "trace_required": true,
           "human_approval_required": true,
           "gate_count": 5,
@@ -952,8 +1376,17 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C3", "C4", "C6", "C7", "C8"],
-          "invokes_skills": ["offerings-loader"],
+          "linked_principles": [
+            "C1",
+            "C3",
+            "C4",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
           "trace_required": true,
           "deep_agent_consumable": true,
           "description": "Sample 5-10% de runs ASSISTED/AUTONOMOUS, drift detection, audit estrutural C5-C8, formato consumível pelo reviewer DeepAgent. Output: docs/forge/audits/{YYYY-MM}.md."
@@ -964,7 +1397,12 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "invokes_skills": [],
           "trace_required": false,
           "read_only": true,
@@ -980,7 +1418,12 @@
           "type": "slash-command",
           "version": "0.2.0",
           "sha256": null,
-          "linked_principles": ["C5", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "invokes_skills": [],
           "trace_required": false,
           "description": "Scaffolda aios/agents/{module}/ COPIANDO de templates/aios/ (Forge-7). Cobre 6 agentes (3 especializados + 3 compartilhados criados se ausentes). Gera orchestrator/config quando ausentes. Gate: 7 checks antes de copiar qualquer arquivo."
@@ -991,7 +1434,11 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4", "C6", "C7"],
+          "linked_principles": [
+            "C4",
+            "C6",
+            "C7"
+          ],
           "invokes_skills": [],
           "trace_required": true,
           "description": "Wrapper para python aios/orchestrator.py pipeline. Health check, execução com gates humanos C4 obrigatórios, telemetria C6. Não re-executa automaticamente após gate rejeitado."
@@ -1002,7 +1449,10 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4", "C6"],
+          "linked_principles": [
+            "C4",
+            "C6"
+          ],
           "invokes_skills": [],
           "trace_required": false,
           "read_only": true,
@@ -1016,8 +1466,19 @@
           "type": "slash-command",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"],
-          "invokes_skills": ["offerings-loader"],
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
           "trace_required": false,
           "requires_autonomous_sku": true,
           "description": "Extrai playbook vertical a partir de SKUs em AUTONOMOUS. Gera docs/playbooks/{vertical}/playbook.md + docs/retrospectives/{sku}/retrospective.md."
@@ -1037,7 +1498,9 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C2"],
+          "linked_principles": [
+            "C2"
+          ],
           "exit_block": 2,
           "bypass_aware": true,
           "description": "Bloqueia edição de cláusulas de outcome aprovadas em docs/onda-*/clients/**."
@@ -1050,7 +1513,9 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C7"],
+          "linked_principles": [
+            "C7"
+          ],
           "exit_block": 2,
           "bypass_aware": true,
           "description": "Bloqueia edição de ADRs com aprovação já assinada."
@@ -1063,7 +1528,10 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6", "C8"],
+          "linked_principles": [
+            "C6",
+            "C8"
+          ],
           "exit_block": 2,
           "bypass_aware": true,
           "description": "Detecta API keys, tokens e connection strings hardcoded antes de escrever."
@@ -1076,7 +1544,10 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C7", "C8"],
+          "linked_principles": [
+            "C7",
+            "C8"
+          ],
           "exit_block": 2,
           "bypass_aware": true,
           "description": "Bloqueia uso de 'any' TypeScript em src/skus/** e src/agents/**."
@@ -1091,7 +1562,9 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6"],
+          "linked_principles": [
+            "C6"
+          ],
           "exit_warn": 1,
           "description": "Avisa quando chamadas LLM em src/agents/** não têm trace Langfuse."
         },
@@ -1103,7 +1576,9 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C3"],
+          "linked_principles": [
+            "C3"
+          ],
           "exit_warn": 1,
           "description": "Avisa quando prompt files mudam e /acme:unit-economics recalc é necessário."
         },
@@ -1115,7 +1590,9 @@
           "matcher": "Edit|Write",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6"],
+          "linked_principles": [
+            "C6"
+          ],
           "exit_warn": 0,
           "description": "Informa quando artefatos Forge mudam e manifest.json precisa ser atualizado."
         }
@@ -1128,7 +1605,14 @@
           "hook_type": "Stop",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C1", "C3", "C4", "C6", "C7", "C8"],
+          "linked_principles": [
+            "C1",
+            "C3",
+            "C4",
+            "C6",
+            "C7",
+            "C8"
+          ],
           "exit_warn": 1,
           "description": "Gera relatório dos 5 gates Forge (manifest, any, evals, secrets, ADRs) ao fim da sessão."
         },
@@ -1139,7 +1623,9 @@
           "hook_type": "Stop",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C4"],
+          "linked_principles": [
+            "C4"
+          ],
           "exit_warn": 1,
           "description": "Avisa ao fim da sessão se eval suites têm menos de 30 casos (mínimo C4)."
         }
@@ -1152,7 +1638,9 @@
           "usage": "standalone CI/PR/pre-push",
           "version": "0.4.1",
           "sha256": null,
-          "linked_principles": ["C6"],
+          "linked_principles": [
+            "C6"
+          ],
           "description": "Validador CI: C1 JSON parse, C2 paths existem, C3 versões coerentes, C4 constitution coerente, C5 bash -n hooks, C6 artefatos órfãos, C7 permissions sanity. Exit 0/1/2."
         },
         {
@@ -1162,28 +1650,98 @@
           "usage": "standalone CI/PR",
           "version": "0.1.0",
           "sha256": null,
-          "linked_principles": ["C6", "C7", "C8"],
+          "linked_principles": [
+            "C6",
+            "C7",
+            "C8"
+          ],
           "description": "Escaneia skill files (S1-S5: secrets, URLs, comandos destrutivos, bypass, frontmatter). Uso: bash hooks/scripts/skill-security-scan.sh"
         }
       ]
     }
   },
   "external_repos_absorbed": [
-    {"repo": "github/spec-kit", "absorbed": ["Constitution pattern", "Pipeline /diagnose → /promote"]},
-    {"repo": "vbomfim/sdlc-guardian-agents", "absorbed": ["Spec template structure", "5 quality gates", "Guardian roles"]},
-    {"repo": "addyosmani/agent-skills", "absorbed": ["Anti-rationalization tables", "Verification gates"]},
-    {"repo": "aj-geddes/claude-code-bmad-skills", "absorbed": ["Helper pattern (token reduction in L0 only)"]},
-    {"repo": "carlrannaberg/claudekit", "absorbed": ["File-guard hook", "Secret scan", "Bash deny list"]},
-    {"repo": "peterkrueck/Claude-Code-Development-Kit", "absorbed": ["Documental structure", "Cross-LLM review pattern"]},
-    {"repo": "VoltAgent/awesome-claude-code-subagents", "absorbed": ["Smart model routing Opus/Sonnet/Haiku"]},
-    {"repo": "anthropics/skills", "absorbed": ["Skill format reference (frontmatter)"]},
-    {"repo": "giuseppe-trisciuoglio/developer-kit", "absorbed": ["Path-scoped auto-activation"]},
-    {"repo": "alirezarezvani/claude-skills", "absorbed": ["Skill security auditor pattern"]}
+    {
+      "repo": "github/spec-kit",
+      "absorbed": [
+        "Constitution pattern",
+        "Pipeline /diagnose → /promote"
+      ]
+    },
+    {
+      "repo": "vbomfim/sdlc-guardian-agents",
+      "absorbed": [
+        "Spec template structure",
+        "5 quality gates",
+        "Guardian roles"
+      ]
+    },
+    {
+      "repo": "addyosmani/agent-skills",
+      "absorbed": [
+        "Anti-rationalization tables",
+        "Verification gates"
+      ]
+    },
+    {
+      "repo": "aj-geddes/claude-code-bmad-skills",
+      "absorbed": [
+        "Helper pattern (token reduction in L0 only)"
+      ]
+    },
+    {
+      "repo": "carlrannaberg/claudekit",
+      "absorbed": [
+        "File-guard hook",
+        "Secret scan",
+        "Bash deny list"
+      ]
+    },
+    {
+      "repo": "peterkrueck/Claude-Code-Development-Kit",
+      "absorbed": [
+        "Documental structure",
+        "Cross-LLM review pattern"
+      ]
+    },
+    {
+      "repo": "VoltAgent/awesome-claude-code-subagents",
+      "absorbed": [
+        "Smart model routing Opus/Sonnet/Haiku"
+      ]
+    },
+    {
+      "repo": "anthropics/skills",
+      "absorbed": [
+        "Skill format reference (frontmatter)"
+      ]
+    },
+    {
+      "repo": "giuseppe-trisciuoglio/developer-kit",
+      "absorbed": [
+        "Path-scoped auto-activation"
+      ]
+    },
+    {
+      "repo": "alirezarezvani/claude-skills",
+      "absorbed": [
+        "Skill security auditor pattern"
+      ]
+    }
   ],
   "external_repos_excluded": [
-    {"repo": "rohitg00/awesome-claude-code-toolkit", "reason": "meta-list, redundant"},
-    {"repo": "feiskyer/claude-code-settings (multi-provider)", "reason": "ADR 001 fixes Claude primary; OpenAI usado apenas para reviewer DeepAgent"},
-    {"repo": "lc-spec-driven", "reason": "repo not found - awaiting confirmation of correct name"}
+    {
+      "repo": "rohitg00/awesome-claude-code-toolkit",
+      "reason": "meta-list, redundant"
+    },
+    {
+      "repo": "feiskyer/claude-code-settings (multi-provider)",
+      "reason": "ADR 001 fixes Claude primary; OpenAI usado apenas para reviewer DeepAgent"
+    },
+    {
+      "repo": "lc-spec-driven",
+      "reason": "repo not found - awaiting confirmation of correct name"
+    }
   ],
   "checks_for_reviewer_summary": "Detalhe completo em reviewer/validation-rules.json. Reviewer deve carregar esse arquivo como input primário de checks.",
   "_meta": {

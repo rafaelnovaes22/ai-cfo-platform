@@ -1,34 +1,52 @@
 ---
-description: Auditoria mensal — sample de 5-10% de runs por subscription em ASSISTED/AUTONOMOUS, detecta drift de prompt/dados/agreement/custo, audita correspondência prompts/{id}/v* ↔ baseline-cost. Output: docs/forge/audits/{YYYY-MM}.md no formato consumido pelo reviewer DeepAgent. Pode disparar rebaixamento automático em SLA breach severo.
+description: Auditoria mensal — sample 5-10% de runs (agentic) ou audited_actions (platform). Detecta drift de qualidade/custo/volume, audita correspondência prompts↔baseline (agentic) ou módulos↔delivery-economics (platform). Output: docs/forge/audits/{YYYY-MM}.md consumido pelo reviewer DeepAgent. Pode disparar rebaixamento automático em SLA breach severo. v0.2.0 (Forge-9): delivery-type aware.
 allowed-tools: [Read, Write, Glob, Grep]
 arguments:
   required:
     - month
   optional:
-    - subscription_filter
+    - subscription_filter        # agentic
+    - module_filter              # platform
     - sample_pct
     - auto_rollback_on_breach
-forge_command_version: 0.1.0
+    - project_type
+forge_command_version: 0.2.0
 linked_principles: [C1, C3, C4, C6, C7, C8]
 invokes_skills:
   - "@offerings-loader"
 output_artifact: docs/forge/audits/{YYYY-MM}.md
 trace_required: true
 deep_agent_consumable: true
+project_type_aware: true
 ---
 
 # /acme:audit-monthly — Auditoria 5-10%
 
 ## Propósito
 
-Roda **continuous validation** sobre tudo o que está em produção (modos ASSISTED/AUTONOMOUS):
+Roda **continuous validation** sobre tudo o que está em produção. A análise é ramificada por `project_type` (lido de `docs/forge/project.json` ou default legado `agentic_saas`):
 
-1. **Sample 5-10%** de runs por subscription do mês — analisa concordância humano/agente em amostra (auditável manualmente)
+### Para `agentic_saas` (subscriptions ASSISTED/AUTONOMOUS)
+
+1. **Sample 5-10%** de runs por subscription do mês — analisa concordância humano/agente em amostra
 2. **Drift detection** — `prompt_hash` em produção mudou desde último `/acme:eval`? Distribuição de inputs deslocou?
-3. **C3 audit** — `recalc_unit_economics_required` em aberto? Custo médio por outcome vs threshold?
-4. **C6 audit** — % de runs com trace válido (alvo 100%)
-5. **C7/C8 audit estrutural** — hash de imports SDK fora de `src/llm/adapters/`? hardcode de tenant?
+3. **C3 audit** (`cost_per_outcome`) — `recalc_unit_economics_required` em aberto? Custo médio por outcome vs threshold?
+4. **C6 audit** — % de runs com trace válido no LLM trace provider (alvo 100%)
+5. **C7/C8 audit estrutural** — hash de imports SDK fora de `src/llm/`? hardcode de tenant?
 6. **C4 SLA breach** — agreement_rate caiu abaixo de threshold em N dias seguidos?
+
+### Para `platform` / `automation` (módulos PILOT/CANONICAL)
+
+1. **Sample 5-10%** de audited_actions por módulo do mês — re-aplica regras de aceite + verifica audit log integrity
+2. **Drift detection** — taxa de aceite humano caiu vs mês anterior? Bug rate subiu?
+3. **C3 audit** (`platform_margin`) — ratio de `delivery-economics-{module}.md` ≤ 25%? Doc atualizado < 90 dias?
+4. **C6 audit** — % de mutações críticas com audit log entry (alvo 100%); checagem de integridade de campos (`actor_id`, `payload`, `timestamp`)
+5. **C7/C8 audit estrutural** — imports de SDK de integração/infra fora de `src/integrations/` ou `src/infra/`? Hardcode por tenant?
+6. **C4 SLA breach** — pass rate de aceite < threshold? Latência p95 fora de SLA? Audit log gap > 1%?
+
+### Para `hybrid`
+
+Aplica os dois ramos: agentic para módulos `ai_enabled=true`, platform para `ai_enabled=false`.
 
 Output é **machine-readable**: o reviewer DeepAgent (Forge-3) lê e compara com `reviewer/output-schema.json`. Auditoria mensal é o ciclo de feedback que mantém o framework íntegro.
 
@@ -248,3 +266,4 @@ trace_id: <>
 | Versão | Data | Mudança |
 |---|---|---|
 | 0.1.0 | 2026-04-30 | Versão inicial — Forge-2 onda 3 (validation) |
+| 0.2.0 | 2026-05-08 | **Delivery-type aware** — auditoria ramificada por `project_type`: para `agentic_saas` mantém comportamento atual; para `platform`/`automation` audita módulos PILOT/CANONICAL com sample de `audited_actions`, drift de aceite humano, integridade de audit log, ratio platform_margin. Aceita `--module_filter`. Forge-9. |
