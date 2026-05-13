@@ -12,7 +12,9 @@ export function parseText(raw: string): ParseResult {
   const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return { entries: [], orphanCount: 0 };
 
-  const headers = splitRow(lines[0]);
+  // lines[0] é garantido != undefined pelo length-check acima, mas TS exige guard.
+  const headerLine = lines[0] ?? "";
+  const headers = splitRow(headerLine);
   const { dateIdx, descIdx, amountIdx, dirIdx } = detectColumns(headers);
 
   const dataLines = lines.slice(1);

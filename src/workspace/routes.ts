@@ -50,7 +50,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       const member = await workspaceService.addMember(req.auth!.tenantId, req.body);
       return reply.status(201).send({
         ...member,
-        lastLoginAt: member.lastLoginAt,
+        lastLoginAt: member.lastLoginAt?.toISOString() ?? null,
       });
     },
   });
@@ -60,7 +60,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     preHandler: [requireAuth, requireRole("admin")],
     handler: async (req, reply) => {
       await workspaceService.removeMember(req.auth!.tenantId, req.params.userId, req.auth!.userId);
-      return reply.status(204).send();
+      return reply.status(204).send(null);
     },
   });
 };

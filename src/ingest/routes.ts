@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import multipart from "@fastify/multipart";
-import { requireAuth } from "@/auth/middleware.js";
+import { requireAuth, requireScope } from "@/auth/middleware.js";
 import { ingest } from "@/ingest/service.js";
 import { ClipboardBody, ManualBody, IngestResponse } from "@/ingest/schemas.js";
 
@@ -14,7 +14,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
 
   // Upload de arquivo (xlsx, xls, csv, pdf)
   app.post("/ingest/upload", {
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireScope("ingest:write")],
     handler: async (req, reply) => {
       const data = await req.file();
       if (!data) return reply.status(400).send({ message: "Arquivo não enviado" });
@@ -36,7 +36,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
   // Texto colado (clipboard)
   f.post("/ingest/clipboard", {
     schema: { body: ClipboardBody, response: { 200: IngestResponse } },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireScope("ingest:write")],
     handler: async (req, reply) => {
       const result = await ingest({
         tenantId: req.auth!.tenantId,
@@ -51,7 +51,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
   // Formulário manual (JSON)
   f.post("/ingest/manual", {
     schema: { body: ManualBody, response: { 200: IngestResponse } },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireScope("ingest:write")],
     handler: async (req, reply) => {
       const result = await ingest({
         tenantId: req.auth!.tenantId,

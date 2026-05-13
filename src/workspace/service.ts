@@ -28,7 +28,7 @@ export async function listMembers(tenantId: string) {
 export async function addMember(
   tenantId: string,
   data: { email: string; name: string; role: "admin" | "editor" | "viewer" },
-): Promise<{ id: string; name: string; email: string; role: string; emailVerified: boolean; lastLoginAt: null; tempPassword: string }> {
+): Promise<{ id: string; name: string; email: string; role: string; emailVerified: boolean; lastLoginAt: Date | null; tempPassword: string }> {
   const db = getPrisma();
 
   const existing = await db.user.findUnique({ where: { email: data.email } });

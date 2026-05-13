@@ -37,7 +37,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     preHandler: [requireAuth],
     handler: async (req, reply) => {
       await authService.logout(req.body.refreshToken);
-      return reply.status(204).send();
+      return reply.status(204).send(null);
     },
   });
 

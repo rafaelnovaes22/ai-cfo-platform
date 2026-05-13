@@ -91,7 +91,7 @@ export const tenantConfigRoutes: FastifyPluginAsync = async (app) => {
     preHandler: [requireAuth, requireRole("admin")],
     handler: async (req, reply) => {
       await configService.revokeToken(req.auth!.tenantId, req.params.tokenId);
-      return reply.status(204).send();
+      return reply.status(204).send(null);
     },
   });
 };

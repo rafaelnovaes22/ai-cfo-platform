@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { requireAuth, requireMode } from "@/auth/middleware.js";
 import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
+import { defaultErrorResponses, problemDetail } from "@/http/problem-detail.js";
 
 const CorrectBody = z.object({
   category: z.enum(DRE_CATEGORIES as [string, ...string[]]),
@@ -20,18 +21,6 @@ const ReviewEntrySchema = z.object({
   predictedCategory: z.string().nullable(),
   classificationConfidence: z.number().nullable(),
 });
-
-// RFC 7807 — Problem Details for HTTP APIs
-function problemDetail(opts: {
-  type: string;
-  title: string;
-  status: number;
-  detail: string;
-  instance: string;
-  requestId: string;
-}) {
-  return opts;
-}
 
 export const classificationRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
@@ -50,6 +39,7 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
             requestId: z.string(),
           }),
         }),
+        ...defaultErrorResponses,
       },
     },
     preHandler: [requireAuth],
@@ -84,7 +74,10 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       params: z.object({ entryId: z.string() }),
       body: CorrectBody,
-      response: { 200: z.object({ id: z.string(), confirmedCategory: z.string() }) },
+      response: {
+        200: z.object({ id: z.string(), confirmedCategory: z.string() }),
+        ...defaultErrorResponses,
+      },
     },
     preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {

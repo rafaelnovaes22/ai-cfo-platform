@@ -70,8 +70,20 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
       continue;
     }
 
-    // Atualizar cada entrada com sua categoria e confiança
+    // Defesa C8: o entryId vem do LLM e NÃO é confiável. Atualizar só IDs que
+    // (a) pertencem ao batch atual, (b) pertencem à mesma análise e (c) pertencem
+    // ao tenant. Qualquer ID alucinado/forjado é silenciosamente descartado.
+    const batchIds = new Set(batch.map((e) => e.id));
+
     for (const result of parsed) {
+      if (!batchIds.has(result.entryId)) {
+        logger.warn(
+          { analysisId, suspiciousId: result.entryId, batchStart: i },
+          "Classifier retornou entryId fora do batch — descartado",
+        );
+        continue;
+      }
+
       const category = DRE_CATEGORIES.includes(result.category as never)
         ? result.category
         : "nao_classificado";
@@ -79,14 +91,22 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
       const isLowConfidence = result.confidence < LOW_CONFIDENCE_THRESHOLD;
       if (isLowConfidence) lowConfidenceCount++;
 
-      await db.ledgerEntry.update({
-        where: { id: result.entryId },
+      // updateMany com where composto: id + analysisId + tenantId.
+      // Se algum não bater, 0 linhas são afetadas (não levanta exceção).
+      const updated = await db.ledgerEntry.updateMany({
+        where: { id: result.entryId, analysisId, tenantId },
         data: {
           predictedCategory:        category,
           classificationConfidence: result.confidence,
           correctionSource:         isLowConfidence ? "needs_review" : null,
         },
       });
+      if (updated.count === 0) {
+        logger.warn(
+          { analysisId, entryId: result.entryId, tenantId },
+          "Classifier tentou atualizar entry fora de tenant+analysis — descartado",
+        );
+      }
     }
 
     logger.debug(

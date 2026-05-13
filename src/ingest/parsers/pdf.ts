@@ -19,7 +19,7 @@ export async function parsePdf(buffer: Buffer): Promise<ParseResult> {
 
   for (const line of lines) {
     const dateMatch = line.match(LINE_WITH_DATE);
-    if (!dateMatch) continue; // linha sem data → provavelmente cabeçalho ou rodapé
+    if (!dateMatch || !dateMatch[1]) continue; // linha sem data → provavelmente cabeçalho ou rodapé
 
     const date = normalizeDate(dateMatch[1]);
     if (!date) continue;
@@ -28,7 +28,7 @@ export async function parsePdf(buffer: Buffer): Promise<ParseResult> {
     const rest = line.replace(dateMatch[0], "").trim();
 
     const amountMatch = rest.match(AMOUNT_IN_LINE);
-    if (!amountMatch) { orphanCount++; continue; }
+    if (!amountMatch || !amountMatch[1]) { orphanCount++; continue; }
 
     const rawCents = normalizeAmountCents(amountMatch[1]);
     if (rawCents === null) { orphanCount++; continue; }

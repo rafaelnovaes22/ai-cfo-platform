@@ -2,19 +2,13 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
-import { requireAuth } from "@/auth/middleware.js";
+import { requireAuth, requireScope } from "@/auth/middleware.js";
 import { generateReport } from "@/export/generator.js";
 import { logger } from "@/observability/logger.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
-
-// referenceMonth válido = "YYYY-MM" — defesa contra filename injection via dado persistido.
-const REFERENCE_MONTH_RE = /^\d{4}-\d{2}$/;
+import { decideExport, buildExportFilename } from "@/export/predicates.js";
 
 const REPORT_TYPES = ["monthly", "investors", "partners"] as const;
-
-// C4 — em SHADOW a análise nunca sai do status "ready"; só pode exportar
-// depois que humano revisou e mode transitou para entrega ao cliente.
-const EXPORTABLE_STATUS = ["delivered", "approved"] as const;
 
 export const exportRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
@@ -26,7 +20,7 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
         type:       z.enum(REPORT_TYPES),
       }),
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireScope("export:read")],
     handler: async (req, reply) => {
       const db = getPrisma();
       const { analysisId, type } = req.params;
@@ -50,18 +44,21 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
-      if (!analysis) return reply.status(404).send({ message: "Análise não encontrada" });
-      if (!(EXPORTABLE_STATUS as readonly string[]).includes(analysis.status)) {
+      const decision = decideExport(analysis);
+      if (decision.status === "not_found" || !analysis) {
+        return reply.status(404).send({ message: "Análise não encontrada" });
+      }
+      if (decision.status === "status_gate") {
         return reply.status(422).send({
           message: "Análise ainda não disponível para exportação",
-          status: analysis.status,
+          status: decision.analysisStatus,
         });
       }
-      if (!analysis.dreJson) return reply.status(422).send({ message: "DRE ainda não gerada" });
+      if (decision.status === "dre_missing") {
+        return reply.status(422).send({ message: "DRE ainda não gerada" });
+      }
 
-      // C8 — sanitização de filename: referenceMonth tem que casar com YYYY-MM antes de virar nome de arquivo.
-      const safeMonth = REFERENCE_MONTH_RE.test(analysis.referenceMonth) ? analysis.referenceMonth : "invalid";
-      const filename = `aicfo-${safeMonth}-${type}.pdf`;
+      const filename = buildExportFilename(analysis.referenceMonth, type);
       reply.type("application/pdf");
       reply.header("Content-Disposition", `attachment; filename="${filename}"`);
 

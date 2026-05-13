@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { requireAuth, requireMode } from "@/auth/middleware.js";
+import { defaultErrorResponses, problemDetail } from "@/http/problem-detail.js";
 
 // Alinhado com ActionSchema do generator.ts — horizon e níveis fechados em enum (C2 spec §1).
 const ActionItemSchema = z.object({
@@ -38,6 +40,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
             totalImpact:  z.number(),
           }),
         }),
+        ...defaultErrorResponses,
       },
     },
     preHandler: [requireAuth],
@@ -46,7 +49,15 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
       const analysis = await db.monthlyAnalysis.findFirst({
         where: { id: req.params.analysisId, tenantId: req.auth!.tenantId },
       });
-      if (!analysis) return reply.status(404).send({ message: "Análise não encontrada" });
+      if (!analysis) {
+        return reply.status(404).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/analysis-not-found",
+          title: "Análise não encontrada",
+          status: 404,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
 
       const items = await db.actionPlanItem.findMany({
         where: { analysisId: req.params.analysisId },
@@ -78,7 +89,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
         approved: z.boolean(),
         comment: z.string().max(500).optional(),
       }),
-      response: { 200: z.object({ id: z.string() }) },
+      response: { 200: z.object({ id: z.string() }), ...defaultErrorResponses },
     },
     preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {
@@ -89,7 +100,15 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
           analysis: { id: req.params.analysisId, tenantId: req.auth!.tenantId },
         },
       });
-      if (!item) return reply.status(404).send({ message: "Item não encontrado" });
+      if (!item) {
+        return reply.status(404).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/action-item-not-found",
+          title: "Item não encontrado",
+          status: 404,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
 
       const updated = await db.actionPlanItem.update({
         where: { id: item.id },
@@ -103,7 +122,10 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
   f.post("/analysis/:analysisId/approve", {
     schema: {
       params: z.object({ analysisId: z.string() }),
-      response: { 200: z.object({ status: z.string(), approvedAt: z.string() }) },
+      response: {
+        200: z.object({ status: z.string(), approvedAt: z.string() }),
+        ...defaultErrorResponses,
+      },
     },
     preHandler: [requireAuth, requireMode("assisted")],
     handler: async (req, reply) => {
@@ -111,7 +133,15 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
       const analysis = await db.monthlyAnalysis.findFirst({
         where: { id: req.params.analysisId, tenantId: req.auth!.tenantId },
       });
-      if (!analysis) return reply.status(404).send({ message: "Análise não encontrada" });
+      if (!analysis) {
+        return reply.status(404).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/analysis-not-found",
+          title: "Análise não encontrada",
+          status: 404,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
       if (analysis.status === "approved") return reply.send({
         status: "approved",
         approvedAt: analysis.approvedAt!.toISOString(),

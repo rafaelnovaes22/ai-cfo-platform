@@ -17,7 +17,8 @@ function getClient(): Anthropic {
 function stripJsonFences(text: string): string {
   const trimmed = text.trim();
   const match = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
-  return match ? match[1].trim() : trimmed;
+  if (!match) return trimmed;
+  return (match[1] ?? "").trim();
 }
 
 export async function callAnthropic(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {

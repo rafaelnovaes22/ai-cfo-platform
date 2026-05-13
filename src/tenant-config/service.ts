@@ -35,7 +35,11 @@ export async function updateConfig(tenantId: string, patch: Record<string, unkno
     }
   }
 
-  await db.tenant.update({ where: { id: tenantId }, data: { productConfig: merged } });
+  // Prisma exige InputJsonValue — merged é Record<string, unknown> serializável em JSON.
+  await db.tenant.update({
+    where: { id: tenantId },
+    data: { productConfig: merged as object },
+  });
   return merged;
 }
 

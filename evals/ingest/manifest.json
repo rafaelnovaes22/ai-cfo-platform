@@ -1,6 +1,11 @@
 {
   "module": "ingest",
-  "outcomes": ["ingest_completed", "ingest_partial", "ingest_failed", "new_analysis_triggered"],
+  "outcomes": [
+    "ingest_completed",
+    "ingest_partial",
+    "ingest_failed",
+    "new_analysis_triggered"
+  ],
   "eval_method": "assertion_shape",
   "pass_rate_threshold": 0.95,
   "source_distribution": {

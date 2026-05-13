@@ -32,10 +32,13 @@ await app.register(rawBody, { global: false, encoding: false, runFirst: true });
 
 app.decorateRequest("auth", null);
 
-// Erros de negócio (4xx) passam a mensagem; 5xx são opacos
-app.setErrorHandler(async (err, _req, reply) => {
-  if ("statusCode" in err && typeof err.statusCode === "number" && err.statusCode < 500) {
-    return reply.status(err.statusCode).send({ message: err.message });
+// Erros de negócio (4xx) passam a mensagem; 5xx são opacos.
+// `err` é declarado como FastifyError pelo Fastify; tratamos como `unknown` por segurança.
+app.setErrorHandler(async (err: unknown, _req, reply) => {
+  const isErrorLike = (e: unknown): e is { statusCode?: number; message?: string } =>
+    typeof e === "object" && e !== null;
+  if (isErrorLike(err) && typeof err.statusCode === "number" && err.statusCode < 500) {
+    return reply.status(err.statusCode).send({ message: err.message ?? "Erro" });
   }
   logger.error({ err }, "Erro interno");
   return reply.status(500).send({ message: "Erro interno do servidor" });

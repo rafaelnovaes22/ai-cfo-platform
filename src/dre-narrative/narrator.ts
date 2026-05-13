@@ -79,8 +79,10 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
     await tx.monthlyAnalysis.update({
       where: { id: analysisId },
       data: {
-        dreJson:       dre,
-        narrativeJson: parsed.cards,
+        // DreLines/parsed.cards são serializáveis em JSON; Prisma exige InputJsonValue.
+        // Cast explícito porque DreLines não declara index signature (mas é puro number/string).
+        dreJson:       dre as unknown as object,
+        narrativeJson: parsed.cards as unknown as object,
         costCents:     (analysis.costCents ?? 0) + llmResponse.costCents,
         langfuseTraceId: llmResponse.traceId,
       },

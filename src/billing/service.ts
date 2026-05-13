@@ -5,6 +5,27 @@ import { logger } from "@/observability/logger.js";
 
 type Plan = "lite" | "pro" | "business";
 
+/**
+ * Obtém current_period_start/end de uma Subscription do Stripe.
+ *
+ * Em SDKs antigos esses campos viviam no objeto raiz da Subscription.
+ * No Stripe SDK ≥ 18 (dahlia) eles moveram para `subscription.items.data[].current_period_*`.
+ * Esta função absorve a divergência. Se nenhum item tiver os campos, cai no objeto raiz
+ * (legacy webhooks) e como último recurso retorna `Date.now()/1000`.
+ */
+export function getSubscriptionPeriod(
+  sub: Stripe.Subscription,
+  edge: "start" | "end",
+): number {
+  const key = edge === "start" ? "current_period_start" : "current_period_end";
+  const item = sub.items?.data?.[0] as (typeof sub.items.data[number] & Record<string, unknown>) | undefined;
+  const fromItem = item ? (item[key] as number | undefined) : undefined;
+  if (typeof fromItem === "number") return fromItem;
+  const fromRoot = (sub as unknown as Record<string, unknown>)[key];
+  if (typeof fromRoot === "number") return fromRoot;
+  return Math.floor(Date.now() / 1000);
+}
+
 export async function createCheckoutSession(
   tenantId: string,
   plan: Plan,
@@ -141,8 +162,10 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         data: {
           ...(plan ? { plan } : {}),
           status: sub.status === "active" ? "active" : "past_due",
-          currentPeriodStart: new Date(sub.current_period_start * 1000),
-          currentPeriodEnd: new Date(sub.current_period_end * 1000),
+          // Stripe SDK ≥ 18 moveu current_period_start/end para subscription.items.data[].
+          // Para preservar compatibilidade, lemos via cast quando o tipo público não expõe.
+          currentPeriodStart: new Date(getSubscriptionPeriod(sub, "start") * 1000),
+          currentPeriodEnd: new Date(getSubscriptionPeriod(sub, "end") * 1000),
           trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
         },
       });

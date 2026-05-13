@@ -1,5 +1,4 @@
 import { buildTaxonomyBlock } from "@/classification/taxonomy.js";
-import type { RawLedger } from "@/ingest/types.js";
 
 // System prompt é L0 — estático e cacheável pelo provider (Gemini prompt cache).
 // Não referenciar dados de tenant aqui (C8).

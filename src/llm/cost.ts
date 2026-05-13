@@ -11,8 +11,10 @@ const PRICE_TABLE: Record<string, { inputUsdPerMTok: number; outputUsdPerMTok: n
   "local":                 { inputUsdPerMTok: 0,      outputUsdPerMTok: 0 },
 };
 
+const DEFAULT_PRICES = { inputUsdPerMTok: 3.0, outputUsdPerMTok: 15.0 }; // fallback Sonnet 4.6.
+
 export function calculateCostCents(model: string, inputTokens: number, outputTokens: number): number {
-  const prices = PRICE_TABLE[model] ?? PRICE_TABLE["claude-sonnet-4-6"];
+  const prices = PRICE_TABLE[model] ?? PRICE_TABLE["claude-sonnet-4-6"] ?? DEFAULT_PRICES;
   const usd =
     (inputTokens / 1_000_000) * prices.inputUsdPerMTok +
     (outputTokens / 1_000_000) * prices.outputUsdPerMTok;

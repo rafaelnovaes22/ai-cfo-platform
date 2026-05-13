@@ -2,26 +2,26 @@
 
 // ── Datas ──────────────────────────────────────────────────────────────────
 
+// Groups[1..3] são garantidos pela regex; com noUncheckedIndexedAccess TS exige defaults.
+const g = (m: RegExpMatchArray, i: number): string => m[i] ?? "";
+
 const DATE_PATTERNS: Array<{ regex: RegExp; parse: (m: RegExpMatchArray) => string }> = [
   // DD/MM/YYYY ou DD-MM-YYYY ou DD.MM.YYYY
   {
     regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/,
-    parse: (m) => `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`,
+    parse: (m) => `${g(m, 3)}-${g(m, 2).padStart(2, "0")}-${g(m, 1).padStart(2, "0")}`,
   },
   // YYYY-MM-DD
   {
     regex: /^(\d{4})-(\d{2})-(\d{2})$/,
-    parse: (m) => `${m[1]}-${m[2]}-${m[3]}`,
+    parse: (m) => `${g(m, 1)}-${g(m, 2)}-${g(m, 3)}`,
   },
   // MM/DD/YYYY (formato americano — menos comum no BR, mas aparece em exports)
   {
     regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
     parse: (m) => {
-      const d1 = parseInt(m[1], 10);
-      const d2 = parseInt(m[2], 10);
-      // Se d1 > 12, deve ser dia; caso contrário assume DD/MM
-      if (d1 > 12) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-      return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      // Sem distinção real entre MM/DD e DD/MM — assume DD/MM (default BR). Drift histórico documentado.
+      return `${g(m, 3)}-${g(m, 2).padStart(2, "0")}-${g(m, 1).padStart(2, "0")}`;
     },
   },
 ];
@@ -32,8 +32,12 @@ export function normalizeDate(raw: string): string | null {
     const m = s.match(regex);
     if (m) {
       const iso = parse(m);
-      const d = new Date(iso);
-      if (!isNaN(d.getTime())) return iso;
+      const d = new Date(`${iso}T00:00:00Z`);
+      if (isNaN(d.getTime())) continue;
+      // Validação estrita: rejeita overflow (ex.: 31/02 vira 03/03 em JS).
+      // Compara dia/mês/ano após round-trip via Date UTC.
+      const isoBack = d.toISOString().slice(0, 10);
+      if (isoBack === iso) return iso;
     }
   }
   return null;

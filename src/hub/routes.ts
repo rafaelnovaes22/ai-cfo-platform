@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
-import { requireAuth } from "@/auth/middleware.js";
+import { requireAuth, requireScope } from "@/auth/middleware.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 
 const DreSnapshotSchema = z.object({
@@ -57,7 +57,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
         }),
       },
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireScope('hub:read')],
     handler: async (req, reply) => {
       const db = getPrisma();
       const { tenantId } = req.auth!;
@@ -139,7 +139,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       response: { 200: z.object({ analyses: z.array(AnalysisSummarySchema) }) },
     },
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireScope('hub:read')],
     handler: async (req, reply) => {
       const db = getPrisma();
       const analyses = await db.monthlyAnalysis.findMany({

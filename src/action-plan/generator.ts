@@ -5,7 +5,8 @@ import { buildActionPlanSystemPrompt, buildActionPlanUserPrompt } from "@/action
 import { logger } from "@/observability/logger.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 
-const ActionSchema = z.object({
+// Exportado para testes unitários — schema é o contrato executável da spec §1.
+export const ActionSchema = z.object({
   horizon:     z.enum(["short", "medium", "long"]),
   title:       z.string().min(3),
   description: z.string().min(10),
@@ -18,7 +19,7 @@ const ActionSchema = z.object({
 });
 
 // PlanResponseSchema enforce mínimos por horizonte como Zod refinement (não apenas total).
-const PlanResponseSchema = z.object({
+export const PlanResponseSchema = z.object({
   actions: z.array(ActionSchema).min(5),
 }).refine(
   ({ actions }) => actions.filter((a) => a.horizon === "short").length >= 3,

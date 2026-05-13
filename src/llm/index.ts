@@ -37,7 +37,8 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
       response = await dispatch(fallback, req);
     } catch (fallbackErr) {
       generation.end({ output: null, level: "ERROR" });
-      await trace.update({ status: "ERROR" });
+      // Langfuse 3.x não expõe `status` em trace.update; mantém o trace, sinaliza no metadata.
+      trace.update({ metadata: { status: "ERROR" } });
       throw fallbackErr;
     }
   }
