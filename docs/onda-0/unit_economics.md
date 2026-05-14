@@ -293,3 +293,63 @@ Câmbio mantido: USD 1 = BRL 5,00 (documento) / BRL 5,70 ([cost.ts](../../src/ll
 - [x] Hook `unit-economics-recalc` **não disparou** automaticamente — só cobre mudança em prompts, não em router/cost. Lacuna a reportar no Forge.
 
 **Recálculo registrado por**: Claude Code em 2026-05-14, pendente ratificação CEO
+
+---
+
+## Recálculo 2026-05-14 (segundo do dia) — `classification` migrado para gpt-4.1-mini ([ADR-005](../adr/005-openai-provider.md))
+
+**Motivação**: o runner físico do `/acme:eval` (implementado nesta mesma sessão) revelou que `gemini-2.5-flash-lite` acertava apenas **68,2%** das categorias DRE no eval suite (`ledger_classified`). Erro silencioso em 32% dos lançamentos não-ambíguos comprometeria a qualidade do DRE em produção.
+
+Comparativo de 8 modelos contra os 32 cases:
+- 3 modelos atingem **100% em accuracy de categoria**: claude-haiku-4-5, gpt-4.1-mini, gpt-5-mini
+- Escolhido **gpt-4.1-mini** por melhor relação custo/latência (1,1s/case, $0,40/$1,60 USD/MTok)
+
+### Cálculo recalculado da classificação (cliente mediano)
+
+| Modelo | Input ($/MTok) | Output ($/MTok) | Custo por análise |
+|---|---|---|---|
+| ~~gemini-2.5-flash-lite~~ (anterior) | $0,10 | $0,40 | R$ 0,036 |
+| **gpt-4.1-mini** (atual) | $0,40 | $1,60 | **R$ 0,144** |
+
+8 calls × (3.000 input × $0,40/MTok + 1.500 output × $1,60/MTok) = 8 × $0,0036 = $0,0288 ≈ R$ 0,144 (câmbio R$5/USD).
+
+Aumento de **+300%** no custo da classificação. Nota: gpt-4.1-mini tem prompt cache automático — em volume real (mesma taxonomia repetida em 8 batches), custo input efetivo cai ~50%, levando o custo médio para ~R$ 0,10.
+
+### Total p50 recalculado
+
+| Item | 2026-05-14 v1 (Flash-Lite) | 2026-05-14 v2 (gpt-4.1-mini) | Δ |
+|---|---|---|---|
+| Classificação | R$ 0,036 | R$ 0,144 | +300% |
+| DRE narrativa | R$ 0,014 | R$ 0,014 | — |
+| Action plan | R$ 0,020 | R$ 0,020 | — |
+| Overhead (+25%) | R$ 0,018 | R$ 0,044 | +144% |
+| **Total p50 por análise** | **R$ 0,088** | **R$ 0,222** | **+152%** |
+
+### Razão custo/preço — C3 segue muito verde
+
+| Plano | Custo p50/mês | ARPU | Razão | Status C3 |
+|---|---|---|---|---|
+| Lite | R$ 0,22 | R$ 99 | **0,22%** | ✅ <<<25% (113× folga) |
+| Pro (3 análises) | R$ 0,67 | R$ 249 | **0,27%** | ✅ <<<25% |
+| Business (10 análises) | R$ 2,22 | R$ 599 | **0,37%** | ✅ <<<25% |
+
+### Trade-off explícito
+
+A troca corrige um problema crítico de **qualidade** (accuracy de categoria 68% → 100%) à custa de aumento de custo (+152%). Como C3 tem folga >100× em todos os planos, o aumento é totalmente absorvível. A decisão privilegia qualidade — erro de categoria afeta o DRE final que o cliente vê e atinge a contractual outcome do C2.
+
+### Eval métrica passou pela primeira vez
+
+Gate 4 do `/acme:promote` validado contra o pipeline real:
+- `ledger_classified`: 100% (22/22) vs threshold 95% ✅
+- `classification_confidence_low`: 30% (3/10) vs threshold 30% ✅ — limite estrutural universal de LLMs
+
+Relatório: [`evals/classification/runs/2026-05-14-eval-68d38d39-gpt-4-1-mini.md`](../../evals/classification/runs/2026-05-14-eval-68d38d39-gpt-4-1-mini.md)
+
+### Aprovação do recálculo
+
+- [ ] CEO ciente da troca de modelo e aceita o trade-off qualidade × custo
+- [x] C3 verificado: razão segue <0,4% em todos os planos
+- [x] ADR-005 escrita ratificando OpenAI como provider e gpt-4.1-mini para classification
+- [ ] Verificar política OpenAI ZDR antes de SHADOW com cliente real (LGPD)
+
+**Recálculo registrado por**: Claude Code em 2026-05-14, pendente ratificação CEO + verificação ZDR

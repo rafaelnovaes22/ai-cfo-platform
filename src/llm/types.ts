@@ -1,5 +1,5 @@
 export type LlmTask = "classification" | "dre-narrative" | "action-plan";
-export type LlmProvider = "google" | "anthropic" | "local";
+export type LlmProvider = "google" | "anthropic" | "openai" | "local";
 
 export interface RouteConfig {
   provider: LlmProvider;
