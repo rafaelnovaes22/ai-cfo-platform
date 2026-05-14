@@ -1,4 +1,4 @@
-export type LlmTask = "classification" | "dre-narrative" | "action-plan";
+export type LlmTask = "classification" | "classification-judge" | "dre-narrative" | "action-plan";
 export type LlmProvider = "google" | "anthropic" | "openai" | "local";
 
 export interface RouteConfig {
