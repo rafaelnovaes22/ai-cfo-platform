@@ -5,6 +5,7 @@ const BRL_PER_USD = 5.7;
 
 const PRICE_TABLE: Record<string, { inputUsdPerMTok: number; outputUsdPerMTok: number }> = {
   "gemini-2.0-flash":      { inputUsdPerMTok: 0.075, outputUsdPerMTok: 0.30 },
+  "gemini-2.5-flash-lite": { inputUsdPerMTok: 0.10,  outputUsdPerMTok: 0.40 },
   "gemini-2.5-flash":      { inputUsdPerMTok: 0.15,  outputUsdPerMTok: 0.60 },
   "claude-haiku-4-5":      { inputUsdPerMTok: 0.80,  outputUsdPerMTok: 4.00 },
   "claude-sonnet-4-6":     { inputUsdPerMTok: 3.00,  outputUsdPerMTok: 15.00 },

@@ -3,7 +3,7 @@ import type { LlmTask, RouteConfig } from "@/llm/types.js";
 // Roteamento por tarefa — único lugar que define qual provider/modelo usar.
 // Para trocar modelo de uma tarefa: editar aqui, sem tocar nos nós do LangGraph.
 const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
-  "classification": { provider: "google",    model: "gemini-2.0-flash" },
+  "classification": { provider: "google",    model: "gemini-2.5-flash-lite" },
   "dre-narrative":  { provider: "google",    model: "gemini-2.5-flash" },
   "action-plan":    { provider: "google",    model: "gemini-2.5-flash", thinkingBudget: 2048 },
 };

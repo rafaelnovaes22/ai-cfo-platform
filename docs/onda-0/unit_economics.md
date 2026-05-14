@@ -1,13 +1,13 @@
 ---
 decision: "D5 — Unit economics do SKU piloto monthly-analysis"
-status: "recalculado 2026-05-12 com Gemini Flash (ADR-002) — premissas a confirmar com volume real durante SHADOW"
+status: "recalculado 2026-05-14 — classification migrado para gemini-2.5-flash-lite (2.0-flash descontinuado)"
 approved_by: "CEO Acme"
 approved_at: "2026-05-08"
-recalc_at: "2026-05-12"
-constitution_version: "0.2.0"
+recalc_at: "2026-05-14"
+constitution_version: "0.3.0"
 linked_principle: "C3"
 created_at: "2026-05-08"
-last_updated: "2026-05-12"
+last_updated: "2026-05-14"
 linked_spec: "src/skus/monthly-analysis/spec.md"
 linked_adrs: ["002-llm-model-strategy"]
 ---
@@ -234,3 +234,62 @@ Este cálculo será refeito automaticamente quando:
 - [ ] Recálculo commitado em `docs/onda-0/unit_economics.md` (esta seção)
 
 **Recálculo aprovado por**: pendente
+
+---
+
+## Recálculo 2026-05-14 — `classification` migrado para Gemini 2.5 Flash-Lite
+
+**Motivação**: durante o smoke test pós-configuração do cartão Google AI Studio (2026-05-14), o modelo `gemini-2.0-flash` retornou 404 com mensagem oficial do Google:
+
+> `This model models/gemini-2.0-flash is no longer available to new users.`
+
+Como o cartão foi configurado depois da janela de descontinuação, a conta entrou como "novo usuário" e perdeu acesso. `gemini-2.5-flash-lite` foi validado como substituto (versionado, mesma família "lite", latência similar) e adotado no [src/llm/router.ts](../../src/llm/router.ts).
+
+### Mudança nos preços (premissas)
+
+| Modelo | Input ($/MTok) | Output ($/MTok) | Mudança |
+|---|---|---|---|
+| ~~gemini-2.0-flash~~ | ~~$0,075~~ | ~~$0,30~~ | descontinuado |
+| **gemini-2.5-flash-lite** (novo) | **$0,10** | **$0,40** | +33% input / +33% output |
+| gemini-2.5-flash | $0,15 | $0,60 | inalterado |
+
+Câmbio mantido: USD 1 = BRL 5,00 (documento) / BRL 5,70 ([cost.ts](../../src/llm/cost.ts) — divergência conhecida, conferir em ondas futuras).
+
+### Recálculo da classificação (cliente mediano)
+
+- 8 calls × (3.000 input + 1.500 output) tokens
+- Por call: 3.000 × $0,10/MTok + 1.500 × $0,40/MTok = $0,0003 + $0,0006 = **$0,0009**
+- Custo classificação: 8 × $0,0009 = $0,0072 ≈ **R$ 0,036** (era R$ 0,027 com 2.0-flash, +33%)
+
+### Total p50 recalculado
+
+| Item | 2026-05-12 (2.0-flash) | 2026-05-14 (2.5-flash-lite) | Δ |
+|---|---|---|---|
+| Classificação | R$ 0,027 | R$ 0,036 | +33% |
+| DRE narrativa | R$ 0,014 | R$ 0,014 | — |
+| Action plan | R$ 0,020 | R$ 0,020 | — |
+| Overhead (+25%) | R$ 0,015 | R$ 0,018 | +20% |
+| **Total p50 por análise** | **R$ 0,076** | **R$ 0,088** | **+16%** |
+
+### Razão custo/preço — C3 segue verde
+
+| Plano | Custo p50/mês | ARPU | Razão | Status C3 |
+|---|---|---|---|---|
+| Lite | R$ 0,088 | R$ 99 | **0,089%** | ✅ <<<25% |
+| Pro (3 análises) | R$ 0,264 | R$ 249 | **0,11%** | ✅ <<<25% |
+| Business (10 análises) | R$ 0,88 | R$ 599 | **0,15%** | ✅ <<<25% |
+
+**Folga preservada**: a folga estratégica desbloqueada pelo recálculo de 2026-05-12 (preço Lite poderia cair de R$ 99 → R$ 49) permanece — a razão segue na faixa 0,1% mesmo no plano Business.
+
+### Observações operacionais (do smoke test 2026-05-14)
+
+- `gemini-2.5-flash-lite`: latência 814ms-2823ms; tokens out econômicos (8 tokens pra responder o JSON de classificação)
+- `gemini-2.5-flash`: latência variável 1890ms-6064ms; retornou 503 "high demand" 1× em 5 chamadas — fallback Anthropic configurado no [router.ts](../../src/llm/router.ts) mas **ainda não exercitado em código**; verificar se nós do LangGraph fazem retry com `useFallback=true`
+
+### Aprovação do recálculo
+
+- [ ] CEO ciente da troca de modelo (decisão técnica forçada por descontinuação Google)
+- [x] C3 verificado: razão segue <0,2% em todos os planos
+- [x] Hook `unit-economics-recalc` **não disparou** automaticamente — só cobre mudança em prompts, não em router/cost. Lacuna a reportar no Forge.
+
+**Recálculo registrado por**: Claude Code em 2026-05-14, pendente ratificação CEO
