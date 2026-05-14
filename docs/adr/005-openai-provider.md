@@ -1,7 +1,7 @@
 ---
 adr_id: "005"
 title: "Adoção de OpenAI como terceiro provider — gpt-4.1-mini para classification"
-status: "proposta"
+status: "ratificada"
 constitution_version: "0.3.0"
 created_at: "2026-05-14"
 last_updated: "2026-05-14"
@@ -14,7 +14,7 @@ related_adrs: ["002"]
 
 # ADR-005 — OpenAI como terceiro provider, gpt-4.1-mini para classification
 
-> **Status**: ⏳ Proposta
+> **Status**: ✅ Ratificada
 > **Data proposta**: 2026-05-14
 > **Decisor**: CEO + Tech Lead
 > **Bloqueia**: promoção da Onda 1 para ASSISTED (Gate 2 — accuracy de categoria atual em 68% inviabiliza qualidade do DRE)
@@ -111,7 +111,7 @@ A trava agregada `pass_rate_threshold: 0.95` vira informativa quando `pass_rate_
 |---|---|
 | Custo classification sobe 4× ($0,10 → $0,40 input) | C3 segue verde (razão 0,089% → 0,26% no plano Lite — 100× abaixo do limite 25%) |
 | Lock-in adicional num terceiro provider | Adapter fica em [src/llm/adapters/openai.ts](../../src/llm/adapters/openai.ts) (C7 — único ponto de import do SDK) |
-| LGPD: política de retenção da OpenAI | Verificar antes de ASSISTED com cliente real. Recomendado: **OpenAI API com zero data retention (ZDR)** ou migração para **Azure OpenAI Service** (BR data residency disponível) |
+| LGPD: política de retenção da OpenAI | ✅ Resolvido: training opt-out ativo por padrão na API; API call logging desativado no painel da org; `store: false` em todas as chamadas via adapter. Azure OpenAI (BR data residency) continua como opção futura para AUTONOMOUS. |
 | Outcome `classification_confidence_low` continua falhando | Aceitar como limite estrutural com threshold 30%; reavaliar via post-processing ou fine-tune local na Fase 3 do ADR-002 |
 
 ### 3.3. Não-mudanças
@@ -139,9 +139,9 @@ Adicionar ao framework de benchmarking do ADR-002:
 - [x] Eval comparativo de 32 cases × 5 modelos OpenAI ([evals/classification/runs/](../../evals/classification/runs/))
 - [x] Adapter [src/llm/adapters/openai.ts](../../src/llm/adapters/openai.ts) implementado com `stripJsonFences` (defesa)
 - [x] Typecheck verde após integração
-- [ ] CEO + Tech Lead aprovam (este ADR vira ratificada)
-- [ ] Eval re-rodada após troca do router confirma 100% em `ledger_classified`
-- [ ] OpenAI ZDR/policy verificada antes de SHADOW com cliente real
+- [x] CEO + Tech Lead aprovam (Rafael Novaes, 2026-05-14)
+- [x] Eval re-rodada após troca do router confirma 100% em `ledger_classified`
+- [x] OpenAI ZDR/policy verificada: training opt-out ativo por padrão na API; API call logging desativado no painel (2026-05-14); `store: false` implementado em `src/llm/adapters/openai.ts`
 
 ---
 
@@ -150,3 +150,4 @@ Adicionar ao framework de benchmarking do ADR-002:
 | Versão | Data | Mudança |
 |---|---|---|
 | 0.1.0 | 2026-05-14 | Versão inicial — Onda 1 (eval físico revelou regressão em gemini-2.5-flash-lite) |
+| 0.2.0 | 2026-05-14 | Ratificada — LGPD resolvida; `store: false` implementado no adapter |

@@ -33,6 +33,7 @@ export async function callOpenAI(config: RouteConfig, req: LlmRequest): Promise<
       { role: "system", content: req.systemPrompt },
       { role: "user", content: req.userPrompt },
     ],
+    store: false, // LGPD: não armazenar inputs/outputs nos servidores da OpenAI
   });
 
   const rawContent = completion.choices[0]?.message?.content ?? "";
