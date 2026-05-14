@@ -1,11 +1,13 @@
 // Eval LLM runner — executa cases contra prompts vigentes via LLM real.
 // Uso: tsx --env-file=.env evals/run-llm.ts --module=<key> [--max-cases=N] [--no-write]
 //
-// Dispatch por manifest.eval_method. Fase 1: exact_match_category (classification).
+// Dispatch por manifest.eval_method / eval_methods.
+// Métodos suportados: exact_match_category, assertion_shape.
 
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { runExactMatchCategory } from "./runner/methods/exact-match-category.js";
+import { runAssertionShape } from "./runner/methods/assertion-shape.js";
 import { writeRunReport } from "./runner/report.js";
 import type { RunSummary } from "./runner/types.js";
 
@@ -57,6 +59,32 @@ interface Manifest {
   total_cases?: number;
 }
 
+// Retorna os outcomes que usam o método alvo (para manifests com eval_methods plural).
+function outcomesForMethod(methods: Record<string, string | string[]>, target: string): string[] {
+  return Object.entries(methods)
+    .filter(([, m]) => (Array.isArray(m) ? m : [m]).includes(target))
+    .map(([outcome]) => outcome);
+}
+
+// Resolve qual método despachar e quais outcomes filtrar.
+function resolveDispatch(manifest: Manifest): { method: string; outcomes?: string[] } {
+  if (manifest.eval_method) {
+    return { method: manifest.eval_method };
+  }
+  if (manifest.eval_methods) {
+    const assertionOutcomes = outcomesForMethod(manifest.eval_methods, "assertion_shape");
+    if (assertionOutcomes.length > 0) {
+      return { method: "assertion_shape", outcomes: assertionOutcomes };
+    }
+    const exactOutcomes = outcomesForMethod(manifest.eval_methods, "exact_match_category");
+    if (exactOutcomes.length > 0) {
+      return { method: "exact_match_category", outcomes: exactOutcomes };
+    }
+    return { method: "unsupported" };
+  }
+  return { method: "unknown" };
+}
+
 function loadManifest(module: string): Manifest {
   const path = join(resolve(process.cwd(), "evals"), module, "manifest.json");
   return JSON.parse(readFileSync(path, "utf-8")) as Manifest;
@@ -65,9 +93,12 @@ function loadManifest(module: string): Manifest {
 async function main(): Promise<void> {
   const args = parseArgs();
   const manifest = loadManifest(args.module);
-  const method = manifest.eval_method;
+  const { method, outcomes } = resolveDispatch(manifest);
 
   console.log(`[eval-llm] módulo=${args.module}  método=${method}  threshold=${manifest.pass_rate_threshold}`);
+  if (outcomes) {
+    console.log(`[eval-llm] outcomes: ${outcomes.join(", ")}`);
+  }
   if (typeof args.maxCases === "number") {
     console.log(`[eval-llm] modo limitado: rodando apenas ${args.maxCases} cases`);
   }
@@ -84,8 +115,17 @@ async function main(): Promise<void> {
         modelOverride: args.provider && args.model ? { provider: args.provider, model: args.model } : undefined,
       });
       break;
+    case "assertion_shape":
+      summary = await runAssertionShape({
+        module: args.module,
+        outcomes,
+        passRateThreshold: manifest.pass_rate_threshold,
+        passRatePerOutcome: manifest.pass_rate_per_outcome,
+        maxCases: args.maxCases,
+      });
+      break;
     default:
-      console.error(`[eval-llm] eval_method "${method}" não suportado nesta fase. Suportados: exact_match_category`);
+      console.error(`[eval-llm] método "${method}" não suportado. Suportados: exact_match_category, assertion_shape`);
       process.exit(2);
   }
 

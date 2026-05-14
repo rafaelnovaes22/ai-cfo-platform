@@ -8,7 +8,7 @@ export interface DreLines {
   // Custos
   custosDiretos: number;
   lucroBruto: number;
-  margemBruta: number; // %
+  margemBruta: number; // fração 0–1
   // Despesas operacionais
   despesasPessoal: number;
   prolabore: number;
@@ -19,18 +19,21 @@ export interface DreLines {
   despesasJuridicas: number;
   despesasFinanceiras: number;
   outrasDespesas: number;
+  outrasReceitasOp: number;
   totalDespesasOp: number;
   // Resultados
   ebitda: number;
-  margemEbitda: number; // %
+  margemEbitda: number; // fração 0–1
   depreciacao: number;
+  amortizacao: number;
   ebit: number;
+  margemOperacional: number; // fração 0–1
   receitaFinanceira: number;
   resultadoFinanceiro: number;
   resultadoAntesImpostos: number;
   impostos: number;
   lucroLiquido: number;
-  margemLiquida: number; // %
+  margemLiquida: number; // fração 0–1
   // Não-P&L (fora do resultado, mas no extrato)
   emprestimosEntrada: number;
   amortizacaoDividas: number;
@@ -58,7 +61,8 @@ function sumBy(entries: EntryRow[], ...categories: string[]): number {
 
 function pct(numerator: number, denominator: number): number {
   if (denominator === 0) return 0;
-  return Math.round((numerator / denominator) * 10000) / 100; // 2 casas decimais
+  // Fração 0–1 com 4 casas decimais (0.1500 = 15%). Exibição em % fica em formatDreForPrompt.
+  return Math.round((numerator / denominator) * 10000) / 10000;
 }
 
 export function aggregateDre(entries: EntryRow[]): DreLines {
@@ -78,13 +82,16 @@ export function aggregateDre(entries: EntryRow[]): DreLines {
   const despesasJuridicas  = sumBy(entries, "despesas_juridicas");
   const despesasFinanceiras = sumBy(entries, "despesas_financeiras");
   const outrasDespesas     = sumBy(entries, "outras_despesas", "outras_receitas");
+  const outrasReceitasOp   = sumBy(entries, "outras_receitas_operacionais");
 
+  // despesasFinanceiras pertence ao resultado financeiro, não ao operacional
   const totalDespesasOp = despesasPessoal + prolabore + despesasAdm + despesasComerciais +
-    despesasTi + despesasViagem + despesasJuridicas + despesasFinanceiras + outrasDespesas;
+    despesasTi + despesasViagem + despesasJuridicas + outrasDespesas - outrasReceitasOp;
 
-  const ebitda     = lucroBruto - totalDespesasOp;
+  const ebitda      = lucroBruto - totalDespesasOp;
   const depreciacao = sumBy(entries, "depreciacao");
-  const ebit       = ebitda - depreciacao;
+  const amortizacao = sumBy(entries, "amortizacao_ativos");
+  const ebit        = ebitda - depreciacao - amortizacao;
 
   const receitaFinanceira   = sumBy(entries, "receita_financeira");
   const resultadoFinanceiro = receitaFinanceira - despesasFinanceiras;
@@ -97,10 +104,10 @@ export function aggregateDre(entries: EntryRow[]): DreLines {
     receitaBruta, deducoes, receitaLiquida,
     custosDiretos, lucroBruto, margemBruta: pct(lucroBruto, receitaLiquida),
     despesasPessoal, prolabore, despesasAdm, despesasComerciais,
-    despesasTi, despesasViagem, despesasJuridicas, despesasFinanceiras, outrasDespesas,
-    totalDespesasOp,
+    despesasTi, despesasViagem, despesasJuridicas, despesasFinanceiras,
+    outrasDespesas, outrasReceitasOp, totalDespesasOp,
     ebitda, margemEbitda: pct(ebitda, receitaLiquida),
-    depreciacao, ebit,
+    depreciacao, amortizacao, ebit, margemOperacional: pct(ebit, receitaLiquida),
     receitaFinanceira, resultadoFinanceiro,
     resultadoAntesImpostos, impostos,
     lucroLiquido, margemLiquida: pct(lucroLiquido, receitaLiquida),
@@ -117,6 +124,8 @@ export function formatDreForPrompt(dre: DreLines, referenceMonth: string): strin
   const brl = (cents: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
+  const pctFmt = (f: number) => (f * 100).toFixed(2);
+
   return `DRE FACILITADO — ${referenceMonth}
 
 RECEITAS
@@ -126,7 +135,7 @@ RECEITAS
 
 CUSTOS
   (-) Custos Diretos:     ${brl(dre.custosDiretos)}
-  = Lucro Bruto:          ${brl(dre.lucroBruto)} (margem ${dre.margemBruta}%)
+  = Lucro Bruto:          ${brl(dre.lucroBruto)} (margem ${pctFmt(dre.margemBruta)}%)
 
 DESPESAS OPERACIONAIS
   Pessoal (CLT):          ${brl(dre.despesasPessoal)}
@@ -138,16 +147,18 @@ DESPESAS OPERACIONAIS
   Jurídicas/Contábeis:    ${brl(dre.despesasJuridicas)}
   Financeiras:            ${brl(dre.despesasFinanceiras)}
   Outras:                 ${brl(dre.outrasDespesas)}
+  Outras Receitas Op.:    (${brl(dre.outrasReceitasOp)})
   TOTAL Despesas Op.:     ${brl(dre.totalDespesasOp)}
 
 RESULTADOS
-  = EBITDA:               ${brl(dre.ebitda)} (margem ${dre.margemEbitda}%)
+  = EBITDA:               ${brl(dre.ebitda)} (margem ${pctFmt(dre.margemEbitda)}%)
   (-) Depreciação:        ${brl(dre.depreciacao)}
-  = EBIT:                 ${brl(dre.ebit)}
+  (-) Amortização:        ${brl(dre.amortizacao)}
+  = EBIT (Lucro Op.):     ${brl(dre.ebit)} (margem ${pctFmt(dre.margemOperacional)}%)
   Resultado Financeiro:   ${brl(dre.resultadoFinanceiro)}
   = Antes de Impostos:    ${brl(dre.resultadoAntesImpostos)}
   (-) Impostos:           ${brl(dre.impostos)}
-  = LUCRO LÍQUIDO:        ${brl(dre.lucroLiquido)} (margem ${dre.margemLiquida}%)
+  = LUCRO LÍQUIDO:        ${brl(dre.lucroLiquido)} (margem ${pctFmt(dre.margemLiquida)}%)
 
 NÃO-P&L (não impactam resultado)
   Entradas de Empréstimos: ${brl(dre.emprestimosEntrada)}
