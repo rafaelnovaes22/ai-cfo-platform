@@ -1,0 +1,213 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cream / off-white background */
+    --background: 40 30% 96%;
+    --foreground: 20 14% 12%;
+
+    --card: 40 33% 98%;
+    --card-foreground: 20 14% 12%;
+
+    --popover: 40 33% 98%;
+    --popover-foreground: 20 14% 12%;
+
+    /* Soft black primary */
+    --primary: 20 14% 10%;
+    --primary-foreground: 40 33% 97%;
+
+    --secondary: 38 22% 91%;
+    --secondary-foreground: 20 14% 12%;
+
+    --muted: 38 20% 92%;
+    --muted-foreground: 25 10% 42%;
+
+    --accent: 38 22% 88%;
+    --accent-foreground: 20 14% 12%;
+
+    /* Burgundy / terracotta destructive */
+    --destructive: 358 45% 38%;
+    --destructive-foreground: 40 33% 97%;
+
+    --border: 35 18% 86%;
+    --input: 35 18% 86%;
+    --ring: 20 14% 12%;
+
+    --radius: 0.375rem;
+
+    /* Brand semantic tokens */
+    --positive: 152 38% 28%; /* deep mature green */
+    --positive-soft: 150 28% 88%;
+    --positive-foreground: 40 33% 97%;
+
+    --negative: 358 45% 38%; /* burgundy */
+    --negative-soft: 358 35% 92%;
+    --negative-foreground: 40 33% 97%;
+
+    --warning: 36 70% 45%; /* amber/mustard */
+    --warning-soft: 40 60% 90%;
+    --warning-foreground: 20 14% 12%;
+
+    --navy: 218 45% 24%; /* navy accent */
+    --navy-soft: 218 30% 92%;
+    --navy-foreground: 40 33% 97%;
+
+    --cream: 40 30% 96%;
+    --cream-deep: 38 25% 92%;
+    --ink: 20 14% 12%;
+    --ink-soft: 25 12% 28%;
+
+    --shadow-soft: 0 1px 2px hsl(20 14% 12% / 0.04),
+      0 2px 8px hsl(20 14% 12% / 0.04);
+    --shadow-card: 0 1px 3px hsl(20 14% 12% / 0.05),
+      0 4px 16px hsl(20 14% 12% / 0.04);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter Tight", system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+  }
+  .font-serif {
+    font-family: "Fraunces", Georgia, serif;
+    font-feature-settings: "lnum", "tnum";
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .text-positive {
+    color: hsl(var(--positive));
+  }
+  .text-negative {
+    color: hsl(var(--negative));
+  }
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  .text-navy {
+    color: hsl(var(--navy));
+  }
+  .text-ink {
+    color: hsl(var(--ink));
+  }
+  .text-ink-soft {
+    color: hsl(var(--ink-soft));
+  }
+
+  .bg-positive {
+    background-color: hsl(var(--positive));
+  }
+  .bg-positive-soft {
+    background-color: hsl(var(--positive-soft));
+  }
+  .bg-negative {
+    background-color: hsl(var(--negative));
+  }
+  .bg-negative-soft {
+    background-color: hsl(var(--negative-soft));
+  }
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  .bg-warning-soft {
+    background-color: hsl(var(--warning-soft));
+  }
+  .bg-navy {
+    background-color: hsl(var(--navy));
+  }
+  .bg-navy-soft {
+    background-color: hsl(var(--navy-soft));
+  }
+  .bg-cream {
+    background-color: hsl(var(--cream));
+  }
+  .bg-cream-deep {
+    background-color: hsl(var(--cream-deep));
+  }
+  .bg-ink {
+    background-color: hsl(var(--ink));
+  }
+
+  .border-ink {
+    border-color: hsl(var(--ink));
+  }
+
+  .eyebrow {
+    @apply text-[10.5px] uppercase tracking-[0.18em] font-medium text-ink-soft;
+  }
+
+  .auth-input {
+    @apply h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] text-ink outline-none transition-colors focus:border-ink;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-up {
+    animation: fadeUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .delay-1 {
+    animation-delay: 60ms;
+  }
+  .delay-2 {
+    animation-delay: 120ms;
+  }
+  .delay-3 {
+    animation-delay: 180ms;
+  }
+  .delay-4 {
+    animation-delay: 240ms;
+  }
+  .delay-5 {
+    animation-delay: 300ms;
+  }
+}
