@@ -20,7 +20,7 @@ cmv: 0                       # predicted ignorado porque confirmed existe
 despesasAdministrativas: 400000
 totalDespesasOperacionais: 400000
 ebitda: 5600000
-margemLiquida: 0.9333
+margemLiquida: 93.33
 naoClassificado: 0
 ```
 

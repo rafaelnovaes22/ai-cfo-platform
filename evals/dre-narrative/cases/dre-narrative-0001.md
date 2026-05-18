@@ -31,8 +31,8 @@ despesasFinanceiras: 200000
 lucroAntesIR: 2000000
 irCsll: 575000
 lucroLiquido: 1425000
-margemBruta: 0.4737
-margemLiquida: 0.1500
+margemBruta: 47.37
+margemLiquida: 15
 naoClassificado: 0
 ```
 

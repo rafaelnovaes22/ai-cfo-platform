@@ -28,9 +28,9 @@ depreciacao: 500000
 amortizacao: 200000
 lucroOperacional: 4300000     # ebitda - dep - amort
 lucroLiquido: 4300000
-margemEbitda: 0.2500
-margemOperacional: 0.2150
-margemLiquida: 0.2150
+margemEbitda: 25
+margemOperacional: 21.5
+margemLiquida: 21.5
 ```
 
 ## Justificativa

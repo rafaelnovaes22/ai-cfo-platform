@@ -23,7 +23,7 @@ naoClassificado: 800000     # 16% do total movimentado
 totalDespesasOperacionais: 0
 ebitda: 3000000
 lucroLiquido: 3000000
-margemLiquida: 0.6000
+margemLiquida: 60
 # nota: naoClassificado NÃO impede agregação; agregação segue completa
 ```
 

@@ -22,7 +22,7 @@ lucroBruto: 5000000
 totalDespesasOperacionais: 4501000
 ebitda: 499000
 lucroLiquido: 499000
-margemLiquida: 0.0499        # 4,99% — ABAIXO do threshold §7
+margemLiquida: 4.99        # 4,99% — ABAIXO do threshold §7
 ```
 
 ## Justificativa

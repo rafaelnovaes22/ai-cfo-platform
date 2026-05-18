@@ -28,7 +28,7 @@ totalDespesasOperacionais: 4980000
 ebitda: -380000
 lucroOperacional: -380000
 lucroLiquido: -380000
-margemLiquida: -0.0500
+margemLiquida: -5
 naoClassificado: 0
 ```
 

@@ -24,8 +24,8 @@ despesasComerciais: 500000
 totalDespesasOperacionais: 500000
 ebitda: 3000000
 lucroLiquido: 3000000
-margemBruta: 0.3500
-margemLiquida: 0.3000
+margemBruta: 35
+margemLiquida: 30
 # checagem: cmv/receitaBruta == 0.65 > 0.60
 ```
 

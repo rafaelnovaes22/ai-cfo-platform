@@ -379,8 +379,8 @@ function parseDreExpectedSection(file: CaseFile): Record<string, number> {
 function isNumericallyClose(actual: number, expected: number): boolean {
   if (actual === expected) return true;
   if (Number.isInteger(expected) && Number.isInteger(actual)) return actual === expected;
-  // Frações (margem): tolerância de 0.0001 (1 ponto-base)
-  return Math.abs(actual - expected) < 0.0001;
+  // Margens em %: tolerância de 0.01pp (1 ponto-base)
+  return Math.abs(actual - expected) < 0.01;
 }
 
 // ─── Helpers de resultado e sumário ──────────────────────────────────────────

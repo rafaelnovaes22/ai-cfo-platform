@@ -29,7 +29,7 @@ resultadoFinanceiro: -500000           # receitas - despesas
 lucroAntesIR: 1500000                  # lucroOperacional + resultadoFinanceiro
 irCsll: 450000
 lucroLiquido: 1050000                  # lucroAntesIR - irCsll
-margemLiquida: 0.1050
+margemLiquida: 10.5
 ```
 
 ## Justificativa
