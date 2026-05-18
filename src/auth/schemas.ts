@@ -27,3 +27,16 @@ export const MeResponse = z.object({
   tenantId: z.string(),
   role: z.string(),
 });
+
+export const PasswordResetRequestBody = z.object({
+  email: z.string().email(),
+});
+
+export const PasswordResetConfirmBody = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
+export const PasswordResetResponse = z.object({
+  ok: z.literal(true),
+});
