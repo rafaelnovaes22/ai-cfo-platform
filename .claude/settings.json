@@ -57,7 +57,12 @@
       "Skill(acme:unit-economics:*)",
       "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" add src/llm/router.ts src/llm/cost.ts docs/onda-0/unit_economics.md scripts/smoke-google.ts)",
       "Bash(git restore *)",
-      "Bash(tsx --env-file=.env evals/run-llm.ts --module=dre-narrative --no-write)"
+      "Bash(tsx --env-file=.env evals/run-llm.ts --module=dre-narrative --no-write)",
+      "Bash(git fetch *)",
+      "Bash(npm i *)",
+      "Bash(node -e \"const p = require\\('fastify-type-provider-zod'\\); console.log\\(Object.keys\\(p\\).sort\\(\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(npm uninstall *)",
+      "Bash(git stash *)"
     ],
     "deny": [
       "Bash(rm -rf*)",
