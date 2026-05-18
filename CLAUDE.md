@@ -127,6 +127,32 @@ O sync `aios:sync` do `clickup-automation` casa PRs com módulos buscando termos
 
 **Module keys válidos**: `auth-tenant`, `workspace-setup`, `billing`, `tenant-config`, `ingest`, `classification`, `dre-narrative`, `action-plan`, `hub`, `export`, `cashflow`, `kpis`, `score`, `alerts`, `dashboard-ceo`, `decision-engine`, `scenarios`, `benchmarking`, `conversational-agent`, `integrations-banks`, `integrations-erp-crm-payroll`, `payment-execution`, `revenue-forecast`, `tax-suite`, `accounts-management`, `bank-reconciliation`, `profitability`, `anomaly-fraud-detection`, `audit-governance`, `financial-planning`.
 
+### Fluxo obrigatório: branch → PR → merge
+
+**Nunca fazer push direto em `main`.** Com frontend e backend no mesmo repo, múltiplos contribuidores (Rafael, Eduardo, agentes) podem trabalhar em paralelo. Push direto em `main` gera conflitos silenciosos e impossibilita revisão.
+
+Fluxo padrão para qualquer trabalho:
+
+```bash
+# 1. Criar branch a partir de main atualizado
+git checkout main && git pull
+git checkout -b feat/aicfo-{module}-{descrição}
+
+# 2. Commits convencionais na branch
+git commit -m "feat({module}): ..."
+
+# 3. Abrir PR (gh cli ou GitHub UI)
+gh pr create --title "feat({module}): ..." --base main
+
+# 4. Merge via PR (squash preferido para features, merge para hotfixes)
+```
+
+**Regras de PR:**
+- Título segue o padrão `feat/fix/docs({module}): descrição` para o sync ClickUp funcionar
+- Toda mudança em `src/` passa por `/acme:pre-merge-check` antes do merge
+- Frontend (`app/`) e backend (`src/`) podem ir no mesmo PR se fizerem parte da mesma feature
+- Exceção permitida: hotfix crítico de segurança com aprovação explícita do CEO
+
 ---
 
 ## Padrões a seguir
