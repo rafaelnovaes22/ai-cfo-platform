@@ -8,7 +8,7 @@ export interface DreLines {
   // Custos
   custosDiretos: number;
   lucroBruto: number;
-  margemBruta: number; // fração 0–1
+  margemBruta: number; // porcentagem 0–100
   // Despesas operacionais
   despesasPessoal: number;
   prolabore: number;
@@ -23,17 +23,17 @@ export interface DreLines {
   totalDespesasOp: number;
   // Resultados
   ebitda: number;
-  margemEbitda: number; // fração 0–1
+  margemEbitda: number; // porcentagem 0–100
   depreciacao: number;
   amortizacao: number;
   ebit: number;
-  margemOperacional: number; // fração 0–1
+  margemOperacional: number; // porcentagem 0–100
   receitaFinanceira: number;
   resultadoFinanceiro: number;
   resultadoAntesImpostos: number;
   impostos: number;
   lucroLiquido: number;
-  margemLiquida: number; // fração 0–1
+  margemLiquida: number; // porcentagem 0–100
   // Não-P&L (fora do resultado, mas no extrato)
   emprestimosEntrada: number;
   amortizacaoDividas: number;
@@ -61,8 +61,7 @@ function sumBy(entries: EntryRow[], ...categories: string[]): number {
 
 function pct(numerator: number, denominator: number): number {
   if (denominator === 0) return 0;
-  // Fração 0–1 com 4 casas decimais (0.1500 = 15%). Exibição em % fica em formatDreForPrompt.
-  return Math.round((numerator / denominator) * 10000) / 10000;
+  return Math.round((numerator / denominator) * 10000) / 100;
 }
 
 export function aggregateDre(entries: EntryRow[]): DreLines {
@@ -124,7 +123,7 @@ export function formatDreForPrompt(dre: DreLines, referenceMonth: string): strin
   const brl = (cents: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
-  const pctFmt = (f: number) => (f * 100).toFixed(2);
+  const pctFmt = (f: number) => f.toFixed(2);
 
   return `DRE FACILITADO — ${referenceMonth}
 

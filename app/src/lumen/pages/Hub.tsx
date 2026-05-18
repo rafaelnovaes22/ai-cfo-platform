@@ -87,7 +87,7 @@ export default function Hub() {
                 <div className="mt-5 flex items-center gap-3 text-[13px]">
                   <span className="text-[#96ff7e]">Lucro líquido · margem</span>
                   <span className={`font-medium ${latest.dre.margemLiquida >= 0 ? "text-positive" : "text-negative"}`}>
-                    {(latest.dre.margemLiquida * 100).toFixed(1)}%
+                    {latest.dre.margemLiquida.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-3 mt-10">
