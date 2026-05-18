@@ -1,29 +1,17 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { api } from "@/lib/api/index.js";
+import { ApiProblem } from "@/lib/api/client.js";
 import { LumenLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") ?? "";
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    // Supabase parses the recovery hash and creates a session automatically
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")
-        setReady(true);
-    });
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,15 +23,24 @@ export default function ResetPassword() {
       toast.error("As senhas não coincidem.");
       return;
     }
-    setSubmitting(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
+    if (!token) {
+      toast.error("Link de recuperação inválido ou expirado.");
       return;
     }
-    toast.success("Senha atualizada com sucesso.");
-    navigate("/", { replace: true });
+    setSubmitting(true);
+    try {
+      await api.auth.confirmPasswordReset(token, password);
+      toast.success("Senha atualizada com sucesso.");
+      navigate("/auth", { replace: true });
+    } catch (err) {
+      const msg =
+        err instanceof ApiProblem
+          ? (err.detail ?? err.title)
+          : "Erro ao atualizar senha.";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -58,8 +55,10 @@ export default function ResetPassword() {
             Escolha uma nova senha pra sua conta.
           </p>
 
-          {!ready ? (
-            <div className="text-[13px] text-[#96ff7e]">Validando link…</div>
+          {!token ? (
+            <div className="text-[13px] text-red-500">
+              Link inválido ou expirado. Solicite um novo link de recuperação.
+            </div>
           ) : (
             <form onSubmit={submit} className="flex flex-col gap-3.5">
               <label className="flex flex-col gap-1.5">
@@ -73,9 +72,7 @@ export default function ResetPassword() {
                 />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-[#96ff7e]">
-                  Confirme a senha
-                </span>
+                <span className="text-[12px] text-[#96ff7e]">Confirme a senha</span>
                 <input
                   type="password"
                   value={confirmPassword}

@@ -3,11 +3,10 @@ import { LumenLogo } from "../components/Logo.tsx";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useState, useRef, useEffect } from "react";
 import { useAnalyses } from "../data/useAnalyses.ts";
-import { supabase } from "@/integrations/supabase/client";
-import { exportDREToXLSX } from "../data/exportDRE.ts";
 import { toast } from "sonner";
 import { routes } from "./Topbar.tsx";
 import { NavLink } from "react-router-dom";
+import { api } from "@/lib/api/index.js";
 
 const map: Record<string, string> = {
   "/": "Hub de análise",
@@ -18,8 +17,8 @@ const map: Record<string, string> = {
 };
 
 export function Sidebar() {
-  const { profile, user, signOut } = useAuth();
-  const { activeAnalysis, activeId } = useAnalyses();
+  const { user, signOut } = useAuth();
+  const { activeId } = useAnalyses();
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -28,8 +27,7 @@ export function Sidebar() {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -41,9 +39,7 @@ export function Sidebar() {
       localStorage.theme === "dark" ||
       (!("theme" in localStorage) &&
         window.matchMedia("(prefers-color-scheme: dark)").matches);
-
     htmlClasses.toggle("dark", defaultThemeIsDark);
-
     setTheme(defaultThemeIsDark ? "dark" : "light");
   }, [theme]);
 
@@ -55,8 +51,8 @@ export function Sidebar() {
     setTheme(newTheme);
   };
 
-  const displayName = profile?.name || user?.email || "";
-  const initials = (profile?.name || user?.email || "?")
+  const displayName = user?.userId ?? "";
+  const initials = (displayName || "?")
     .trim()
     .split(/\s+/)
     .map((w) => w[0])
@@ -65,33 +61,19 @@ export function Sidebar() {
     .join("")
     .toUpperCase();
 
-  const canExport = !!activeAnalysis && !!activeId;
+  const canExport = !!activeId;
 
   async function handleExport() {
-    if (!activeAnalysis || !activeId) {
+    if (!activeId) {
       toast.error("Selecione uma análise para exportar.");
       return;
     }
     setExporting(true);
     try {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("analysis_id", activeId)
-        .order("date", { ascending: false });
-      if (error) throw error;
-      const txs = (data ?? []).map((t: any) => ({
-        ...t,
-        amount: Number(t.amount),
-      }));
-      if (txs.length === 0) {
-        toast.error("Esta análise não tem lançamentos para exportar.");
-        return;
-      }
-      exportDREToXLSX(activeAnalysis, txs as any);
-      toast.success("DRE exportado em .xlsx");
-    } catch (e: any) {
-      toast.error(e.message ?? "Erro ao exportar");
+      await api.export.download(activeId, "monthly");
+      toast.success("DRE exportado.");
+    } catch {
+      toast.error("Erro ao exportar DRE.");
     } finally {
       setExporting(false);
     }
@@ -106,7 +88,7 @@ export function Sidebar() {
           <LumenLogo size={32} />
         </a>
         <h1 className="hidden md:flex whitespace-nowrap ml-8 pl-8 py-2 border-l border-1 border-[#245fff]/30 text-xl">
-          Hub de Análises · {profile?.name || ""}
+          Hub de Análises
         </h1>
       </div>
 
@@ -172,12 +154,8 @@ export function Sidebar() {
           <button
             onClick={handleExport}
             disabled={!canExport || exporting}
-            title={
-              canExport
-                ? "Exportar DRE da análise ativa em .xlsx"
-                : "Selecione uma análise para exportar"
-            }
-            className="hidden md:flex  items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-md text-white bg-[#3D24A0] dark:bg-[#245fff] text-[12.5px] hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={canExport ? "Exportar DRE da análise ativa" : "Selecione uma análise para exportar"}
+            className="hidden md:flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-md text-white bg-[#3D24A0] dark:bg-[#245fff] text-[12.5px] hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {exporting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -210,19 +188,14 @@ export function Sidebar() {
             {open && (
               <div className="absolute right-0 mt-2 w-56 bg-card rounded-md shadow-md py-1 z-30">
                 <div className="px-3 py-2">
-                  <div className="text-[12.5px]  truncate">
-                    {profile?.name || "—"}
-                  </div>
-                  <div className="text-[11.5px] text-[#96ff7e] truncate">
-                    {user?.email}
-                  </div>
+                  <div className="text-[12.5px] truncate">{user?.role ?? "—"}</div>
+                  <div className="text-[11.5px] text-[#96ff7e] truncate">{user?.tenantId ?? ""}</div>
                 </div>
               </div>
             )}
           </div>
           <button
             onClick={() => signOut()}
-            title={undefined}
             className={`group flex items-center w-full gap-2.5 px-3 py-2 rounded-md text-[12.5px] transition-colors`}
           >
             <LogOut className="h-[14px] w-[14px] shrink-0" strokeWidth={1.5} />
@@ -232,12 +205,13 @@ export function Sidebar() {
       </div>
       <div
         className={`z-[51] block md:hidden fixed top-0 left-0 w-screen h-screen bg-[#000000]/90 ${
-          menuOpen
-            ? "opacity-100 pointer-events-all"
-            : "opacity-0 pointer-events-none"
+          menuOpen ? "opacity-100 pointer-events-all" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setMenuOpen(false)}
       ></div>
     </aside>
   );
 }
+
+// Eliminate the unused import warning for `map`
+void map;

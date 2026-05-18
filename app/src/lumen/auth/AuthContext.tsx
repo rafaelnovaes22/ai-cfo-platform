@@ -1,68 +1,78 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-
-type Profile = { id: string; user_id: string; name: string; email: string };
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { api } from "@/lib/api/index.js";
+import { setTokens, clearTokens, setUnauthorizedHandler } from "@/lib/api/client.js";
+import type { MeResponse } from "@/lib/api/index.js";
 
 interface AuthContextValue {
-  user: User | null;
-  session: Session | null;
-  profile: Profile | null;
+  user: MeResponse | null;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (tenantName: string, name: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [user, setUser] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Set up listener BEFORE getSession (per Supabase guidance)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        // Defer Supabase calls
-        setTimeout(() => {
-          supabase
-            .from("profiles")
-            .select("*")
-            .eq("user_id", newSession.user.id)
-            .maybeSingle()
-            .then(({ data }) => setProfile(data as Profile | null));
-        }, 0);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    supabase.auth.getSession().then(({ data: { session: existing } }) => {
-      setSession(existing);
-      setUser(existing?.user ?? null);
-      if (existing?.user) {
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", existing.user.id)
-          .maybeSingle()
-          .then(({ data }) => setProfile(data as Profile | null));
-      }
+  const hydrate = useCallback(async () => {
+    const token = localStorage.getItem("aicfo.accessToken");
+    if (!token) {
       setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+      return;
+    }
+    try {
+      const me = await api.auth.me();
+      setUser(me);
+    } catch {
+      clearTokens();
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearTokens();
+      setUser(null);
+      window.location.href = "/auth";
+    });
+    hydrate();
+  }, [hydrate]);
+
+  const signIn = async (email: string, password: string) => {
+    const tokens = await api.auth.login({ email, password });
+    setTokens(tokens!.accessToken, tokens!.refreshToken);
+    const me = await api.auth.me();
+    setUser(me);
+  };
+
+  const signUp = async (tenantName: string, name: string, email: string, password: string) => {
+    const tokens = await api.auth.register({ tenantName, name, email, password });
+    setTokens(tokens!.accessToken, tokens!.refreshToken);
+    const me = await api.auth.me();
+    setUser(me);
+  };
+
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const refreshToken = localStorage.getItem("aicfo.refreshToken") ?? "";
+    try {
+      await api.auth.logout(refreshToken);
+    } finally {
+      clearTokens();
+      setUser(null);
+    }
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    await api.auth.requestPasswordReset(email);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, requestPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );
