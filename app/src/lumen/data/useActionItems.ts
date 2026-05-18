@@ -1,24 +1,20 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext";
 import { useAnalyses } from "./useAnalyses";
 
-export type ActionStatus = "pending" | "in_progress" | "done";
-export type ActionPriority = "low" | "medium" | "high";
-
 export interface ActionItem {
   id: string;
-  user_id: string;
-  analysis_id: string;
+  horizon: "short" | "medium" | "long";
   title: string;
-  description: string | null;
-  status: ActionStatus;
-  priority: ActionPriority;
-  ai_generated: boolean;
-  due_date: string | null;
-  position: number;
-  created_at: string;
-  updated_at: string;
+  description: string;
+  effortLevel: "low" | "medium" | "high";
+  riskLevel: "low" | "medium" | "high";
+  impactCents: number;
+  deadlineDays: number | null;
+  doneWhen: string | null;
+  clientApproved: boolean | null;
+  clientComment: string | null;
 }
 
 export function useActionItems() {
@@ -34,26 +30,28 @@ export function useActionItems() {
       return;
     }
     setLoading(true);
-    const { data } = await supabase
-      .from("action_items")
-      .select("*")
-      .eq("analysis_id", activeId)
-      .order("position", { ascending: true });
-    setItems((data ?? []) as ActionItem[]);
-    setLoading(false);
+    try {
+      const { items: raw } = await api.actionPlan.get(activeId);
+      setItems(raw);
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, [user, activeId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
-
-  const updateStatus = useCallback(async (id: string, status: ActionStatus) => {
-    await supabase.from("action_items").update({ status }).eq("id", id);
-    await refresh();
+  useEffect(() => {
+    refresh();
   }, [refresh]);
 
-  const remove = useCallback(async (id: string) => {
-    await supabase.from("action_items").delete().eq("id", id);
-    await refresh();
-  }, [refresh]);
+  const feedback = useCallback(
+    async (itemId: string, approved: boolean, comment?: string) => {
+      if (!activeId) return;
+      await api.actionPlan.feedback(activeId, itemId, { approved, comment });
+      await refresh();
+    },
+    [activeId, refresh]
+  );
 
-  return { items, loading, refresh, updateStatus, remove };
+  return { items, loading, refresh, feedback };
 }

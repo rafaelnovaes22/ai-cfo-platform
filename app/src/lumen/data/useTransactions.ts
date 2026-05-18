@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useAnalyses } from "./useAnalyses.ts";
 
@@ -8,24 +8,99 @@ export type TransactionSource = "manual" | "spreadsheet" | "pdf" | "pasted" | "a
 
 export interface Transaction {
   id: string;
-  user_id: string;
   analysis_id: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   description: string;
   category: string;
   account: string;
-  amount: number; // always positive in DB; sign derived from `type`
+  amount: number;
   type: TransactionType;
   source: TransactionSource;
   notes: string | null;
   created_at: string;
   updated_at: string;
+  rawCategory: string;
+  confidence: number | null;
 }
 
-export type NewTransaction = Omit<Transaction, "id" | "user_id" | "analysis_id" | "created_at" | "updated_at"> & {
+// Kept for TransactionModal compatibility (ManualEntry in Import.tsx)
+export type NewTransaction = {
+  date: string;
+  description: string;
+  category: string;
+  account: string;
+  amount: number;
+  type: TransactionType;
   source?: TransactionSource;
-  analysis_id?: string; // opcional: usa a análise ativa se não informada
+  notes?: string | null;
+  analysis_id?: string;
 };
+
+const CATEGORY_LABELS: Record<string, string> = {
+  receita_bruta: "Receita Bruta",
+  receita_financeira: "Receita Financeira",
+  outras_receitas: "Outras Receitas",
+  deducoes_receita: "Deduções de Receita",
+  cpv_cmv: "CPV / CMV",
+  custo_servicos: "Custo de Serviços",
+  despesas_pessoal: "Pessoal e Benefícios",
+  prolabore: "Pró-labore",
+  despesas_administrativas: "Despesas Administrativas",
+  despesas_comerciais: "Comercial e Marketing",
+  despesas_ti: "TI e Ferramentas",
+  despesas_viagem: "Viagens",
+  despesas_juridicas: "Jurídico",
+  despesas_financeiras: "Despesas Financeiras",
+  simples_nacional: "Simples Nacional",
+  irpj_csll: "IRPJ / CSLL",
+  capex: "Investimento (CAPEX)",
+  emprestimos_entrada: "Empréstimos (entrada)",
+  amortizacao_dividas: "Amortização de Dívidas",
+  transferencia_interna: "Transferência Interna",
+  depreciacao: "Depreciação",
+  outras_despesas: "Outras Despesas",
+  nao_classificado: "Não Classificado",
+};
+
+export const BACKEND_CATEGORIES = Object.entries(CATEGORY_LABELS).map(([key, label]) => ({
+  key,
+  label,
+  type: ["receita_bruta", "receita_financeira", "outras_receitas", "emprestimos_entrada"].includes(key)
+    ? "income" as const
+    : "expense" as const,
+}));
+
+function mapEntry(
+  entry: {
+    id: string;
+    date: string;
+    description: string;
+    amountCents: number;
+    direction: string;
+    predictedCategory: string | null;
+    classificationConfidence: number | null;
+  },
+  analysisId: string
+): Transaction {
+  const rawCategory = entry.predictedCategory ?? "nao_classificado";
+  const type: TransactionType = entry.direction === "in" || entry.direction === "credit" ? "income" : "expense";
+  return {
+    id: entry.id,
+    analysis_id: analysisId,
+    date: entry.date,
+    description: entry.description,
+    category: CATEGORY_LABELS[rawCategory] ?? rawCategory,
+    account: "",
+    amount: entry.amountCents / 100,
+    type,
+    source: "ai",
+    notes: null,
+    created_at: entry.date,
+    updated_at: entry.date,
+    rawCategory,
+    confidence: entry.classificationConfidence,
+  };
+}
 
 export function useTransactions() {
   const { user } = useAuth();
@@ -41,76 +116,31 @@ export function useTransactions() {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("analysis_id", activeId)
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (error) setError(error.message);
-    else {
-      setTransactions((data ?? []).map((t) => ({ ...t, amount: Number(t.amount) })) as Transaction[]);
+    try {
+      const { data } = await api.classification.review(activeId);
+      setTransactions(data.map((e) => mapEntry(e, activeId)));
       setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao carregar lançamentos");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user, activeId]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const create = useCallback(
-    async (tx: NewTransaction) => {
-      if (!user) throw new Error("Não autenticado");
-      const analysisId = tx.analysis_id ?? activeId;
-      if (!analysisId) throw new Error("Selecione uma análise antes de criar lançamentos");
-      const { error } = await supabase.from("transactions").insert({
-        ...tx,
-        analysis_id: analysisId,
-        user_id: user.id,
+  const correct = useCallback(
+    async (entryId: string, category: string) => {
+      await api.classification.correct(entryId, {
+        category: category as Parameters<typeof api.classification.correct>[1]["category"],
       });
-      if (error) throw error;
-      await refresh();
-    },
-    [user, refresh, activeId]
-  );
-
-  const createMany = useCallback(
-    async (txs: NewTransaction[]) => {
-      if (!user) throw new Error("Não autenticado");
-      if (txs.length === 0) return;
-      const { error } = await supabase
-        .from("transactions")
-        .insert(
-          txs.map((t) => {
-            const analysisId = t.analysis_id ?? activeId;
-            if (!analysisId) throw new Error("Selecione uma análise antes de importar");
-            return { ...t, analysis_id: analysisId, user_id: user.id };
-          })
-        );
-      if (error) throw error;
-      await refresh();
-    },
-    [user, refresh, activeId]
-  );
-
-  const update = useCallback(
-    async (id: string, patch: Partial<NewTransaction>) => {
-      const { error } = await supabase.from("transactions").update(patch).eq("id", id);
-      if (error) throw error;
       await refresh();
     },
     [refresh]
   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      const { error } = await supabase.from("transactions").delete().eq("id", id);
-      if (error) throw error;
-      await refresh();
-    },
-    [refresh]
-  );
-
-  return { transactions, loading, error, refresh, create, createMany, update, remove };
+  return { transactions, loading, error, refresh, correct };
 }
