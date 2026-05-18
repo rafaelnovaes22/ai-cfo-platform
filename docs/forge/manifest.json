@@ -1846,6 +1846,34 @@
       }
     ]
   },
+  "consumer_frontend": {
+    "id": "frontend-app",
+    "path": "app/",
+    "path_kind": "directory",
+    "type": "consumer-artifact",
+    "description": "Frontend React do Aicfo — integrado no monorepo em 2026-05-14 (ADR-006). Consome backend Fastify via api client tipado gerado por openapi-typescript.",
+    "stack": {
+      "runtime": "Vite 5 + React 18 + TypeScript",
+      "state": "TanStack Query + React Context",
+      "routing": "React Router 6",
+      "styling": "TailwindCSS",
+      "auth": "JWT Bearer — backend Fastify (sem Supabase)"
+    },
+    "entry_point": "app/src/main.tsx",
+    "api_client": "app/src/lib/api/",
+    "env_example": "app/.env.example",
+    "dev_command": "cd app && npm run dev",
+    "adr": "docs/adr/006-frontend-monorepo-integration.md",
+    "references": [
+      { "path": "app/src/lib/api/client.ts", "description": "Fetch wrapper com bearer JWT e parse de application/problem+json" },
+      { "path": "app/src/lib/api/index.ts", "description": "Namespaces tipados por módulo (auth, analyses, ingest, classification, dre, actionPlan, hub, export)" },
+      { "path": "app/src/lib/api/types.ts", "description": "Tipos gerados por openapi-typescript — não editar manualmente" },
+      { "path": "app/src/lumen/auth/AuthContext.tsx", "description": "Auth state (accessToken/refreshToken) + signIn/signUp/signOut/refresh" },
+      { "path": "app/src/lumen/data/useAnalyses.ts", "description": "Context Provider para lista de analyses + activeId" },
+      { "path": "app/src/lumen/data/useTransactions.ts", "description": "Wrapper sobre GET /classification/:id/review + PATCH correct" },
+      { "path": "app/src/lumen/data/useActionItems.ts", "description": "Wrapper sobre GET /analysis/:id/action-plan + PATCH feedback" }
+    ]
+  },
   "external_repos_absorbed": [
     {
       "repo": "github/spec-kit",

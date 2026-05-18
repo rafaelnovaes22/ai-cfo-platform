@@ -94,7 +94,11 @@ Promoção entre modos exige eval suite passing + N execuções no modo atual + 
 
 ### Frontend
 
-Frontend é desenvolvido em **repositório separado** por **dev interno** da empresa (não Rafael; não terceiro). Backend (este repo) entrega **contratos** (OpenAPI 3.1 + Zod schemas + handoff doc) — frontend implementa UI/design por conta própria.
+Frontend React está **neste mesmo repositório** sob [`app/`](app/) (integrado em 2026-05-14, ADR-006). Stack: Vite + React 18 + TypeScript + TailwindCSS + TanStack Query + React Router 6.
+
+Consome o backend Fastify via api client tipado em [`app/src/lib/api/`](app/src/lib/api/) — sem dependência de Supabase. Tipos gerados por `openapi-typescript` apontando para `VITE_API_URL/openapi.json`.
+
+Para rodar o frontend: `cd app && npm run dev` (porta 5173). Configurar `VITE_API_URL=http://localhost:3000` em `app/.env.local`.
 
 `frontend_agent` do AIOS está reposicionado como **Contract Agent**: gera `docs/contracts/{module}.openapi.yml` + `docs/contracts/{module}.zod.ts` + `docs/frontend-handoff/{module}.md` — **não gera código React**.
 
