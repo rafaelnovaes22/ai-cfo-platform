@@ -296,9 +296,9 @@ Wave 5 (QA gate)
 - [ ] Relatório SHADOW mostra diff legacy × agentic em 3 dimensões
 - [ ] Todas as 6 gates pre-merge-check passam em todos os 9 PRs
 - [ ] `npm test` ≥ 160 testes verdes (atual: 131 + ~30 estimados)
-- [ ] Custo medido por análise no Langfuse documentado em `docs/monthly-analysis/shadow-cost-baseline.md` — atualizar projeção R$ 0,44 com dados reais
+- [x] Baseline SHADOW criado em `docs/monthly-analysis/shadow-cost-baseline.md` com placeholders explícitos — atualizar projeção R$ 0,44 com dados reais/Langfuse antes de promoção
 - [ ] CEO ciente do estado: agentic em SHADOW, BullMQ em prod
-- [ ] Decisão registrada em ADR (criar `docs/adr/008-langgraph-mvp.md`) sobre coexistência com BullMQ até promoção pra ASSISTED
+- [x] Decisão registrada em ADR (`docs/adr/008-langgraph-mvp.md`) sobre coexistência com BullMQ até promoção pra ASSISTED
 
 ---
 
