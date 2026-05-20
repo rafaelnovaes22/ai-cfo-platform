@@ -1,4 +1,5 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
+import type { RawLedgerEntry } from "@/monthly-analysis/agents/normalization.js";
 import type {
   ActionPlanDraft,
   AgentCost,
@@ -14,11 +15,13 @@ import type {
   QaReview,
 } from "@/monthly-analysis/schemas/agents.js";
 
-// Estado canônico do futuro grafo LangGraph do SKU monthly-analysis.
-// Ele é deliberadamente aditivo: não substitui o pipeline BullMQ atual nesta branch.
+// Estado canônico do grafo LangGraph do SKU monthly-analysis.
+// Aditivo ao pipeline BullMQ atual — coexistência até promoção SHADOW→default.
 export interface MonthlyAnalysisState {
   analysisId: string;
   tenantId: string;
+
+  rawEntries?: RawLedgerEntry[];
 
   normalizedEntries?: NormalizedLedgerEntry[];
   clarityResults?: ClarityResult[];

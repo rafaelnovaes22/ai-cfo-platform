@@ -1,10 +1,10 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
+import type { RawLedgerEntry } from "@/monthly-analysis/agents/normalization.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
-// Nó esqueleto: lê a MonthlyAnalysis em Prisma para validar tenancy do estado.
-// Não popula resultados de agentes — esses arrays só são preenchidos pelos nós
-// reais (normalization, clarity, etc.) em ondas futuras.
+// Carrega metadata da MonthlyAnalysis + lançamentos brutos (LedgerEntry).
+// Valida tenancy. Popula state.rawEntries para o nó `normalize` consumir.
 export async function loadAnalysisNode(
   state: MonthlyAnalysisState,
 ): Promise<Partial<MonthlyAnalysisState>> {
@@ -35,10 +35,24 @@ export async function loadAnalysisNode(
     return {};
   }
 
+  const entries = await prisma.ledgerEntry.findMany({
+    where: { analysisId: state.analysisId, tenantId: state.tenantId },
+    select: { id: true, date: true, description: true, amountCents: true, direction: true },
+    orderBy: { date: "asc" },
+  });
+
+  const rawEntries: RawLedgerEntry[] = entries.map((entry) => ({
+    entryId: entry.id,
+    date: entry.date.toISOString().slice(0, 10),
+    description: entry.description,
+    amountCents: entry.amountCents,
+    direction: entry.direction === "credit" ? "in" : "out",
+  }));
+
   logger.debug(
-    { analysisId: analysis.id, status: analysis.status },
-    "monthly-analysis.graph.load_analysis: analysis carregada",
+    { analysisId: analysis.id, status: analysis.status, entriesCount: rawEntries.length },
+    "monthly-analysis.graph.load_analysis: analysis + entries carregados",
   );
 
-  return {};
+  return { rawEntries };
 }
