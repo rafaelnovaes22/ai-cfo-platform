@@ -23,7 +23,8 @@
     "seed:demo": "tsx scripts/seed-demo.ts",
     "eval:run": "tsx evals/run.ts",
     "eval:model-matrix": "tsx evals/model-matrix.ts",
-    "eval:llm": "tsx --env-file=.env evals/run-llm.ts"
+    "eval:llm": "tsx --env-file=.env evals/run-llm.ts",
+    "shadow:graph": "tsx --env-file=.env scripts/run-monthly-analysis-graph-shadow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
