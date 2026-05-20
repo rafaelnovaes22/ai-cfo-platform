@@ -22,6 +22,7 @@
     "db:studio": "prisma studio",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "eval:run": "tsx evals/run.ts",
+    "eval:model-matrix": "tsx evals/model-matrix.ts",
     "eval:llm": "tsx --env-file=.env evals/run-llm.ts"
   },
   "dependencies": {
