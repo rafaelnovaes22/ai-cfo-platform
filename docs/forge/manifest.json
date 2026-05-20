@@ -1,11 +1,11 @@
 {
   "$schema": "https://acme.com.br/forge/manifest-v1.json",
-  "manifest_version": "0.19.0",
+  "manifest_version": "0.21.0",
   "framework": {
     "name": "Acme Forge",
-    "version": "0.19.0",
-    "phase": "Forge-14 consumer upgrade v0.7.0 to v0.15.0",
-    "last_updated": "2026-05-14",
+    "version": "0.21.0",
+    "phase": "Forge-20 self-harness loop — Aicfo consumer aligned with canonical v0.21.0",
+    "last_updated": "2026-05-20",
     "constitution_version": "0.3.0",
     "constitution_path": ".claude/CONSTITUTION.md",
     "constitution_sha256": null,
@@ -63,8 +63,8 @@
         ]
       }
     },
-    "framework_version_required": "0.15.0",
-    "last_synced_at": "2026-05-13"
+    "framework_version_required": "0.21.0",
+    "last_synced_at": "2026-05-20"
   },
   "principles": [
     {
@@ -1865,13 +1865,34 @@
     "dev_command": "cd app && npm run dev",
     "adr": "docs/adr/006-frontend-monorepo-integration.md",
     "references": [
-      { "path": "app/src/lib/api/client.ts", "description": "Fetch wrapper com bearer JWT e parse de application/problem+json" },
-      { "path": "app/src/lib/api/index.ts", "description": "Namespaces tipados por módulo (auth, analyses, ingest, classification, dre, actionPlan, hub, export)" },
-      { "path": "app/src/lib/api/types.ts", "description": "Tipos gerados por openapi-typescript — não editar manualmente" },
-      { "path": "app/src/lumen/auth/AuthContext.tsx", "description": "Auth state (accessToken/refreshToken) + signIn/signUp/signOut/refresh" },
-      { "path": "app/src/lumen/data/useAnalyses.ts", "description": "Context Provider para lista de analyses + activeId" },
-      { "path": "app/src/lumen/data/useTransactions.ts", "description": "Wrapper sobre GET /classification/:id/review + PATCH correct" },
-      { "path": "app/src/lumen/data/useActionItems.ts", "description": "Wrapper sobre GET /analysis/:id/action-plan + PATCH feedback" }
+      {
+        "path": "app/src/lib/api/client.ts",
+        "description": "Fetch wrapper com bearer JWT e parse de application/problem+json"
+      },
+      {
+        "path": "app/src/lib/api/index.ts",
+        "description": "Namespaces tipados por módulo (auth, analyses, ingest, classification, dre, actionPlan, hub, export)"
+      },
+      {
+        "path": "app/src/lib/api/types.ts",
+        "description": "Tipos gerados por openapi-typescript — não editar manualmente"
+      },
+      {
+        "path": "app/src/lumen/auth/AuthContext.tsx",
+        "description": "Auth state (accessToken/refreshToken) + signIn/signUp/signOut/refresh"
+      },
+      {
+        "path": "app/src/lumen/data/useAnalyses.ts",
+        "description": "Context Provider para lista de analyses + activeId"
+      },
+      {
+        "path": "app/src/lumen/data/useTransactions.ts",
+        "description": "Wrapper sobre GET /classification/:id/review + PATCH correct"
+      },
+      {
+        "path": "app/src/lumen/data/useActionItems.ts",
+        "description": "Wrapper sobre GET /analysis/:id/action-plan + PATCH feedback"
+      }
     ]
   },
   "external_repos_absorbed": [
@@ -1972,7 +1993,8 @@
       "0.4.0_to_0.4.1": "Doc sync (F22): README badges/status/estrutura atualizados para v0.4.1; settings.json _forge_version + _constitution_version corrigidos; decisions.md header F1-F22; roadmap.md header; manifest sha256_policy explicitado; reviewer/README.md criado; path_kind adicionado em examples/acme/.",
       "0.4.1_to_0.5.0": "Forge-6 AIOS (F23): 3 novos commands (aios-init/run/status) + seção AIOS condicional em plan/tasks/implement + aios-telemetry-pattern.md + aios_tier no template spec + roadmap Forge-6 section.",
       "0.5.0_to_0.6.0": "Forge-7 AIOS portable agents (F24): 6 agentes em templates/aios/agents/ (3 especializados + 3 compartilhados, sendo schema_agent stack-agnostic), orchestrator.py.template + config.yaml.template, /acme:aios-init bumped para v0.2.0 (copia de templates físicos em vez de boilerplate inline), README dos templates AIOS, F24 em decisions, Forge-7 section em roadmap.",
-      "0.6.0_to_0.7.0": "Forge-8 CI/CD esteira completa (F25): 4 templates em templates/cicd/ (github-actions-validate/eval/audit + cicd-checklist), Gate 6 adicionado ao /acme:promote (obrigatório para assisted_to_autonomous), Wave 6 no /acme:tasks (T6.1-T6.5), promotion-officer.md atualizado com Gate 6, F25 em decisions, Forge-8 section em roadmap."
+      "0.6.0_to_0.7.0": "Forge-8 CI/CD esteira completa (F25): 4 templates em templates/cicd/ (github-actions-validate/eval/audit + cicd-checklist), Gate 6 adicionado ao /acme:promote (obrigatório para assisted_to_autonomous), Wave 6 no /acme:tasks (T6.1-T6.5), promotion-officer.md atualizado com Gate 6, F25 em decisions, Forge-8 section em roadmap.",
+      "0.15.0_to_0.21.0": "Aicfo consumer ingest of Forge-15/16/17/18/19/20: SDLC skills (Forge-15/16/17/18 already synced via earlier copy), Hermes integration (.github/workflows/forge-headless.yml), self-harness loop (templates/hermes/ + docs/clients/aicfo/agent-soul.md + agent-memory.md). ADR-008 documents the upgrade."
     }
   }
 }

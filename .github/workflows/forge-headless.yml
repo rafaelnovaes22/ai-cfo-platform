@@ -1,0 +1,320 @@
+# .github/workflows/forge-headless.yml
+#
+# FORGE HEADLESS — Execução remota de /acme:* via GitHub Actions
+#
+# Disparado por: Hermes Agent (Railway) via Telegram → `gh workflow run`
+# Propósito   : Executar slash commands do Forge em repos consumer sem acesso
+#               à máquina local. Suporta matrix multi-consumer (paralelismo real).
+#
+# Inputs:
+#   command    → slash command a executar (ex: "/acme:audit-monthly")
+#   consumers  → CSV de repos consumer (ex: "school-platform,aicfo,clickup_acme")
+#   args       → argumentos adicionais (ex: "--month 2026-05")
+#   caller_id  → Telegram chat_id (audit trail C6)
+#   caller_intent → intent original em linguagem natural (audit trail)
+#
+# Secrets necessários no repo acme-startup/agent-governance-framework:
+#   ANTHROPIC_API_KEY          — Claude Code CLI
+#   GH_TOKEN                   — checkout de repos privados (PAT com repo + workflow scope)
+#   HERMES_WEBHOOK_URL         — endpoint /forge/callback no Hermes Railway (opcional)
+#   HERMES_WEBHOOK_SECRET      — assinatura HMAC do callback (opcional)
+#   HERMES_PRIVILEGED_CHAT_IDS — CSV de chat_ids autorizados para comandos write
+#
+# Princípios: C1 (audit trail), C6 (telemetria por run), C7 (portável — zero hardcode de consumer)
+
+name: Forge Headless
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Slash command (ex: /acme:audit-monthly)'
+        required: true
+        type: string
+      consumers:
+        description: 'Consumer repos CSV (ex: school-platform,aicfo,clickup_acme)'
+        required: true
+        type: string
+      args:
+        description: 'Argumentos adicionais do comando'
+        required: false
+        default: ''
+        type: string
+      caller_id:
+        description: 'Telegram chat_id do chamador (audit trail C6)'
+        required: false
+        default: ''
+        type: string
+      caller_intent:
+        description: 'Intent original em linguagem natural'
+        required: false
+        default: ''
+        type: string
+
+  workflow_call:
+    inputs:
+      command:
+        required: true
+        type: string
+      consumers:
+        required: true
+        type: string
+      args:
+        required: false
+        default: ''
+        type: string
+      caller_id:
+        required: false
+        default: ''
+        type: string
+      caller_intent:
+        required: false
+        default: ''
+        type: string
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      GH_TOKEN:
+        required: false
+      HERMES_WEBHOOK_URL:
+        required: false
+      HERMES_WEBHOOK_SECRET:
+        required: false
+      HERMES_PRIVILEGED_CHAT_IDS:
+        required: false
+
+jobs:
+  # ─── Job 1: converte CSV de consumers em matrix JSON ─────────────────
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Montar matriz de consumers
+        id: set-matrix
+        run: |
+          CONSUMERS="${{ inputs.consumers }}"
+          MATRIX=$(echo "$CONSUMERS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | jq -R . | jq -sc '{"consumer": .}')
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Consumers na matriz: $CONSUMERS"
+
+  # ─── Job 2: executa em paralelo (1 job por consumer da matrix) ───────
+  run-forge:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false     # outros consumers continuam mesmo que 1 falhe
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout agent-governance-framework (canônico — agents/commands/skills)
+        uses: actions/checkout@v4
+        with:
+          repository: acme-startup/agent-governance-framework
+          token: ${{ secrets.GH_TOKEN || github.token }}
+          path: forge
+
+      - name: Checkout consumer — ${{ matrix.consumer }}
+        uses: actions/checkout@v4
+        with:
+          repository: acme-startup/${{ matrix.consumer }}
+          token: ${{ secrets.GH_TOKEN || github.token }}
+          path: consumer
+
+      - name: Validar consumer é projeto sob Forge (C1)
+        run: |
+          if [[ ! -f "consumer/.claude/CONSTITUTION.md" ]]; then
+            echo "::error::${{ matrix.consumer }} não é projeto sob Forge — .claude/CONSTITUTION.md ausente"
+            exit 4
+          fi
+          echo "Consumer '${{ matrix.consumer }}' validado como projeto Forge"
+
+      - name: Verificar allowlist de comandos (C1 — segurança)
+        run: |
+          COMMAND="${{ inputs.command }}"
+          CALLER_ID="${{ inputs.caller_id }}"
+
+          # Comandos write exigem caller_id em HERMES_PRIVILEGED_CHAT_IDS
+          WRITE_COMMANDS="/acme:implement /acme:promote"
+          for WRITE_CMD in $WRITE_COMMANDS; do
+            if [[ "$COMMAND" == "$WRITE_CMD"* ]]; then
+              PRIVILEGED_IDS="${{ secrets.HERMES_PRIVILEGED_CHAT_IDS }}"
+              if [[ -z "$PRIVILEGED_IDS" ]]; then
+                echo "::error::Comando '$COMMAND' requer HERMES_PRIVILEGED_CHAT_IDS configurado"
+                exit 2
+              fi
+              if ! echo "$PRIVILEGED_IDS" | tr ',' '\n' | grep -qx "$CALLER_ID"; then
+                echo "::error::caller_id '$CALLER_ID' não autorizado para '$COMMAND'"
+                exit 2
+              fi
+            fi
+          done
+          echo "Allowlist OK para: $COMMAND (caller_id: ${CALLER_ID:-anônimo})"
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Sincronizar agents/commands/skills do Forge para o consumer
+        run: |
+          # Copia artefatos canônicos do Forge que o consumer pode não ter sincronizado
+          for dir in agents commands skills; do
+            SRC="forge/.claude/$dir"
+            DST="consumer/.claude/$dir"
+            if [[ -d "$SRC" ]] && [[ ! -d "$DST" ]]; then
+              echo "Copiando forge/.claude/$dir → consumer/.claude/$dir"
+              cp -r "$SRC" "$DST"
+            fi
+          done
+
+      - name: Executar slash command (Claude Code headless)
+        id: run-command
+        working-directory: consumer
+        run: |
+          echo "::group::${{ inputs.command }} em ${{ matrix.consumer }}"
+
+          claude --print \
+            --output-format stream-json \
+            "${{ inputs.command }} ${{ inputs.args }}" \
+            2>&1 | tee /tmp/forge-output-${{ matrix.consumer }}.ndjson
+
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+          echo "::endgroup::"
+          echo "Exit code: $EXIT_CODE"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        continue-on-error: true
+
+      - name: Registrar audit trail (C6)
+        if: always()
+        run: |
+          mkdir -p /tmp/forge-audit
+          cat > /tmp/forge-audit/${{ matrix.consumer }}.json << AUDITEOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "run_id": "${{ github.run_id }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "consumer": "${{ matrix.consumer }}",
+            "command": "${{ inputs.command }}",
+            "args": "${{ inputs.args }}",
+            "caller_id": "${{ inputs.caller_id }}",
+            "caller_intent": "${{ inputs.caller_intent }}",
+            "exit_code": "${{ steps.run-command.outputs.exit_code }}"
+          }
+          AUDITEOF
+
+      - name: Upload artifacts (output + audit trail)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-headless-${{ matrix.consumer }}-${{ github.run_id }}
+          path: |
+            /tmp/forge-output-${{ matrix.consumer }}.ndjson
+            /tmp/forge-audit/${{ matrix.consumer }}.json
+          retention-days: 90
+
+      - name: Extrair learning snapshot (Forge-20)
+        id: extract-learning
+        if: always()
+        working-directory: consumer
+        run: |
+          # Localiza o snapshot mais recente gerado pelo Stop hook desta sessão
+          MONTH="$(date +%Y-%m)"
+          LEARNING_DIR="docs/learnings/$MONTH"
+          SNAPSHOT_PATH=""
+          SNAPSHOT_CONTENT=""
+          IS_INTERNAL="true"
+
+          if [[ -d "$LEARNING_DIR" ]]; then
+            LATEST=$(ls -t "$LEARNING_DIR"/*.md 2>/dev/null | head -1)
+            if [[ -n "$LATEST" ]]; then
+              SNAPSHOT_PATH="$LATEST"
+              SNAPSHOT_CONTENT=$(cat "$LATEST" 2>/dev/null | head -100)
+              IS_INTERNAL=$(grep -m1 "^is_internal:" "$LATEST" 2>/dev/null | awk '{print $2}' || echo "true")
+              echo "Learning snapshot encontrado: $SNAPSHOT_PATH (is_internal=$IS_INTERNAL)"
+            else
+              echo "Nenhum learning snapshot encontrado em $LEARNING_DIR"
+            fi
+          else
+            echo "Diretório de learnings não existe ainda: $LEARNING_DIR"
+          fi
+
+          # Exportar para uso nos steps seguintes
+          echo "snapshot_path=$SNAPSHOT_PATH" >> $GITHUB_OUTPUT
+          echo "is_internal=$IS_INTERNAL" >> $GITHUB_OUTPUT
+
+          # Salvar conteúdo (sanitizado — sem dados de sessão sensíveis) para payload
+          if [[ -n "$SNAPSHOT_CONTENT" ]]; then
+            echo "$SNAPSHOT_CONTENT" > /tmp/forge-learning-${{ matrix.consumer }}.md
+          fi
+
+      - name: Callback para Hermes Railway (opcional)
+        if: always()
+        run: |
+          WEBHOOK_URL="${{ secrets.HERMES_WEBHOOK_URL }}"
+          if [[ -z "$WEBHOOK_URL" ]]; then
+            echo "HERMES_WEBHOOK_URL não configurado — skipping callback"
+            exit 0
+          fi
+
+          # Preview das últimas 80 linhas do output
+          OUTPUT_PREVIEW=$(tail -80 /tmp/forge-output-${{ matrix.consumer }}.ndjson 2>/dev/null || echo '{}')
+
+          # Learning snapshot (se gerado pelo Stop hook — Forge-20)
+          SNAPSHOT_PATH="${{ steps.extract-learning.outputs.snapshot_path }}"
+          SNAPSHOT_CONTENT=$(cat /tmp/forge-learning-${{ matrix.consumer }}.md 2>/dev/null || echo "")
+          IS_INTERNAL="${{ steps.extract-learning.outputs.is_internal }}"
+
+          # HMAC signature do payload (para validação no Hermes — C6)
+          PAYLOAD=$(jq -cn \
+            --arg event "forge_run_completed" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg consumer "${{ matrix.consumer }}" \
+            --arg command "${{ inputs.command }}" \
+            --argjson exit_code "${{ steps.run-command.outputs.exit_code || 1 }}" \
+            --arg caller_id "${{ inputs.caller_id }}" \
+            --arg output_preview "$(echo "$OUTPUT_PREVIEW" | tail -80)" \
+            --arg learning_snapshot_path "$SNAPSHOT_PATH" \
+            --arg learning_snapshot_content "$SNAPSHOT_CONTENT" \
+            --arg is_internal "$IS_INTERNAL" \
+            '{
+              event: $event,
+              run_id: $run_id,
+              run_url: $run_url,
+              consumer: $consumer,
+              command: $command,
+              exit_code: $exit_code,
+              caller_id: $caller_id,
+              output_preview: $output_preview,
+              learning_snapshot_path: $learning_snapshot_path,
+              learning_snapshot_content: $learning_snapshot_content,
+              is_internal: $is_internal
+            }')
+
+          HMAC_SECRET="${{ secrets.HERMES_WEBHOOK_SECRET }}"
+          SIGNATURE=""
+          if [[ -n "$HMAC_SECRET" ]]; then
+            SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | awk '{print $2}')"
+          fi
+
+          curl -fsSL -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hermes-Signature: ${SIGNATURE}" \
+            -d "$PAYLOAD" \
+            --max-time 15 || echo "::warning::Webhook callback para Hermes falhou (não bloqueante)"
+
+      - name: Verificar exit code final
+        run: |
+          EXIT="${{ steps.run-command.outputs.exit_code }}"
+          [[ "$EXIT" == "0" ]] || { echo "::error::Forge command falhou (exit $EXIT)"; exit $EXIT; }
