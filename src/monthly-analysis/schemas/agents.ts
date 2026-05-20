@@ -119,6 +119,23 @@ export const NarrativeCardDraftSchema = z.object({
 });
 export type NarrativeCardDraft = z.infer<typeof NarrativeCardDraftSchema>;
 
+// Wrapper que reforça composição contratual: EXATAMENTE 3 cards, um de cada tipo.
+export const NarrativeCardDraftsSchema = z.array(NarrativeCardDraftSchema)
+  .length(3, { message: "Exatamente 3 cards de narrativa são obrigatórios" })
+  .refine(
+    (cards) => cards.filter((c) => c.type === "critical_gap").length === 1,
+    { message: "Exatamente 1 card do tipo critical_gap é obrigatório" },
+  )
+  .refine(
+    (cards) => cards.filter((c) => c.type === "attention").length === 1,
+    { message: "Exatamente 1 card do tipo attention é obrigatório" },
+  )
+  .refine(
+    (cards) => cards.filter((c) => c.type === "healthy").length === 1,
+    { message: "Exatamente 1 card do tipo healthy é obrigatório" },
+  );
+export type NarrativeCardDrafts = z.infer<typeof NarrativeCardDraftsSchema>;
+
 export const ActionPlanItemDraftSchema = z.object({
   horizon: z.enum(["short", "medium", "long"]),
   title: z.string().min(3),
