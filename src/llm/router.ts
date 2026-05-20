@@ -5,12 +5,14 @@ import type { LlmTask, RouteConfig } from "@/llm/types.js";
 //
 // As 4 tarefas legadas continuam ativas para preservar o pipeline BullMQ atual.
 // As tarefas granulares abaixo são a base do novo monthly-analysis multiagente.
+// `eval-judge` é tooling do runner `llm_as_judge` (não vai pra produção).
 const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
   // Pipeline legado — compatibilidade.
   "classification":       { provider: "openai", model: "gpt-4.1-mini" },
   "classification-judge": { provider: "openai", model: "gpt-4.1-nano" },
   "dre-narrative":        { provider: "google", model: "gemini-2.5-flash" },
   "action-plan":          { provider: "google", model: "gemini-2.5-flash", thinkingBudget: 2048 },
+  "eval-judge":           { provider: "openai", model: "gpt-4.1-mini" },
 
   // Pipeline agentic/LangGraph — SLM first.
   "normalization":        { provider: "openai", model: "gpt-4.1-nano" },
@@ -31,6 +33,7 @@ const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
   "classification-judge": { provider: "openai", model: "gpt-4o-mini" },
   "dre-narrative":        { provider: "anthropic", model: "claude-sonnet-4-6" },
   "action-plan":          { provider: "anthropic", model: "claude-sonnet-4-6" },
+  "eval-judge":           { provider: "anthropic", model: "claude-sonnet-4-6" },
 
   // Pipeline agentic/LangGraph.
   "normalization":        { provider: "openai", model: "gpt-4.1-mini" },

@@ -1,4 +1,9 @@
-export type LegacyLlmTask = "classification" | "classification-judge" | "dre-narrative" | "action-plan";
+export type LegacyLlmTask =
+  | "classification"
+  | "classification-judge"
+  | "dre-narrative"
+  | "action-plan"
+  | "eval-judge";
 
 export type AgenticLlmTask =
   | "normalization"

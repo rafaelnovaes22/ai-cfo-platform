@@ -2,12 +2,13 @@
 // Uso: tsx --env-file=.env evals/run-llm.ts --module=<key> [--max-cases=N] [--no-write]
 //
 // Dispatch por manifest.eval_method / eval_methods.
-// Métodos suportados: exact_match_category, assertion_shape.
+// Métodos suportados: exact_match_category, assertion_shape, llm_as_judge.
 
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { runExactMatchCategory } from "./runner/methods/exact-match-category.js";
 import { runAssertionShape } from "./runner/methods/assertion-shape.js";
+import { runLlmAsJudge } from "./runner/methods/llm-as-judge.js";
 import { writeRunReport } from "./runner/report.js";
 import type { RunSummary } from "./runner/types.js";
 
@@ -19,6 +20,7 @@ interface CliArgs {
   write: boolean;
   provider: LlmProvider | undefined;
   model: string | undefined;
+  method: string | undefined;
 }
 
 function parseArgs(): CliArgs {
@@ -28,6 +30,7 @@ function parseArgs(): CliArgs {
   let write = true;
   let provider: LlmProvider | undefined;
   let model: string | undefined;
+  let method: string | undefined;
 
   for (const arg of args) {
     if (arg.startsWith("--module=")) module = arg.slice("--module=".length);
@@ -36,10 +39,11 @@ function parseArgs(): CliArgs {
     else if (arg === "--no-write") write = false;
     else if (arg.startsWith("--provider=")) provider = arg.slice("--provider=".length) as LlmProvider;
     else if (arg.startsWith("--model=")) model = arg.slice("--model=".length);
+    else if (arg.startsWith("--method=")) method = arg.slice("--method=".length);
   }
 
   if (!module) {
-    console.error("Uso: tsx --env-file=.env evals/run-llm.ts --module=<key> [--max-cases=N] [--no-write] [--provider=<p> --model=<m>]");
+    console.error("Uso: tsx --env-file=.env evals/run-llm.ts --module=<key> [--max-cases=N] [--no-write] [--provider=<p> --model=<m>] [--method=<m>]");
     process.exit(2);
   }
 
@@ -48,7 +52,7 @@ function parseArgs(): CliArgs {
     process.exit(2);
   }
 
-  return { module, maxCases, write, provider, model };
+  return { module, maxCases, write, provider, model, method };
 }
 
 interface Manifest {
@@ -67,18 +71,22 @@ function outcomesForMethod(methods: Record<string, string | string[]>, target: s
 }
 
 // Resolve qual método despachar e quais outcomes filtrar.
-function resolveDispatch(manifest: Manifest): { method: string; outcomes?: string[] } {
+// Quando o manifest declara múltiplos métodos por outcome, prioriza llm_as_judge
+// (mais informativo). CLI pode forçar via --method=<m>.
+function resolveDispatch(manifest: Manifest, methodOverride?: string): { method: string; outcomes?: string[] } {
   if (manifest.eval_method) {
+    if (methodOverride && methodOverride !== manifest.eval_method) {
+      return { method: "unsupported" };
+    }
     return { method: manifest.eval_method };
   }
   if (manifest.eval_methods) {
-    const assertionOutcomes = outcomesForMethod(manifest.eval_methods, "assertion_shape");
-    if (assertionOutcomes.length > 0) {
-      return { method: "assertion_shape", outcomes: assertionOutcomes };
-    }
-    const exactOutcomes = outcomesForMethod(manifest.eval_methods, "exact_match_category");
-    if (exactOutcomes.length > 0) {
-      return { method: "exact_match_category", outcomes: exactOutcomes };
+    const candidates = methodOverride
+      ? [methodOverride]
+      : ["llm_as_judge", "assertion_shape", "exact_match_category"];
+    for (const m of candidates) {
+      const outcomes = outcomesForMethod(manifest.eval_methods, m);
+      if (outcomes.length > 0) return { method: m, outcomes };
     }
     return { method: "unsupported" };
   }
@@ -93,7 +101,7 @@ function loadManifest(module: string): Manifest {
 async function main(): Promise<void> {
   const args = parseArgs();
   const manifest = loadManifest(args.module);
-  const { method, outcomes } = resolveDispatch(manifest);
+  const { method, outcomes } = resolveDispatch(manifest, args.method);
 
   console.log(`[eval-llm] módulo=${args.module}  método=${method}  threshold=${manifest.pass_rate_threshold}`);
   if (outcomes) {
@@ -124,8 +132,19 @@ async function main(): Promise<void> {
         maxCases: args.maxCases,
       });
       break;
+    case "llm_as_judge":
+      summary = await runLlmAsJudge({
+        module: args.module,
+        outcomes,
+        passRateThreshold: manifest.pass_rate_threshold,
+        passRatePerOutcome: manifest.pass_rate_per_outcome,
+        maxCases: args.maxCases,
+        generatorOverride:
+          args.provider && args.model ? { provider: args.provider, model: args.model } : undefined,
+      });
+      break;
     default:
-      console.error(`[eval-llm] método "${method}" não suportado. Suportados: exact_match_category, assertion_shape`);
+      console.error(`[eval-llm] método "${method}" não suportado. Suportados: exact_match_category, assertion_shape, llm_as_judge`);
       process.exit(2);
   }
 
