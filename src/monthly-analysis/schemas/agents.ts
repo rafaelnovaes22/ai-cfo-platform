@@ -69,6 +69,8 @@ export const ClarityResultSchema = z.object({
   reason: z.string().max(240),
 });
 export type ClarityResult = z.infer<typeof ClarityResultSchema>;
+export const ClarityResultsSchema = z.array(ClarityResultSchema);
+export type ClarityResults = z.infer<typeof ClarityResultsSchema>;
 
 export const DreClassificationResultSchema = z.object({
   entryId: z.string(),
@@ -77,6 +79,8 @@ export const DreClassificationResultSchema = z.object({
   rationale: z.string().max(240).optional(),
 });
 export type DreClassificationResult = z.infer<typeof DreClassificationResultSchema>;
+export const DreClassificationResultsSchema = z.array(DreClassificationResultSchema);
+export type DreClassificationResults = z.infer<typeof DreClassificationResultsSchema>;
 
 export const AnomalySchema = z.object({
   code: z.string().min(2),
