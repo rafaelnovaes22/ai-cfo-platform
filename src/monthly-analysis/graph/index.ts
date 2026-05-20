@@ -1,0 +1,66 @@
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
+
+import { loadAnalysisNode } from "@/monthly-analysis/graph/nodes/load-analysis.js";
+import { finalizeNode } from "@/monthly-analysis/graph/nodes/finalize.js";
+import type { DreLines } from "@/dre-narrative/aggregator.js";
+import type {
+  ActionPlanDraft,
+  AgentCost,
+  AgentError,
+  AgentTrace,
+  Anomaly,
+  CashflowRisk,
+  ClarityResult,
+  DreClassificationResult,
+  MarginDiagnosis,
+  NarrativeCardDraft,
+  NormalizedLedgerEntry,
+  QaReview,
+} from "@/monthly-analysis/schemas/agents.js";
+
+// Annotation root espelhando MonthlyAnalysisState. Arrays usam reducer de
+// concatenação para que nós paralelos (futuros) possam emitir custos/traces
+// sem sobrescrever uns aos outros.
+export const MonthlyAnalysisAnnotation = Annotation.Root({
+  analysisId: Annotation<string>(),
+  tenantId: Annotation<string>(),
+
+  normalizedEntries: Annotation<NormalizedLedgerEntry[] | undefined>(),
+  clarityResults: Annotation<ClarityResult[] | undefined>(),
+  classifiedEntries: Annotation<DreClassificationResult[] | undefined>(),
+
+  dre: Annotation<DreLines | undefined>(),
+  anomalies: Annotation<Anomaly[] | undefined>(),
+  marginDiagnosis: Annotation<MarginDiagnosis | undefined>(),
+  cashflowRisk: Annotation<CashflowRisk | undefined>(),
+
+  narrativeCards: Annotation<NarrativeCardDraft[] | undefined>(),
+  actionPlan: Annotation<ActionPlanDraft | undefined>(),
+  qaReview: Annotation<QaReview | undefined>(),
+
+  costs: Annotation<AgentCost[]>({
+    reducer: (curr, next) => [...curr, ...next],
+    default: () => [],
+  }),
+  traces: Annotation<AgentTrace[]>({
+    reducer: (curr, next) => [...curr, ...next],
+    default: () => [],
+  }),
+  errors: Annotation<AgentError[]>({
+    reducer: (curr, next) => [...curr, ...next],
+    default: () => [],
+  }),
+});
+
+// Factory: monta e compila o StateGraph do SKU monthly-analysis.
+// Ondas futuras inserem nós entre load_analysis e finalize.
+export function buildMonthlyAnalysisGraph() {
+  const graph = new StateGraph(MonthlyAnalysisAnnotation)
+    .addNode("load_analysis", loadAnalysisNode)
+    .addNode("finalize", finalizeNode)
+    .addEdge(START, "load_analysis")
+    .addEdge("load_analysis", "finalize")
+    .addEdge("finalize", END);
+
+  return graph.compile();
+}
