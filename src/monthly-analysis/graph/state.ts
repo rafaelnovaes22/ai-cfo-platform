@@ -17,6 +17,8 @@ import type {
 
 // Estado canônico do grafo LangGraph do SKU monthly-analysis.
 // Aditivo ao pipeline BullMQ atual — coexistência até promoção SHADOW→default.
+export type QaGateDecision = "narrative_synthesis" | "action_planning" | "finalize";
+
 export interface MonthlyAnalysisState {
   analysisId: string;
   tenantId: string;
@@ -35,6 +37,12 @@ export interface MonthlyAnalysisState {
   narrativeCards?: NarrativeCardDraft[];
   actionPlan?: ActionPlanDraft;
   qaReview?: QaReview;
+  needsReview?: boolean;
+  retryCount?: {
+    narrative: number;
+    actionPlan: number;
+  };
+  qaGateDecision?: QaGateDecision;
 
   costs: AgentCost[];
   traces: AgentTrace[];

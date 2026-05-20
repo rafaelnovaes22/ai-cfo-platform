@@ -126,6 +126,12 @@ function setupHappyPath(): void {
         provider: "google", model: "gemini-2.5-flash", inputTokens: 600, outputTokens: 800, costCents: 2, traceId: "t5",
       };
     }
+    if (task === "financial-qa-review") {
+      return {
+        content: JSON.stringify({ publishable: true, issues: [], retryTargets: [] }),
+        provider: "openai", model: "gpt-4.1-mini", inputTokens: 400, outputTokens: 100, costCents: 1, traceId: "t6",
+      };
+    }
     throw new Error(`Mock não cobre task: ${task}`);
   });
 }
@@ -169,7 +175,7 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.actionPlan!.actions.filter((a) => a.horizon === "short").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("invoca callLlm exatamente 5 vezes (normalize + clarity + classification + narrative + action)", async () => {
+  it("invoca callLlm exatamente 6 vezes (normalize + clarity + classification + narrative + action + QA)", async () => {
     setupHappyPath();
     const graph = buildMonthlyAnalysisGraph();
 
@@ -189,9 +195,10 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
         "dre-classification",
         "narrative-synthesis",
         "action-planning",
+        "financial-qa-review",
       ]),
     );
-    expect(tasksInvoked).toHaveLength(5);
+    expect(tasksInvoked).toHaveLength(6);
   });
 
   it("propaga tenantId em todas as chamadas LLM (C8 — sem leakage de tenant)", async () => {

@@ -10,6 +10,8 @@ import { marginDiagnosisNode } from "@/monthly-analysis/graph/nodes/margin-diagn
 import { cashflowRiskNode } from "@/monthly-analysis/graph/nodes/cashflow-risk.js";
 import { narrativeSynthesisNode } from "@/monthly-analysis/graph/nodes/narrative-synthesis.js";
 import { actionPlanningNode } from "@/monthly-analysis/graph/nodes/action-planning.js";
+import { qaReviewNode } from "@/monthly-analysis/graph/nodes/qa-review.js";
+import { qaGateNode, routeAfterQaGate } from "@/monthly-analysis/graph/nodes/qa-gate.js";
 import { finalizeNode } from "@/monthly-analysis/graph/nodes/finalize.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import type { RawLedgerEntry } from "@/monthly-analysis/agents/normalization.js";
@@ -49,6 +51,9 @@ export const MonthlyAnalysisAnnotation = Annotation.Root({
   narrativeCards: Annotation<NarrativeCardDraft[] | undefined>(),
   actionPlan: Annotation<ActionPlanDraft | undefined>(),
   qaReview: Annotation<QaReview | undefined>(),
+  needsReview: Annotation<boolean | undefined>(),
+  retryCount: Annotation<{ narrative: number; actionPlan: number } | undefined>(),
+  qaGateDecision: Annotation<"narrative_synthesis" | "action_planning" | "finalize" | undefined>(),
 
   costs: Annotation<AgentCost[]>({
     reducer: (curr, next) => [...curr, ...next],
@@ -69,9 +74,9 @@ export const MonthlyAnalysisAnnotation = Annotation.Root({
 // Topologia:
 //   load_analysis → normalize → clarity_judge → dre_classifier → aggregate_dre
 //     → [anomaly_detection ‖ margin_diagnosis ‖ cashflow_risk] (paralelo)
-//     → narrative_synthesis → action_planning → finalize
+//     → narrative_synthesis → action_planning → qa_review → qa_gate
+//     → finalize | retry narrative/action once → qa_review → finalize/needsReview
 //
-// Wave 5 adicionará: qa_review + retry condicional após action_planning.
 // Wave 3.C.2 adicionará: instrumentação Langfuse explícita por nó.
 export function buildMonthlyAnalysisGraph() {
   const graph = new StateGraph(MonthlyAnalysisAnnotation)
@@ -85,6 +90,8 @@ export function buildMonthlyAnalysisGraph() {
     .addNode("cashflow_risk", cashflowRiskNode)
     .addNode("narrative_synthesis", narrativeSynthesisNode)
     .addNode("action_planning", actionPlanningNode)
+    .addNode("qa_review", qaReviewNode)
+    .addNode("qa_gate", qaGateNode)
     .addNode("finalize", finalizeNode)
     .addEdge(START, "load_analysis")
     .addEdge("load_analysis", "normalize")
@@ -100,7 +107,13 @@ export function buildMonthlyAnalysisGraph() {
     .addEdge("margin_diagnosis", "narrative_synthesis")
     .addEdge("cashflow_risk", "narrative_synthesis")
     .addEdge("narrative_synthesis", "action_planning")
-    .addEdge("action_planning", "finalize")
+    .addEdge("action_planning", "qa_review")
+    .addEdge("qa_review", "qa_gate")
+    .addConditionalEdges("qa_gate", routeAfterQaGate, {
+      narrative_synthesis: "narrative_synthesis",
+      action_planning: "action_planning",
+      finalize: "finalize",
+    })
     .addEdge("finalize", END);
 
   return graph.compile();
