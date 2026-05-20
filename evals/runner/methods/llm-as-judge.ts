@@ -17,6 +17,7 @@ import { callLlm } from "@/llm/index.js";
 import { callGoogle } from "@/llm/adapters/google.js";
 import { callAnthropic } from "@/llm/adapters/anthropic.js";
 import { callOpenAI } from "@/llm/adapters/openai.js";
+import { callGroq } from "@/llm/adapters/groq.js";
 import type { LlmProvider, LlmRequest, LlmResponse } from "@/llm/types.js";
 import {
   buildNarrativeSystemPrompt,
@@ -92,9 +93,16 @@ export async function runLlmAsJudge(opts: RunOptions): Promise<RunSummary> {
 
   const results: CaseResult[] = [];
 
+  // Rate limit defensivo para provider=groq (free tier ~6K TPM, reasoning
+  // models consomem muito por request). Espalha requests em ~8s entre cada.
+  const inteRequestSleepMs = opts.generatorOverride?.provider === "groq" ? 8000 : 0;
+
   for (let i = 0; i < cases.length; i++) {
     const file = cases[i];
     if (!file) continue;
+    if (i > 0 && inteRequestSleepMs > 0) {
+      await new Promise((res) => setTimeout(res, inteRequestSleepMs));
+    }
     process.stdout.write(`  [${i + 1}/${cases.length}] ${file.caseId} (${file.outcome}) ... `);
 
     const t0 = Date.now();
@@ -155,6 +163,7 @@ async function dispatchGenerator(
     case "google":    return callGoogle(route, req);
     case "anthropic": return callAnthropic(route, req);
     case "openai":    return callOpenAI(route, req);
+    case "groq":      return callGroq(route, req);
     default: throw new Error(`provider "${override.provider}" não suportado em override`);
   }
 }

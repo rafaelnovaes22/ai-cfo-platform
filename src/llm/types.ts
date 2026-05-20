@@ -18,7 +18,7 @@ export type AgenticLlmTask =
 
 // Mantém compatibilidade com o pipeline atual enquanto a evolução LangGraph é construída.
 export type LlmTask = LegacyLlmTask | AgenticLlmTask;
-export type LlmProvider = "google" | "anthropic" | "openai" | "local";
+export type LlmProvider = "google" | "anthropic" | "openai" | "groq" | "local";
 
 export interface RouteConfig {
   provider: LlmProvider;

@@ -2,6 +2,7 @@ import { resolveRoute } from "@/llm/router.js";
 import { callGoogle } from "@/llm/adapters/google.js";
 import { callAnthropic } from "@/llm/adapters/anthropic.js";
 import { callOpenAI } from "@/llm/adapters/openai.js";
+import { callGroq } from "@/llm/adapters/groq.js";
 import { callLocal } from "@/llm/adapters/local.js";
 import { createTrace } from "@/observability/langfuse.js";
 import { logger } from "@/observability/logger.js";
@@ -65,6 +66,7 @@ async function dispatch(route: ReturnType<typeof resolveRoute>, req: LlmRequest)
     case "google":    return callGoogle(route, req);
     case "anthropic": return callAnthropic(route, req);
     case "openai":    return callOpenAI(route, req);
+    case "groq":      return callGroq(route, req);
     case "local":     return callLocal(route, req);
   }
 }

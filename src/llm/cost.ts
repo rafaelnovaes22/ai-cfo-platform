@@ -15,6 +15,13 @@ const PRICE_TABLE: Record<string, { inputUsdPerMTok: number; outputUsdPerMTok: n
   "gpt-4.1-nano":          { inputUsdPerMTok: 0.10,  outputUsdPerMTok: 0.40 },
   "gpt-5-mini":            { inputUsdPerMTok: 0.25,  outputUsdPerMTok: 2.00 },
   "gpt-5-nano":            { inputUsdPerMTok: 0.05,  outputUsdPerMTok: 0.40 },
+  // Groq — preços do console.groq.com/docs/models (maio 2026). Chave bate com
+  // o model ID retornado pela API /v1/models (com namespace quando aplicável).
+  "qwen/qwen3-32b":        { inputUsdPerMTok: 0.29,  outputUsdPerMTok: 0.59 },
+  "llama-3.3-70b-versatile":       { inputUsdPerMTok: 0.59, outputUsdPerMTok: 0.79 },
+  "llama-3.1-8b-instant":          { inputUsdPerMTok: 0.05, outputUsdPerMTok: 0.08 },
+  "openai/gpt-oss-120b":           { inputUsdPerMTok: 0.15, outputUsdPerMTok: 0.75 },
+  "openai/gpt-oss-20b":            { inputUsdPerMTok: 0.10, outputUsdPerMTok: 0.50 },
   "local":                 { inputUsdPerMTok: 0,      outputUsdPerMTok: 0 },
 };
 
