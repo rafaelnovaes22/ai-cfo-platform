@@ -19,7 +19,9 @@ const ReviewEntrySchema = z.object({
   amountCents: z.number(),
   direction: z.string(),
   predictedCategory: z.string().nullable(),
+  confirmedCategory: z.string().nullable(),
   classificationConfidence: z.number().nullable(),
+  correctionSource: z.string().nullable(),
 });
 
 export const classificationRoutes: FastifyPluginAsync = async (app) => {
@@ -51,11 +53,11 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
         where: {
           analysisId: req.params.analysisId,
           tenantId: req.auth!.tenantId,
-          correctionSource: "needs_review",
         },
         select: {
           id: true, date: true, description: true, amountCents: true,
-          direction: true, predictedCategory: true, classificationConfidence: true,
+          direction: true, predictedCategory: true, confirmedCategory: true,
+          classificationConfidence: true, correctionSource: true,
         },
         orderBy: { date: "asc" },
       });

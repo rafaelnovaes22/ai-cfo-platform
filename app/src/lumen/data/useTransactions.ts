@@ -6,6 +6,8 @@ import { useAnalyses } from "./useAnalyses.ts";
 export type TransactionType = "income" | "expense";
 export type TransactionSource = "manual" | "spreadsheet" | "pdf" | "pasted" | "ai";
 
+export type ReviewStatus = "needs_review" | "confirmed" | "corrected";
+
 export interface Transaction {
   id: string;
   analysis_id: string;
@@ -21,6 +23,7 @@ export interface Transaction {
   updated_at: string;
   rawCategory: string;
   confidence: number | null;
+  reviewStatus: ReviewStatus;
 }
 
 // Kept for TransactionModal compatibility (ManualEntry in Import.tsx)
@@ -78,12 +81,18 @@ function mapEntry(
     amountCents: number;
     direction: string;
     predictedCategory: string | null;
+    confirmedCategory: string | null;
     classificationConfidence: number | null;
+    correctionSource: string | null;
   },
   analysisId: string
 ): Transaction {
-  const rawCategory = entry.predictedCategory ?? "nao_classificado";
+  const rawCategory = entry.confirmedCategory ?? entry.predictedCategory ?? "nao_classificado";
   const type: TransactionType = entry.direction === "in" || entry.direction === "credit" ? "income" : "expense";
+  const reviewStatus: ReviewStatus =
+    entry.correctionSource === "needs_review" ? "needs_review"
+    : entry.correctionSource === "rafael" || entry.correctionSource === "client" ? "corrected"
+    : "confirmed";
   return {
     id: entry.id,
     analysis_id: analysisId,
@@ -99,6 +108,7 @@ function mapEntry(
     updated_at: entry.date,
     rawCategory,
     confidence: entry.classificationConfidence,
+    reviewStatus,
   };
 }
 
