@@ -6,11 +6,15 @@ let _redis: IORedis | null = null;
 
 function getRedis(): IORedis {
   if (!_redis) {
-    _redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+    const url = process.env.REDIS_URL ?? "redis://localhost:6379";
+    // Railway private network uses IPv6-only hostnames (*.railway.internal).
+    // Node's default DNS resolution prefers IPv4 even with family: 0, so force
+    // family: 6 whenever the URL points to a Railway internal host. Local dev
+    // (Docker Redis on localhost) keeps the default IPv4.
+    const isRailwayInternal = url.includes(".railway.internal");
+    _redis = new IORedis(url, {
       maxRetriesPerRequest: null,
-      // Railway private network uses IPv6-only hostnames (*.railway.internal).
-      // family: 0 lets DNS pick whichever stack is available (v4 locally, v6 on Railway).
-      family: 0,
+      ...(isRailwayInternal ? { family: 6 } : {}),
     });
   }
   return _redis;
