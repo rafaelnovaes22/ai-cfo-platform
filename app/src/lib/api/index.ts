@@ -127,8 +127,10 @@ export const ingest = {
   upload: (file: File, referenceMonth: string) => {
     const form = new FormData();
     form.append("file", file);
-    form.append("referenceMonth", referenceMonth);
-    return apiUpload<Req200<"/ingest/upload", "post">>("/ingest/upload", form);
+    return apiUpload<Req200<"/ingest/upload", "post">>(
+      `/ingest/upload?referenceMonth=${encodeURIComponent(referenceMonth)}`,
+      form,
+    );
   },
 
   clipboard: (body: Body<"/ingest/clipboard", "post">) =>
