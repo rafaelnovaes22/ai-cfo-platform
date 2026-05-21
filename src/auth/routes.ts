@@ -4,6 +4,7 @@ import { z } from "zod";
 import * as authService from "@/auth/service.js";
 import * as passwordReset from "@/auth/password-reset.js";
 import { requireAuth } from "@/auth/middleware.js";
+import { getPrisma } from "@/persistence/prisma.js";
 import {
   RegisterBody,
   LoginBody,
@@ -55,10 +56,20 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     schema: { response: { 200: MeResponse } },
     preHandler: [requireAuth],
     handler: async (req, reply) => {
+      const db = getPrisma();
+      const user = await db.user.findUnique({
+        where: { id: req.auth!.userId },
+        select: { name: true, email: true },
+      });
+      if (!user) {
+        return reply.status(404).send({ message: "Usuário não encontrado" });
+      }
       return reply.send({
         userId: req.auth!.userId,
         tenantId: req.auth!.tenantId,
         role: req.auth!.role,
+        name: user.name,
+        email: user.email,
       });
     },
   });

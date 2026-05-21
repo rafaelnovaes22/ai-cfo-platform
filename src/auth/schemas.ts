@@ -26,6 +26,8 @@ export const MeResponse = z.object({
   userId: z.string(),
   tenantId: z.string(),
   role: z.string(),
+  name: z.string(),
+  email: z.string(),
 });
 
 export const PasswordResetRequestBody = z.object({

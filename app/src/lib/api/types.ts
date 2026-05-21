@@ -243,6 +243,8 @@ export interface paths {
                             userId: string;
                             tenantId: string;
                             role: string;
+                            name: string;
+                            email: string;
                         };
                     };
                 };

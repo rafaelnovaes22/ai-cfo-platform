@@ -46,7 +46,7 @@ export default function Hub() {
   }, [user]);
 
   const latest = hub?.latestAnalysis;
-  const userName = user?.userId?.split("@")[0] ?? "você";
+  const userName = user?.name?.split(" ")[0] ?? "você";
 
   return (
     <div className="space-y-12">
@@ -57,7 +57,7 @@ export default function Hub() {
         <h1 className="text-[44px] leading-[1.05] tracking-tight max-w-2xl">
           {latest ? `Análise ${latest.referenceMonth}` : "Suas análises financeiras"}
         </h1>
-        <p className="text-[#96ff7e] mt-3 text-[15px]">
+        <p className="text-ink-soft dark:text-zinc-300 mt-3 text-[15px]">
           {loading
             ? "Carregando…"
             : analyses.length === 0
@@ -198,11 +198,11 @@ export default function Hub() {
       )}
 
       <section className="animate-fade-up delay-3">
-        <div className="border border-border rounded-lg bg-card p-8">
+        <div className="border border-border rounded-lg bg-card text-ink p-8">
           <div className="flex items-end justify-between mb-6">
             <div>
               <h2 className="text-[24px] tracking-tight">Nova análise</h2>
-              <p className="text-[13px] text-[#96ff7e] mt-1">Escolha o formato dos dados e leve cerca de 2 minutos.</p>
+              <p className="text-[13px] text-ink-soft mt-1">Escolha o formato dos dados e leve cerca de 2 minutos.</p>
             </div>
             <Link
               to="/importar"
@@ -218,7 +218,7 @@ export default function Hub() {
                 to={`/importar?method=${m.id}`}
                 className="group flex items-center gap-3 p-4 rounded-md border border-border hover:border-[#96ff7e] hover:bg-cream-deep/40 transition-all"
               >
-                <m.icon className="h-4 w-4 text-[#96ff7e] group-hover:" strokeWidth={1.6} />
+                <m.icon className="h-4 w-4 text-[#111164]" strokeWidth={1.6} />
                 <span className="text-[13px]">{m.label}</span>
               </Link>
             ))}
@@ -231,10 +231,10 @@ export default function Hub() {
 
 function EmptyState({ userName }: { userName: string }) {
   return (
-    <section className="animate-fade-up delay-1 bg-card border border-border rounded-lg p-12 text-center">
-      <Inbox className="h-10 w-10 mx-auto text-[#96ff7e] mb-4" strokeWidth={1.4} />
+    <section className="animate-fade-up delay-1 bg-card text-ink border border-border rounded-lg p-12 text-center">
+      <Inbox className="h-10 w-10 mx-auto text-[#111164] mb-4" strokeWidth={1.4} />
       <h2 className="text-[28px] tracking-tight mb-2">Vamos começar, {userName}?</h2>
-      <p className="text-[14px] text-[#96ff7e] max-w-md mx-auto mb-6">
+      <p className="text-[14px] text-ink-soft max-w-md mx-auto mb-6">
         Importe um extrato, cole uma planilha ou adicione lançamentos manuais para gerar sua primeira análise.
       </p>
       <Link
