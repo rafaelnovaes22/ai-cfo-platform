@@ -95,19 +95,30 @@ export function normalizeDirection(
 const COL_DATE   = /data|date|dt|vencimento|competência|competencia/i;
 const COL_DESC   = /descri|historico|histórico|memo|lancamento|lançamento|complement/i;
 const COL_AMOUNT = /valor|amount|value|montante|quantia|vlr/i;
-const COL_DIR    = /tipo|natureza|type|d[\/\-]c|dc|entrada|saida|crédito|débito/i;
+const COL_DIR    = /tipo|natureza|type|d[\/\-]c|dc|entrada|saida/i;
+// Colunas separadas de crédito/débito (ex: extrato Itaú "Crédito (R$)" / "Débito (R$)")
+const COL_CREDIT = /crédito|credito/i;
+const COL_DEBIT  = /débito|debito/i;
 
 export function detectColumns(headers: string[]): {
   dateIdx: number;
   descIdx: number;
   amountIdx: number;
   dirIdx: number | null;
+  creditIdx: number | null;
+  debitIdx: number | null;
 } {
   const find = (re: RegExp) => headers.findIndex((h) => re.test(h.trim()));
+  const creditIdx = find(COL_CREDIT);
+  const debitIdx  = find(COL_DEBIT);
+  // Quando ambas as colunas existem, são colunas de valor (não de direção)
+  const hasSplitAmounts = creditIdx >= 0 && debitIdx >= 0;
   return {
     dateIdx:   find(COL_DATE),
     descIdx:   find(COL_DESC),
     amountIdx: find(COL_AMOUNT),
-    dirIdx:    find(COL_DIR) >= 0 ? find(COL_DIR) : null,
+    dirIdx:    hasSplitAmounts ? null : (find(COL_DIR) >= 0 ? find(COL_DIR) : null),
+    creditIdx: hasSplitAmounts ? creditIdx : null,
+    debitIdx:  hasSplitAmounts ? debitIdx : null,
   };
 }

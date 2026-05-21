@@ -15,7 +15,7 @@ export function parseText(raw: string): ParseResult {
   // lines[0] é garantido != undefined pelo length-check acima, mas TS exige guard.
   const headerLine = lines[0] ?? "";
   const headers = splitRow(headerLine);
-  const { dateIdx, descIdx, amountIdx, dirIdx } = detectColumns(headers);
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = detectColumns(headers);
 
   const dataLines = lines.slice(1);
   const entries: RawLedger[] = [];
@@ -24,16 +24,31 @@ export function parseText(raw: string): ParseResult {
   for (const line of dataLines) {
     const cells = splitRow(line);
 
-    const rawDate   = dateIdx >= 0   ? (cells[dateIdx] ?? "")   : (cells[0] ?? "");
-    const rawDesc   = descIdx >= 0   ? (cells[descIdx] ?? "")   : (cells[1] ?? "");
-    const rawAmount = amountIdx >= 0 ? (cells[amountIdx] ?? "") : (cells[2] ?? "");
-    const rawDir    = dirIdx !== null ? (cells[dirIdx] ?? null)  : null;
+    const rawDate = dateIdx >= 0 ? (cells[dateIdx] ?? "") : (cells[0] ?? "");
+    const rawDesc = descIdx >= 0 ? (cells[descIdx] ?? "") : (cells[1] ?? "");
 
     if (!rawDate.trim() && !rawDesc.trim()) continue;
 
-    const date = normalizeDate(rawDate);
-    const rawCents = normalizeAmountCents(rawAmount);
+    let rawCents: number | null;
+    let rawDir: string | null = dirIdx !== null ? (cells[dirIdx] ?? null) : null;
 
+    if (amountIdx >= 0) {
+      rawCents = normalizeAmountCents(cells[amountIdx] ?? "");
+    } else if (creditIdx !== null && debitIdx !== null) {
+      const creditVal = normalizeAmountCents(cells[creditIdx] ?? "");
+      const debitVal  = normalizeAmountCents(cells[debitIdx]  ?? "");
+      if (creditVal !== null && creditVal !== 0) {
+        rawCents = creditVal;
+        rawDir = "credit";
+      } else {
+        rawCents = debitVal;
+        rawDir = "debit";
+      }
+    } else {
+      rawCents = normalizeAmountCents(cells[2] ?? "");
+    }
+
+    const date = normalizeDate(rawDate);
     if (!date || rawCents === null || !rawDesc.trim()) { orphanCount++; continue; }
 
     entries.push({
