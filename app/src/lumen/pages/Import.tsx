@@ -73,7 +73,7 @@ function sheetToText(file: File): Promise<string> {
         const parts: string[] = [];
         wb.SheetNames.forEach((name) => {
           const ws = wb.Sheets[name];
-          const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false });
+          const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false, FS: ";" });
           parts.push(`--- Aba: ${name} ---\n${csv}`);
         });
         resolve(parts.join("\n\n"));
@@ -206,7 +206,11 @@ function FileModal({
         const text = await sheetToText(file);
         result = await api.ingest.clipboard({ referenceMonth, text });
       }
-      toast.success(`${result?.entryCount ?? 0} lançamentos importados.`);
+      if (!result || result.outcome === "failed" || result.entryCount === 0) {
+        toast.error("Nenhum lançamento reconhecido. Verifique se o arquivo tem colunas de data, descrição e valor.");
+        return;
+      }
+      toast.success(`${result.entryCount} lançamentos importados.`);
       onImported();
     } catch (e) {
       toast.error(errorMessage(e));

@@ -5,6 +5,7 @@ import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdf } from "@/ingest/parsers/pdf.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { createTrace } from "@/observability/langfuse.js";
+import { logger } from "@/observability/logger.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 
 // Default — pode ser sobrescrito por tenant em productConfig.monthlyAnalysis.minEntries (C8).
@@ -40,10 +41,13 @@ export async function ingest(params: {
   } catch (err) {
     parseSpan.end({ level: "ERROR", output: { error: String(err) } });
     await trace.update({ metadata: { outcome: "failed", reason: "parse_error" } });
+    logger.error({ err, source, referenceMonth, tenantId }, "Ingest parse error");
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
   const { entries, orphanCount } = parseResult;
+  logger.info({ source, referenceMonth, tenantId, entryCount: entries.length, orphanCount }, "Ingest parse concluído");
+
   if (entries.length === 0) {
     await trace.update({ metadata: { outcome: "failed", reason: "no_entries", orphanCount } });
     return buildResult("failed", tenantId, referenceMonth, 0, orphanCount);
