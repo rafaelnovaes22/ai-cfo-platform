@@ -1,34 +1,20 @@
 import { randomUUID } from "crypto";
-import Langfuse from "langfuse";
+import { RunTree } from "langsmith";
 
-const noopChild = { end: () => {} };
+// No-op child returned when LangSmith is not configured
+const noopChild = { end: (_opts?: unknown) => {} };
 
 function makeNoopTrace(id: string) {
   return {
     id,
-    generation: () => noopChild,
-    span: () => noopChild,
-    update: async () => {},
+    generation: (_opts?: unknown) => noopChild,
+    span: (_opts?: unknown) => noopChild,
+    update: async (_opts?: unknown) => {},
   };
 }
 
-let _client: Langfuse | null = null;
-
-function getClient(): Langfuse | null {
-  const secret = process.env.LANGFUSE_SECRET_KEY;
-  const pub = process.env.LANGFUSE_PUBLIC_KEY;
-  if (!secret || !pub) return null;
-
-  if (!_client) {
-    _client = new Langfuse({
-      publicKey: pub,
-      secretKey: secret,
-      baseUrl: process.env.LANGFUSE_HOST ?? "https://cloud.langfuse.com",
-      flushAt: 20,
-      flushInterval: 10_000,
-    });
-  }
-  return _client;
+function isConfigured(): boolean {
+  return !!(process.env.LANGSMITH_API_KEY ?? process.env.LANGCHAIN_API_KEY);
 }
 
 export interface TraceOptions {
@@ -38,18 +24,47 @@ export interface TraceOptions {
   traceId?: string;
 }
 
-export function createTrace(opts: TraceOptions) {
-  const client = getClient();
-  if (!client) return makeNoopTrace(opts.traceId ?? randomUUID());
+type ChildOpts = Record<string, unknown>;
 
-  return client.trace({
+export function createTrace(opts: TraceOptions) {
+  if (!isConfigured()) return makeNoopTrace(opts.traceId ?? randomUUID());
+
+  const run = new RunTree({
     id: opts.traceId,
     name: opts.name,
-    userId: opts.tenantId,
-    metadata: opts.metadata,
+    run_type: "chain",
+    inputs: { tenantId: opts.tenantId },
+    metadata: opts.metadata ?? {},
+    project_name: process.env.LANGSMITH_PROJECT ?? "aicfo",
   });
+  void run.postRun();
+
+  function makeChild(runType: "llm" | "tool", childOpts: ChildOpts) {
+    const child = run.createChild({
+      name: String(childOpts.name ?? runType),
+      run_type: runType,
+      inputs: (childOpts.input as Record<string, unknown>) ?? {},
+    });
+    void child.postRun();
+    return {
+      end: (endOpts: ChildOpts) => {
+        const outputs =
+          endOpts.output != null ? { output: endOpts.output } : (endOpts as Record<string, unknown>);
+        void child.end(outputs).then(() => child.patchRun());
+      },
+    };
+  }
+
+  return {
+    id: run.id,
+    generation: (childOpts: ChildOpts) => makeChild("llm", childOpts),
+    span: (childOpts: ChildOpts) => makeChild("tool", childOpts),
+    update: async (updateOpts: { metadata?: Record<string, unknown> }) => {
+      run.metadata = { ...(run.metadata as Record<string, unknown>), ...(updateOpts.metadata ?? {}) };
+      await run.patchRun();
+    },
+  };
 }
 
-export async function flushLangfuse(): Promise<void> {
-  await _client?.flushAsync();
-}
+// Kept for backward compat (server.ts shutdown hook); LangSmith posts are fire-and-forget.
+export async function flushLangfuse(): Promise<void> {}

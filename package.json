@@ -43,7 +43,7 @@
     "fastify-type-provider-zod": "^4.0.2",
     "ioredis": "^5.0.0",
     "jose": "^6.2.3",
-    "langfuse": "^3.38.0",
+    "langsmith": "^0.7.1",
     "openai": "^6.37.0",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.18.0",
