@@ -6,14 +6,16 @@ import {
   Upload,
   Receipt,
   ArrowDownUp,
+  CircleDollarSign,
 } from "lucide-react";
 
 const workspace = [
-  { to: "/", label: "Visão Geral", icon: Home, end: true },
-  { to: "/plano", label: "Plano de Ação", icon: ListChecks },
-  { to: "/dre", label: "DRE", icon: FileBarChart2 },
-  { to: "/lancamentos", label: "Lançamentos", icon: Receipt },
-  { to: "/caixa", label: "Caixa", icon: ArrowDownUp },
+  { to: "/", label: "Visão Geral", icon: Home, end: true, soon: false },
+  { to: "/plano", label: "Plano de Ação", icon: ListChecks, soon: false },
+  { to: "/dre", label: "DRE", icon: FileBarChart2, soon: false },
+  { to: "/lancamentos", label: "Lançamentos", icon: Receipt, soon: false },
+  { to: "/caixa", label: "Caixa", icon: ArrowDownUp, soon: true },
+  { to: "/credito", label: "Crédito", icon: CircleDollarSign, soon: true },
 ];
 const dados = [{ to: "/importar", label: "Importar", icon: Upload }];
 
@@ -43,11 +45,16 @@ function Section({ items }: { items: typeof workspace }) {
                   strokeWidth={1.75}
                 />
                 <span
-                  className={`-mt-1.5 opacity-70 group-hover:opacity-100 text-center items-center flex leading-[1.2] md:text-left md:whitespace-nowrap text-[11px] md:text-base ${
+                  className={`relative opacity-70 group-hover:opacity-100 text-center items-center flex leading-[1.2] md:text-left md:whitespace-nowrap text-[11px] md:text-base ${
                     isActive ? "opacity-100" : ""
                   }`}
                 >
                   {it.label}
+                  {it.soon && (
+                    <div className="absolute inline-block tracking-widest opacity-50 -bottom-[14px] left-0 text-[9px] uppercase">
+                      Em breve
+                    </div>
+                  )}
                 </span>
                 <span
                   className={`bg-[#3D24A0] dark:bg-[#96ff7e] rounded rounded-t-none rounded-b md:rounded-t md:rounded-b-none absolute left-0 h-1 w-full transition-all duration-300 group-hover:top-0 group-hover:bottom-auto group-hover:md:bottom-0 group-hover:md:top-auto ${

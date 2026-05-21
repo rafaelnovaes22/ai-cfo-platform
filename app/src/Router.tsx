@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound.tsx";
 import { useEffect } from "react";
 import nprogress from "nprogress";
 import CashFlow from "./lumen/pages/CashFlow.tsx";
+import Credit from "./lumen/pages/Credit.tsx";
 
 const queryClient = new QueryClient();
 
@@ -39,13 +40,14 @@ const Router = () => {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Hub />} />
+        <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dre" element={<DRE />} />
         <Route path="/plano" element={<Plan />} />
         <Route path="/importar" element={<Import />} />
         <Route path="/lancamentos" element={<Transactions />} />
         <Route path="/caixa" element={<CashFlow />} />
+        <Route path="/credito" element={<Credit />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

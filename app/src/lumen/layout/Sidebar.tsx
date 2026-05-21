@@ -27,7 +27,8 @@ export function Sidebar() {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -134,11 +135,17 @@ export function Sidebar() {
                     strokeWidth={1.75}
                   />
                   <span
-                    className={`-mt-1.5 opacity-70 group-hover:opacity-100 text-center items-center flex leading-[1.2] md:text-left md:whitespace-nowrap ${
+                    className={`opacity-70 group-hover:opacity-100 text-center items-center flex leading-[1.2] md:text-left md:whitespace-nowrap ${
                       isActive ? "opacity-100" : ""
                     }`}
                   >
-                    {route.label}
+                    {route.label}{" "}
+                    {route.soon && (
+                      <span className="absolute right-4 top-1/2 translate-y-[-50%] inline-block opacity-50 text-xs">
+                        {" "}
+                        EM BREVE
+                      </span>
+                    )}
                   </span>
                   <span
                     className={`bg-[#3D24A0] dark:bg-[#96ff7e] rounded rounded-r absolute h-full w-1 transition-all duration-300 group-hover:right-0 ${
@@ -154,7 +161,11 @@ export function Sidebar() {
           <button
             onClick={handleExport}
             disabled={!canExport || exporting}
-            title={canExport ? "Exportar DRE da análise ativa" : "Selecione uma análise para exportar"}
+            title={
+              canExport
+                ? "Exportar DRE da análise ativa"
+                : "Selecione uma análise para exportar"
+            }
             className="hidden md:flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-md text-white bg-[#3D24A0] dark:bg-[#245fff] text-[12.5px] hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {exporting ? (
@@ -188,8 +199,12 @@ export function Sidebar() {
             {open && (
               <div className="absolute right-0 mt-2 w-56 bg-card rounded-md shadow-md py-1 z-30">
                 <div className="px-3 py-2">
-                  <div className="text-[12.5px] truncate">{user?.role ?? "—"}</div>
-                  <div className="text-[11.5px] text-[#96ff7e] truncate">{user?.tenantId ?? ""}</div>
+                  <div className="text-[12.5px] truncate">
+                    {user?.role ?? "—"}
+                  </div>
+                  <div className="text-[11.5px] text-[#96ff7e] truncate">
+                    {user?.tenantId ?? ""}
+                  </div>
                 </div>
               </div>
             )}
@@ -205,7 +220,9 @@ export function Sidebar() {
       </div>
       <div
         className={`z-[51] block md:hidden fixed top-0 left-0 w-screen h-screen bg-[#000000]/90 ${
-          menuOpen ? "opacity-100 pointer-events-all" : "opacity-0 pointer-events-none"
+          menuOpen
+            ? "opacity-100 pointer-events-all"
+            : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setMenuOpen(false)}
       ></div>

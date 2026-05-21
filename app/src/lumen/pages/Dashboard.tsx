@@ -48,7 +48,8 @@ export default function Dashboard() {
     ? compositionByType(transactions, currentKey)
     : null;
 
-  const userName = user?.userId?.split("@")[0] ?? "você";
+  // const userName = user?.userId?.split("@")[0] ?? "você";
+  const userName = "você";
 
   useActionItems();
 
@@ -58,7 +59,10 @@ export default function Dashboard() {
     toast.error("O plano é gerado automaticamente após importar os dados.");
   }
 
-  const summaries: Record<string, { income: number; expense: number; count: number }> = {};
+  const summaries: Record<
+    string,
+    { income: number; expense: number; count: number }
+  > = {};
 
   return (
     <div className="space-y-6">
@@ -147,7 +151,8 @@ function EmptyState({ userName }: { userName: string }) {
     <section className="animate-fade-up delay-1 w-full mx-auto rounded-lg p-12 text-center">
       <Inbox className="h-10 w-10 mx-auto  mb-4" strokeWidth={1.4} />
       <h2 className=" text-[28px] tracking-tight  mb-2">
-        Vamos começar, {userName}?
+        {/* Vamos começar, {userName}? */}
+        Vamos começar?
       </h2>
       <p className="text-[14px]  max-w-md mx-auto mb-6">
         Importe um extrato, cole uma planilha ou adicione lançamentos manuais
