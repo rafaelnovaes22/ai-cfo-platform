@@ -74,8 +74,8 @@ export function normalizeAmountCents(raw: string | number): number | null {
 
 // ── Direção ────────────────────────────────────────────────────────────────
 
-const CREDIT_TOKENS = /^(c|cr|cred|crédito|credito|entrada|e|receita|in)$/i;
-const DEBIT_TOKENS  = /^(d|db|deb|débito|debito|saída|saida|s|despesa|out)$/i;
+const CREDIT_TOKENS = /^(c|cr|cred|crédito|credito|entrada|e|receita|in|credit)$/i;
+const DEBIT_TOKENS  = /^(d|db|deb|débito|debito|saída|saida|s|despesa|out|debit)$/i;
 
 export function normalizeDirection(
   raw: string | null | undefined,
