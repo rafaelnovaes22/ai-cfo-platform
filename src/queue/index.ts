@@ -8,6 +8,9 @@ function getRedis(): IORedis {
   if (!_redis) {
     _redis = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
       maxRetriesPerRequest: null,
+      // Railway private network uses IPv6-only hostnames (*.railway.internal).
+      // family: 0 lets DNS pick whichever stack is available (v4 locally, v6 on Railway).
+      family: 0,
     });
   }
   return _redis;
