@@ -61,9 +61,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         where: { id: req.auth!.userId },
         select: { name: true, email: true },
       });
-      if (!user) {
-        return reply.status(404).send({ message: "Usuário não encontrado" });
-      }
+      if (!user) throw Object.assign(new Error("Usuário não encontrado"), { statusCode: 404 });
       return reply.send({
         userId: req.auth!.userId,
         tenantId: req.auth!.tenantId,

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { getPrisma } from "@/persistence/prisma.js";
 import { signAccessToken, generateRefreshToken } from "@/auth/jwt.js";
 
@@ -30,29 +31,36 @@ export async function register(data: {
   const db = getPrisma();
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
 
-  const { user } = await db.$transaction(async (tx) => {
-    const tenant = await tx.tenant.create({
-      data: { name: data.tenantName, cnpj: data.cnpj },
+  try {
+    const { user } = await db.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: { name: data.tenantName, cnpj: data.cnpj },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: data.email,
+          passwordHash,
+          name: data.name,
+          role: "admin",
+        },
+      });
+
+      await tx.subscription.create({
+        data: { tenantId: tenant.id, plan: "trial", mode: "shadow", status: "active" },
+      });
+
+      return { tenant, user };
     });
 
-    const user = await tx.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: data.email,
-        passwordHash,
-        name: data.name,
-        role: "admin",
-      },
-    });
-
-    await tx.subscription.create({
-      data: { tenantId: tenant.id, plan: "trial", mode: "shadow", status: "active" },
-    });
-
-    return { tenant, user };
-  });
-
-  return issueTokens(user);
+    return issueTokens(user);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new AuthError("E-mail já cadastrado", 409);
+    }
+    throw err;
+  }
 }
 
 export async function login(
