@@ -47,3 +47,9 @@ docs/forge/session-gate-reports/*.md
 
 # Pasta de imagens de referência do frontend (não versionada — referência local)
 imagens_front/
+
+# Forge runtime (gerado por hooks — não versionar)
+.forge-mode
+.claude/scheduled_tasks.lock
+docs/forge/persona-detection.log
+docs/forge/sync-history.md

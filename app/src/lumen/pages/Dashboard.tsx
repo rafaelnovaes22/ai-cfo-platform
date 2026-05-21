@@ -15,12 +15,11 @@ import {
 } from "../data/analytics.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useAnalyses } from "../data/useAnalyses.ts";
-import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import CompositionCard from "@/components/CompositionCard.tsx";
 import ActionListCard from "@/components/ActionListCard.tsx";
-import { useActionItems, type ActionItem } from "../data/useActionItems.ts";
+import { useActionItems } from "../data/useActionItems.ts";
 import CreateAnalysisCard from "@/components/CreateAnalysisCard.tsx";
 import AnalysesCard from "@/components/AnalysesCard.tsx";
 import DashboardCard from "@/components/DashboardCard.tsx";
@@ -39,7 +38,7 @@ const inputMethods = [
 
 export default function Dashboard() {
   const { transactions, loading } = useTransactions();
-  const { profile } = useAuth();
+  const { user } = useAuth();
   const { analyses, activeId, activeAnalysis } = useAnalyses();
   const months = listMonthKeys(transactions);
   const currentKey = months[0];
@@ -49,70 +48,17 @@ export default function Dashboard() {
     ? compositionByType(transactions, currentKey)
     : null;
 
-  const userName = profile?.name?.split(" ")[0] ?? "você";
+  const userName = user?.userId?.split("@")[0] ?? "você";
 
-  const { refresh } = useActionItems();
+  useActionItems();
 
-  const [generating, setGenerating] = useState(false);
+  const [generating] = useState(false);
 
-  async function handleGenerate() {
-    if (!activeId) {
-      toast.error("Selecione uma análise primeiro.");
-      return;
-    }
-    if (transactions.length === 0) {
-      toast.error("Adicione lançamentos primeiro para gerar o plano.");
-      return;
-    }
-    setGenerating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("generate-plan", {
-        body: { analysis_id: activeId },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(`Plano gerado com ${(data as any).count} ações`);
-      await refresh();
-    } catch (e: any) {
-      toast.error(e.message ?? "Erro ao gerar plano");
-    } finally {
-      setGenerating(false);
-    }
+  function handleGenerate() {
+    toast.error("O plano é gerado automaticamente após importar os dados.");
   }
 
-  // Resumo agregado por análise (independente da análise ativa)
-  const [summaries, setSummaries] = useState<
-    Record<string, { income: number; expense: number; count: number }>
-  >({});
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (analyses.length === 0) return;
-      const ids = analyses.map((a) => a.id);
-      const { data } = await supabase
-        .from("transactions")
-        .select("analysis_id, type, amount")
-        .in("analysis_id", ids);
-      if (cancelled || !data) return;
-      const map: Record<
-        string,
-        { income: number; expense: number; count: number }
-      > = {};
-      for (const row of data as any[]) {
-        const id = row.analysis_id as string;
-        const cur = map[id] ?? { income: 0, expense: 0, count: 0 };
-        if (row.type === "income") cur.income += Number(row.amount);
-        else cur.expense += Number(row.amount);
-        cur.count += 1;
-        map[id] = cur;
-      }
-      setSummaries(map);
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [analyses]);
+  const summaries: Record<string, { income: number; expense: number; count: number }> = {};
 
   return (
     <div className="space-y-6">
@@ -126,8 +72,6 @@ export default function Dashboard() {
               ? loading
                 ? "Carregando…"
                 : "Crie sua primeira análise importando dados ou cadastrando lançamentos."
-              : activeAnalysis?.description
-              ? activeAnalysis.description
               : `${analyses.length} ${
                   analyses.length === 1 ? "análise" : "análises"
                 } no total. Selecione uma abaixo para ver os detalhes.`}

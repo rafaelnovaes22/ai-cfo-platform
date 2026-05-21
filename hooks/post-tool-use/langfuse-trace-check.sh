@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 # Hook: langfuse-trace-check
 # Warns when LLM calls in src/agents/** lack Langfuse trace instrumentation (C6).
+# Skipped automatically when project.ai_enabled=false (platform/automation projects).
+
+_get_ai_enabled() {
+  if [ -f "docs/forge/project.json" ]; then
+    if command -v jq &>/dev/null; then
+      jq -r '.project.ai_enabled // true' docs/forge/project.json 2>/dev/null || echo "true"
+    else
+      python3 -c "import json; d=json.load(open('docs/forge/project.json')); print(str(d.get('project',{}).get('ai_enabled',True)).lower())" 2>/dev/null || echo "true"
+    fi
+  else
+    echo "true"
+  fi
+}
+
+AI_ENABLED=$(_get_ai_enabled)
+[ "$AI_ENABLED" = "false" ] && exit 0
 
 INPUT=$(cat)
 

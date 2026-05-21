@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { LumenLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
+import { ApiProblem } from "@/lib/api/client.js";
 
 const signUpSchema = z
   .object({
+    tenantName: z.string().trim().min(2, "Informe o nome da empresa").max(100),
     name: z.string().trim().min(1, "Informe seu nome").max(100),
     email: z.string().trim().email("Email inválido").max(255),
     password: z.string().min(8, "Mínimo de 8 caracteres").max(72),
@@ -26,11 +27,12 @@ const signInSchema = z.object({
 type Mode = "signin" | "signup" | "forgot";
 
 export default function Auth() {
-  const { user, loading } = useAuth();
+  const { user, loading, signIn, signUp, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("signin");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
+    tenantName: "",
     name: "",
     email: "",
     password: "",
@@ -68,26 +70,24 @@ export default function Auth() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.signUp({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { name: parsed.data.name },
-      },
-    });
-    setSubmitting(false);
-    if (error) {
-      if (error.message.toLowerCase().includes("already")) {
+    try {
+      await signUp(parsed.data.tenantName, parsed.data.name, parsed.data.email, parsed.data.password);
+      toast.success("Conta criada com sucesso!");
+      navigate("/", { replace: true });
+    } catch (err) {
+      const msg =
+        err instanceof ApiProblem
+          ? (err.detail ?? err.title)
+          : "Erro ao criar conta. Tente novamente.";
+      if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("existe")) {
         toast.error("Este email já está cadastrado. Faça login.");
         setMode("signin");
       } else {
-        toast.error(error.message);
+        toast.error(msg);
       }
-      return;
+    } finally {
+      setSubmitting(false);
     }
-    toast.success("Conta criada com sucesso!");
-    navigate("/", { replace: true });
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -102,20 +102,20 @@ export default function Auth() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: parsed.data.email,
-      password: parsed.data.password,
-    });
-    setSubmitting(false);
-    if (error) {
-      toast.error(
-        error.message.toLowerCase().includes("invalid")
+    try {
+      await signIn(parsed.data.email, parsed.data.password);
+      navigate("/", { replace: true });
+    } catch (err) {
+      const msg =
+        err instanceof ApiProblem && err.status === 401
           ? "Email ou senha incorretos"
-          : error.message
-      );
-      return;
+          : err instanceof ApiProblem
+          ? (err.detail ?? err.title)
+          : "Erro ao fazer login.";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
-    navigate("/", { replace: true });
   };
 
   const handleForgot = async (e: React.FormEvent) => {
@@ -125,16 +125,10 @@ export default function Auth() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      form.email.trim(),
-      {
-        redirectTo: `${window.location.origin}/reset-password`,
-      }
-    );
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await requestPasswordReset(form.email.trim());
+    } finally {
+      setSubmitting(false);
     }
     toast.success("Enviamos um link de recuperação pro seu email.");
     setMode("signin");
@@ -156,30 +150,37 @@ export default function Auth() {
           <p className="text-[13px] opacity-60 mb-6">
             {mode === "signin" && "Acesse sua conta pra continuar."}
             {mode === "signup" && "Leva menos de um minuto."}
-            {mode === "forgot" &&
-              "Te enviaremos um link pra redefinir sua senha."}
+            {mode === "forgot" && "Te enviaremos um link pra redefinir sua senha."}
           </p>
 
           <form
             onSubmit={
-              mode === "signin"
-                ? handleSignIn
-                : mode === "signup"
-                ? handleSignUp
-                : handleForgot
+              mode === "signin" ? handleSignIn : mode === "signup" ? handleSignUp : handleForgot
             }
             className="flex flex-col gap-3.5"
           >
             {mode === "signup" && (
-              <Field label="Nome" error={errors.name}>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={update("name")}
-                  className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
-                  autoComplete="name"
-                />
-              </Field>
+              <>
+                <Field label="Empresa" error={errors.tenantName}>
+                  <input
+                    type="text"
+                    value={form.tenantName}
+                    onChange={update("tenantName")}
+                    className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
+                    autoComplete="organization"
+                    placeholder="Nome da sua empresa"
+                  />
+                </Field>
+                <Field label="Nome" error={errors.name}>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={update("name")}
+                    className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
+                    autoComplete="name"
+                  />
+                </Field>
+              </>
             )}
 
             <Field label="Email" error={errors.email}>
@@ -199,9 +200,7 @@ export default function Auth() {
                   value={form.password}
                   onChange={update("password")}
                   className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
-                  autoComplete={
-                    mode === "signup" ? "new-password" : "current-password"
-                  }
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 />
               </Field>
             )}
@@ -236,18 +235,12 @@ export default function Auth() {
           <div className="mt-6 flex flex-col gap-2 text-[12.5px] text-[#96ff7e] text-center">
             {mode === "signin" && (
               <>
-                <button
-                  onClick={() => setMode("forgot")}
-                  className="hover: transition-colors"
-                >
+                <button onClick={() => setMode("forgot")} className="hover: transition-colors">
                   Esqueci minha senha
                 </button>
                 <div>
                   Não tem conta?{" "}
-                  <button
-                    onClick={() => setMode("signup")}
-                    className=" underline-offset-2 hover:underline"
-                  >
+                  <button onClick={() => setMode("signup")} className=" underline-offset-2 hover:underline">
                     Criar conta
                   </button>
                 </div>
@@ -256,19 +249,13 @@ export default function Auth() {
             {mode === "signup" && (
               <div>
                 Já tem conta?{" "}
-                <button
-                  onClick={() => setMode("signin")}
-                  className=" underline-offset-2 hover:underline"
-                >
+                <button onClick={() => setMode("signin")} className=" underline-offset-2 hover:underline">
                   Entrar
                 </button>
               </div>
             )}
             {mode === "forgot" && (
-              <button
-                onClick={() => setMode("signin")}
-                className="hover: transition-colors"
-              >
+              <button onClick={() => setMode("signin")} className="hover: transition-colors">
                 Voltar pro login
               </button>
             )}

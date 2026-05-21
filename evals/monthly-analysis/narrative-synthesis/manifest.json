@@ -1,0 +1,36 @@
+{
+  "sku": "monthly-analysis",
+  "agent": "narrative-synthesis",
+  "lifecycle": "SHADOW_eval_seed",
+  "outcomes": [
+    "three_card_synthesis",
+    "risk_synthesis",
+    "margin_synthesis",
+    "contradiction_handling",
+    "anomaly_synthesis",
+    "insufficient_evidence"
+  ],
+  "eval_methods": {
+    "default": [
+      "schema_validation",
+      "llm_as_judge"
+    ]
+  },
+  "judge_dimensions": [
+    "factualidade",
+    "sintese_executiva",
+    "uso_de_evidencias",
+    "tom_apropriado"
+  ],
+  "judge_threshold_per_dim": 4,
+  "total_cases": 15,
+  "min_cases_required": 15,
+  "source_distribution": {
+    "real": 4,
+    "synthetic": 7,
+    "edge": 2,
+    "adversarial": 2
+  },
+  "pass_rate_threshold": 0.9,
+  "last_updated": "2026-05-20"
+}

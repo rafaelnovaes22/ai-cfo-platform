@@ -26,7 +26,7 @@ despesasAdministrativas: 800000
 totalDespesasOperacionais: 4800000
 ebitda: 2200000
 lucroLiquido: 2200000
-margemLiquida: 0.2200
+margemLiquida: 22
 # checagem chave: (despesasPessoal + prolabore) / receitaLiquida == 0.40
 ```
 

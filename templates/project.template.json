@@ -1,0 +1,118 @@
+{
+  "$schema": "https://acme.com.br/forge/project-config-v1.json",
+  "_doc": "Configuração canônica do projeto consumidor. Persistir em docs/forge/project.json no repo do consumidor. Lido pelo reviewer DeepAgent (reviewer/prompt.template.md), pelos commands /acme:* e pelo validation-rules.json antes de aplicar checks. Quando ausente no consumidor, defaults retroativos são project_type='agentic_saas' e ai_enabled=true (compat v0.7.0).",
+
+  "project_config_version": "0.1.0",
+  "framework_version_required": ">=0.8.0",
+  "constitution_version_required": ">=0.3.0",
+
+  "project": {
+    "name": "{{ nome do projeto consumidor }}",
+    "owner": "{{ org / squad responsável }}",
+    "type": "agentic_saas | platform | automation | hybrid",
+    "ai_enabled": true,
+    "_type_doc": {
+      "agentic_saas": "Projeto centrado em agentes de IA com governança de outcome cobrável (default histórico do Forge).",
+      "platform": "Plataforma SaaS/operacional com módulos CRUD/CRM/etc. Outcome = ação operacional verificável (tela/API/dado persistido); IA pode estar ausente ou pontual.",
+      "automation": "Automações operacionais determinísticas (jobs, workers, integrações, RPA). Outcome = execução verificável; IA opcional.",
+      "hybrid": "Plataforma com módulos agênticos. Convive ai_enabled=true em alguns módulos, false em outros — ver overrides_per_module."
+    },
+    "_ai_enabled_doc": "true: aplicam-se checks de LLM, prompts, instrumentação de tracing de inferência, eval LLM, custo de inferência. false: substitui-se por checks de auditoria de plataforma (audit logs, testes funcionais, aceite humano, custo de infra/manutenção)."
+  },
+
+  "lifecycle_states": {
+    "_doc": "Estados de promoção aplicáveis ao projeto. Para platform usa-se DRAFT/STAGING/PILOT/CANONICAL/DEPRECATED; para agentic_saas mantém-se SHADOW/ASSISTED/AUTONOMOUS. Ambos são suportados em hybrid.",
+    "agentic": ["SHADOW", "ASSISTED", "AUTONOMOUS"],
+    "platform": ["DRAFT", "STAGING", "PILOT", "CANONICAL", "DEPRECATED"],
+    "default_for_project_type": {
+      "agentic_saas": "agentic",
+      "platform": "platform",
+      "automation": "platform",
+      "hybrid": "auto-per-module"
+    }
+  },
+
+  "telemetry": {
+    "_doc": "Quando ai_enabled=true, llm_trace_provider deve estar configurado e os checks C6.* aplicam-se ao código de chamada LLM. Quando ai_enabled=false, os checks usam audit_log_provider e structured_logging_provider.",
+    "llm_trace_provider": "langfuse | helicone | phoenix | custom | null",
+    "audit_log_provider": "postgres-audit | elastic | datadog | custom | null",
+    "structured_logging_provider": "pino | winston | python-logging | otel | custom | null",
+    "metrics_provider": "prometheus | grafana | datadog | custom | null",
+    "error_tracking_provider": "sentry | bugsnag | custom | null"
+  },
+
+  "economics": {
+    "_doc": "Modelo econômico aplicado ao c3_check. Para agentic, ratio é (custo_inferência_por_outcome / preço). Para platform, ratio é (custo_infra_mensal + suporte + manutenção) / receita_mensal. Limite 25% pode ser ajustado por extensão.",
+    "model": "cost_per_outcome | platform_margin | hybrid",
+    "cost_to_price_ratio_max": 0.25,
+    "platform_margin_inputs": {
+      "infra_monthly_brl": null,
+      "support_monthly_brl": null,
+      "maintenance_monthly_brl": null,
+      "revenue_monthly_brl": null
+    }
+  },
+
+  "principle_overrides": {
+    "_doc": "Overrides locais por princípio. Mantém os 8 princípios da Constitution mas reinterpreta no contexto do projeto. Reviewer aplica overrides apenas se assinados via principle_overrides_signature.",
+    "C1": {
+      "trigger_artifact": "diagnostic.md",
+      "applies_to": "every module/product/agent before build"
+    },
+    "C2": {
+      "outcome_clause_required": true,
+      "outcome_kind_for_platform": "operational_action_with_observable_evidence"
+    },
+    "C3": {
+      "model": "cost_per_outcome | platform_margin",
+      "ratio_max": 0.25
+    },
+    "C4": {
+      "agentic_modes": ["SHADOW", "ASSISTED", "AUTONOMOUS"],
+      "platform_states": ["DRAFT", "STAGING", "PILOT", "CANONICAL", "DEPRECATED"],
+      "min_window_days_critical_modules": 14,
+      "min_window_days_simple_modules": 3
+    },
+    "C5": {
+      "tier_vocabulary": "L0/L1/L2",
+      "L0": "strategic (org-wide invariants)",
+      "L1": "tactical (per product/customer)",
+      "L2": "operational (per execution/run)"
+    },
+    "C6": {
+      "telemetry_default_when_ai": "llm_trace_provider",
+      "telemetry_default_when_no_ai": "audit_log_provider + structured_logging_provider",
+      "trace_coverage_target_pct": 99
+    },
+    "C7": {
+      "abstraction_layers_required_for": ["llm", "infra", "integrations", "payments", "messaging", "storage"]
+    },
+    "C8": {
+      "tenant_customization_via": "config + tenant settings",
+      "forbidden_patterns": ["if (tenantId === '...')", "switch (tenantName)", "src/{module}/clients/{tenant}/"]
+    }
+  },
+  "principle_overrides_signature": null,
+
+  "modules": [
+    {
+      "_doc": "Lista de módulos/produtos/agentes do projeto. Em hybrid, cada módulo pode declarar ai_enabled e lifecycle próprios.",
+      "id": "{{ slug-do-modulo }}",
+      "type": "platform-module | agentic-skill | automation-job | product",
+      "ai_enabled": false,
+      "lifecycle_state": "DRAFT",
+      "criticality": "critical | standard | simple",
+      "linked_diagnostic": "docs/clients/{client}/diagnostic-{module}.md",
+      "linked_spec": "docs/specs/{module}.md",
+      "linked_economics": "docs/clients/{client}/delivery-economics-{module}.md"
+    }
+  ],
+
+  "_meta": {
+    "created_at": "{{ YYYY-MM-DD }}",
+    "last_updated": "{{ YYYY-MM-DD }}",
+    "validated_by_forge_doctor": false,
+    "consumer_repo": "{{ url do repo consumidor }}",
+    "notes": "Reviewer DeepAgent lê este arquivo antes de qualquer check. Mudança em project.type ou ai_enabled exige ADR no consumidor + nova auditoria de coerência."
+  }
+}

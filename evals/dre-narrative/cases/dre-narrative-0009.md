@@ -25,7 +25,7 @@ despesasAdministrativas: 1000000
 totalDespesasOperacionais: -4000000   # outras receitas reduzem total
 ebitda: 8000000
 lucroLiquido: 8000000
-margemLiquida: 1.0000                  # margem >100% sinaliza não-recorrente
+margemLiquida: 100                  # margem >100% sinaliza não-recorrente
 ```
 
 ## Justificativa

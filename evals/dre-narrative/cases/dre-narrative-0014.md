@@ -27,7 +27,7 @@ despesasFinanceiras: 400000
 resultadoFinanceiro: -400000
 lucroAntesIR: 1600000
 lucroLiquido: 1600000
-margemLiquida: 0.1600
+margemLiquida: 16
 # checagem: despesasFinanceiras/lucroOperacional == 0.20 > 0.15
 ```
 

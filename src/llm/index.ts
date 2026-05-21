@@ -1,6 +1,8 @@
 import { resolveRoute } from "@/llm/router.js";
 import { callGoogle } from "@/llm/adapters/google.js";
 import { callAnthropic } from "@/llm/adapters/anthropic.js";
+import { callOpenAI } from "@/llm/adapters/openai.js";
+import { callGroq } from "@/llm/adapters/groq.js";
 import { callLocal } from "@/llm/adapters/local.js";
 import { createTrace } from "@/observability/langfuse.js";
 import { logger } from "@/observability/logger.js";
@@ -37,7 +39,6 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
       response = await dispatch(fallback, req);
     } catch (fallbackErr) {
       generation.end({ output: null, level: "ERROR" });
-      // Langfuse 3.x não expõe `status` em trace.update; mantém o trace, sinaliza no metadata.
       trace.update({ metadata: { status: "ERROR" } });
       throw fallbackErr;
     }
@@ -63,6 +64,8 @@ async function dispatch(route: ReturnType<typeof resolveRoute>, req: LlmRequest)
   switch (route.provider) {
     case "google":    return callGoogle(route, req);
     case "anthropic": return callAnthropic(route, req);
+    case "openai":    return callOpenAI(route, req);
+    case "groq":      return callGroq(route, req);
     case "local":     return callLocal(route, req);
   }
 }

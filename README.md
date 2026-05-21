@@ -2,9 +2,10 @@
 
 > CFO-IA self-serve para PMEs. Centraliza dados financeiros, projeta caixa, recomenda decisões e gera relatórios — substituindo trabalho operacional financeiro por agentes auditáveis.
 
-[![Forge](https://img.shields.io/badge/operated_by-acme--forge-orange)](docs/forge/README.md)
-[![Constitution](https://img.shields.io/badge/constitution-v0.2.0-blue)](.claude/CONSTITUTION.md)
-[![Status](https://img.shields.io/badge/status-discovery-yellow)](docs/onda-0/sku_piloto.md)
+[![version](https://img.shields.io/badge/version-0.15.0-blue)](CHANGELOG.md)
+[![Forge](https://img.shields.io/badge/forge-v0.15.0-orange)](docs/forge/README.md)
+[![Constitution](https://img.shields.io/badge/constitution-v0.3.0-green)](.claude/CONSTITUTION.md)
+[![Status](https://img.shields.io/badge/status-shadow-yellow)](src/skus/monthly-analysis/spec.md)
 
 ---
 

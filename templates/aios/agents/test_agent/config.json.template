@@ -1,18 +1,28 @@
 {
   "name": "test_agent",
   "description": [
-    "Compartilhado entre módulos — gera testes TDD-first a partir da spec (modo TDD-RED) ou reforça testes contra backend já implementado (modo REINFORCE).",
-    "Em TDD-RED: os testes precedem o código e falham até a implementação existir.",
-    "Stack lida de aios/config.yaml → stack.tests (sem hardcode).",
-    "Output: docs/specs/_tests_{MODULE}.md."
+    "Compartilhado entre módulos — gera testes TDD em 2 modos: red (antes do build) e verify (após build).",
+    "Modo red: lê APENAS a spec, gera arquivos físicos em tests/{module}/{unit,integration,e2e}/.",
+    "Modo verify: revisa cobertura vs. requisitos, aponta gaps, parsable VEREDICTO.",
+    "Stack lida de aios/config.yaml → stack.tests_{unit,integration,e2e}.",
+    "Coverage targets lidos de aios/config.yaml → coverage_targets.{A,B,C} ou defaults Constitution C4."
   ],
   "tools": [],
   "meta": {
     "author": "forge",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "tier": "shared",
     "context_isolation": true,
-    "linked_principles": ["C5", "C6", "C7", "C8"]
+    "tdd_phase_aware": true,
+    "modes": ["red", "verify"],
+    "writes_physical_files": true,
+    "writes_scope": "tests/{module}/",
+    "coverage_defaults": {
+      "A": {"line": 70, "branch": 60, "critical_path": 100},
+      "B": {"line": 85, "branch": 75, "critical_path": 100},
+      "C": {"line": 95, "branch": 90, "critical_path": 100}
+    },
+    "linked_principles": ["C4", "C5", "C6", "C7", "C8"]
   },
   "build": {
     "entry": "entry.py",

@@ -1,0 +1,42 @@
+{
+  "sku": "monthly-analysis",
+  "agent": "action-planning",
+  "lifecycle": "SHADOW_eval_seed",
+  "outcomes": [
+    "plan_by_horizon",
+    "cash_recovery_plan",
+    "margin_plan",
+    "risk_mitigation_plan",
+    "qa_sensitive_plan",
+    "needs_review_plan"
+  ],
+  "eval_methods": {
+    "default": [
+      "schema_validation",
+      "llm_as_judge",
+      "assertion_shape"
+    ]
+  },
+  "judge_dimensions": [
+    "acionabilidade",
+    "impacto_plausivel",
+    "doneWhen_executavel",
+    "evidenceRefs_validos"
+  ],
+  "judge_threshold_per_dim": 4,
+  "total_cases": 15,
+  "min_cases_required": 15,
+  "schema_min_per_horizon": {
+    "short": 3,
+    "medium": 1,
+    "long": 1
+  },
+  "source_distribution": {
+    "real": 4,
+    "synthetic": 7,
+    "edge": 2,
+    "adversarial": 2
+  },
+  "pass_rate_threshold": 0.85,
+  "last_updated": "2026-05-20"
+}

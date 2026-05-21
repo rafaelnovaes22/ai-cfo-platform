@@ -1,5 +1,24 @@
-export type LlmTask = "classification" | "dre-narrative" | "action-plan";
-export type LlmProvider = "google" | "anthropic" | "local";
+export type LegacyLlmTask =
+  | "classification"
+  | "classification-judge"
+  | "dre-narrative"
+  | "action-plan"
+  | "eval-judge";
+
+export type AgenticLlmTask =
+  | "normalization"
+  | "clarity-judge"
+  | "dre-classification"
+  | "anomaly-detection"
+  | "margin-diagnosis"
+  | "cashflow-risk"
+  | "narrative-synthesis"
+  | "action-planning"
+  | "financial-qa-review";
+
+// Mantém compatibilidade com o pipeline atual enquanto a evolução LangGraph é construída.
+export type LlmTask = LegacyLlmTask | AgenticLlmTask;
+export type LlmProvider = "google" | "anthropic" | "openai" | "groq" | "local";
 
 export interface RouteConfig {
   provider: LlmProvider;

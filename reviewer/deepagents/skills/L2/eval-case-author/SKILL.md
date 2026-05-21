@@ -14,6 +14,8 @@ metadata:
 
 # Skill: eval-case-author — Tier 3 Operational (Forge)
 
+> **applies_when**: `project.ai_enabled = true` — This skill generates LLM evaluation cases (classified outcomes, agreement rate). For platform modules (`ai_enabled=false`), C4 compliance uses E2E functional tests + `platform-acceptance-report.template.md` instead of LLM eval suites. Invoking this skill in a platform project will produce cases that cannot be measured against the correct promotion gates.
+
 Generates **eval cases** (input + ground truth + justification) used as:
 
 1. Promotion criterion (C4: ≥30 cases per `outcome_category` to pass SHADOW)

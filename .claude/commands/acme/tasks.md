@@ -1,5 +1,5 @@
 ---
-description: Quebra o plan em tasks ordenadas com dependências, gate de pronto e skill/tool por task. Tasks organizadas em 6 ondas (scaffolding → prompt → eval seed → SHADOW prep → metrics → CI/CD setup). Output: docs/clients/{client_id}/tasks-{artifact_id}.md como checklist machine-readable.
+description: Quebra o plan em tasks ordenadas com dependências, gate de pronto e skill/tool por task. Para agentic (ai_enabled=true): 6 ondas (scaffolding → prompt → eval seed → SHADOW prep → metrics → CI/CD). Para platform (ai_enabled=false): 5 ondas (scaffolding → service build → E2E tests → PILOT prep → CI/CD). Lê docs/forge/project.json para detectar tipo. Output: docs/clients/{client_id}/tasks-{artifact_id}.md como checklist machine-readable.
 allowed-tools: [Read, Write, Glob, Grep]
 arguments:
   required:
@@ -7,7 +7,8 @@ arguments:
   optional:
     - client_id
     - granularity
-forge_command_version: 0.1.0
+    - project_type   # auto-detectado de docs/forge/project.json se omitido
+forge_command_version: 0.2.0
 linked_principles: [C1, C5, C6]
 invokes_skills: []
 output_artifact: docs/clients/{client_id}/tasks-{artifact_id}.md
@@ -45,13 +46,19 @@ granularity: standard | fine # default standard; fine quebra por step do process
 ## Execução
 
 ```
+0. Resolver project_type:
+   - Ler docs/forge/project.json → project.type, project.ai_enabled
+   - Se ausente: default agentic_saas / ai_enabled=true (compat v0.7.0)
+   - ai_enabled=true → gerar 6 ondas agentic (Wave 1, 2, 3, 4, 5, 6)
+   - ai_enabled=false → gerar 5 ondas platform (Wave 1P, 2P, 3P, 4P, 6P)
+
 1. Trace start
 
-2. Ler plan-{artifact_id}.md → seções 2 (camadas), 3 (fluxo), 4 (instrumentação), 5 (tenant), 7 (riscos)
+2. Ler plan-{artifact_id}.md → seções 2/2P (camadas), 3 (fluxo), 4/4P (instrumentação), 5 (tenant), 7 (riscos)
 
-3. Ler spec → outcome_categories, c4_thresholds
+3. Ler spec → outcome_categories (agentic) ou audited_actions + criticality (platform)
 
-4. Gerar tasks distribuídas em 6 ondas (estrutura abaixo)
+4. Gerar tasks distribuídas nas ondas correspondentes (estrutura abaixo)
 
 5. Validar DAG (sem ciclo; toda dependência resolve)
 
@@ -263,7 +270,117 @@ total_waves: 5
 - **Tier**: 3
 - **Trace required**: false
 
+---
+
+## Ondas platform (ai_enabled=false) — Wave 1P a 4P + Wave 6P
+
+> Gerado quando `project.ai_enabled=false`. Substitui Waves 2, 3, 4 e 5 do path agentic.
+> Wave 1 (scaffolding) e Wave 6 (CI/CD) permanecem, com adaptações anotadas.
+
+### Wave 1P — Scaffolding platform
+
+#### T1P.1 — Criar estrutura de diretórios
+- **Skill/tool**: bash mkdir | shell
+- **Paths criados**: `src/services/{module_id}/`, `src/lib/{module_id}/`, `src/integrations/`, `src/lib/audit.ts`
+- **Gate de pronto**: `find src -type d` retorna paths esperados
+- **Depends on**: —
+
+#### T1P.2 — Criar TenantContext schema (C8)
+- **Skill/tool**: editor manual
+- **Output**: `src/lib/tenant/context.ts` com `{ tenant_id, name, config }` — sem hardcode por tenant
+- **Gate de pronto**: interface TS exporta corretamente; grep por `=== '` em `src/services/` retorna 0
+- **Depends on**: T1P.1
+
+#### T1P.3 — Criar abstração de integração (C7)
+- **Skill/tool**: editor manual
+- **Output**: `src/integrations/{provider}/index.ts` isolando SDK de terceiro
+- **Gate de pronto**: grep por import direto do SDK fora de `src/integrations/` retorna 0
+- **Depends on**: T1P.1
+
+#### T1P.4 — Criar audit logger (C6)
+- **Skill/tool**: editor manual
+- **Output**: `src/lib/audit.ts` com `auditLog.write({ action, userId, tenantId, resourceId, payload_hash })`
+- **Gate de pronto**: função exportada; chamada em ao menos 1 route handler de teste; log entry persistida na tabela de auditoria
+- **Depends on**: T1P.1
+
+### Wave 2P — Service build (lógica de negócio + audit log)
+
+#### T2P.1 — Implementar service layer
+- **Skill/tool**: editor manual / @backend_agent (se AIOS disponível)
+- **Output**: `src/services/{module_id}.ts` com CRUD + validação + chamada a auditLog.write()
+- **Gate de pronto**: todos os `audited_actions[]` da spec têm chamada `auditLog.write()` correspondente; lint passa
+- **Depends on**: T1P.1, T1P.4
+
+#### T2P.2 — Implementar route handlers (API layer)
+- **Skill/tool**: editor manual / @frontend_agent (se AIOS disponível)
+- **Output**: `src/app/api/{module_id}/route.ts` com autenticação + validação de schema + chamada ao service
+- **Gate de pronto**: curl de teste retorna 200; auth missing retorna 401; payload inválido retorna 422
+- **Depends on**: T2P.1
+
+#### T2P.3 — Calcular delivery economics (C3)
+- **Skill/tool**: `@baseline-cost-builder --mode=platform`
+- **Output**: `docs/modules/{module_id}/delivery-economics-{module_id}.md`
+- **Gate de pronto**: `platform_margin ≤ 0.25` OU `c3_check.status=tight` com plano de redução declarado
+- **Depends on**: T1P.1
+
+### Wave 3P — E2E tests (gate de qualidade C4)
+
+#### T3P.1 — Criar suite E2E por ação auditável
+- Para **cada `audited_action`** em `spec.audited_actions[]`:
+  - **Skill/tool**: editor manual + Playwright/Vitest
+  - **Output**: `tests/e2e/{module_id}/{action}.spec.ts`
+  - **Gate de pronto**: teste passa; ação gera entrada no audit log; entry tem campos obrigatórios (action, userId, tenantId, resourceId)
+  - **Depends on**: T2P.2
+
+#### T3P.LAST — Validar cobertura E2E
+- **Skill/tool**: playwright report / vitest coverage
+- **Gate de pronto**: ≥80% de cobertura de `audited_actions[]`; 0 testes falhando
+- **Depends on**: todas T3P.1
+
+### Wave 4P — PILOT prep (gate C4 para platform)
+
+#### T4P.1 — Criar pilot-state.md
+- **Skill/tool**: editor manual (a partir de `templates/platform-pilot-state.template.md`)
+- **Output**: `docs/modules/{module_id}/pilot-state.md` com estado inicial `DRAFT`
+- **Gate de pronto**: arquivo parseável; `estado_atual: DRAFT`; responsável declarado
+- **Depends on**: T2P.1
+
+#### T4P.2 — Promover para STAGING via /acme:promote
+- **Skill/tool**: `/acme:promote --module_id={module_id} --to_mode=to_staging`
+- **Output**: `pilot-state.md` atualizado com transição `DRAFT → STAGING`
+- **Gate de pronto**: spec e plan aprovados (6 gates Forge-platform passando); `estado_atual: STAGING`
+- **Depends on**: T4P.1, T3P.LAST
+
+#### T4P.3 — Janela de observação STAGING (C4)
+- **Skill/tool**: observação humana + logs de produção/staging
+- **Output**: no-op (janela de tempo, não artefato)
+- **Gate de pronto**: módulo em uso real por ≥3 dias (simples) / ≥7 dias (standard) / ≥14 dias (crítico) sem regressão crítica
+- **Depends on**: T4P.2
+
+#### T4P.4 — Promover para PILOT + criar acceptance-report.md
+- **Skill/tool**: `/acme:promote --module_id={module_id} --to_mode=to_pilot` + editor manual (`templates/platform-acceptance-report.template.md`)
+- **Output**: `pilot-state.md` com `STAGING → PILOT`; `docs/modules/{module_id}/acceptance-report.md` iniciado
+- **Gate de pronto**: 6 gates platform passando; arquivo de aceite criado com seção de stakeholders
+- **Depends on**: T4P.3
+
+### Wave 6P — CI/CD platform (adaptações de Wave 6)
+
+> As tasks T6.1, T6.3, T6.4 (forge-validate, branch protection, forge-audit) se aplicam normalmente.
+> T6.2 (forge-eval) é substituído por T6.2P (forge-tests — E2E em CI).
+> T6.5 (checklist) aplica-se normalmente.
+
+#### T6.2P — Criar workflow de testes E2E (forge-tests) — substitui T6.2
+- **Skill/tool**: editor manual + template CI/CD
+- **Output**: `.github/workflows/forge-tests.yml` disparando `npm run test:e2e` em PRs que tocam `src/services/{module_id}/`
+- **Gate de pronto**: PR de teste dispara workflow; todos os E2E passam; PR falha se ≥1 `audited_action` sem cobertura
+- **Depends on**: T3P.LAST
+- **Trace required**: false
+
+---
+
 ## Resumo de dependências (DAG)
+
+### Agentic (ai_enabled=true)
 
 ```
 T1.1 ─┬─→ T1.2
@@ -276,6 +393,18 @@ T1.1 ─────────────────────────
                                                                                     └─→ T6.4
 T6.1, T6.2, T6.3, T6.4 ────────────────────────────────────────────────────────────→ T6.5
 ```
+
+### Platform (ai_enabled=false)
+
+```
+T1P.1 ─┬─→ T1P.2
+       ├─→ T1P.3
+       ├─→ T1P.4
+       └─→ T2P.1 (service) ─→ T2P.2 (route) ─→ T3P.{n} ─→ T3P.LAST ─→ T4P.1 ─→ T4P.2 ─→ T4P.3 ─→ T4P.4
+       └─→ T2P.3 (economics, parallel)
+T1P.1 ──────────────────────────────────────────────────────────────────────→ T6.1 ─→ T6.3
+T3P.LAST ────────────────────────────────────────────────────────────────────→ T6.2P
+T6.1, T6.2P, T6.3, T6.4 ──────────────────────────────────────────────────────────→ T6.5
 ```
 
 ## Output structured
@@ -285,18 +414,26 @@ command: /acme:tasks
 status: ok | error
 artifact_id: <>
 tasks_path: docs/clients/<>/tasks-<>.md
+tasks_variant: agentic | platform        # detectado de project.json
 total_tasks: <N>
-total_waves: 6
+total_waves: 6                           # agentic: waves 1-6; platform: 1P-4P + 6P (=5 ondas)
 dag_validation:
   cycles: 0
   unresolved_dependencies: 0
   total_edges: <N>
-trace_required_count: <N>   # tasks com trace
+trace_required_count: <N>
 estimated_total_days_low: <N>
 estimated_total_days_high: <N>
 trace_id: <>
 next_step: "/acme:implement --artifact_id=<>"
 ```
+
+## Histórico
+
+| Versão | Data | Mudança |
+|---|---|---|
+| 0.1.0 | 2026-04-30 | Versão inicial — Forge-2 onda 2 (implementation) |
+| 0.2.0 | 2026-05-08 | Forge-9: lê docs/forge/project.json; Waves 1P-4P + 6P para platform; DAG platform; detecção automática de tipo (F9.14) |
 
 ## Verification gate
 

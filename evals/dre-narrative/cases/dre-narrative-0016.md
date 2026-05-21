@@ -26,7 +26,7 @@ despesasTecnologia: 300000             # via predictedCategory
 totalDespesasOperacionais: 2100000
 ebitda: 2400000
 lucroLiquido: 2400000
-margemLiquida: 0.3429
+margemLiquida: 34.29
 naoClassificado: 0
 ```
 

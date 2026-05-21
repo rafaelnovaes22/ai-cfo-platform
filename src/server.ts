@@ -1,5 +1,12 @@
 import Fastify from "fastify";
-import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
+import {
+  serializerCompiler,
+  validatorCompiler,
+  jsonSchemaTransform,
+} from "fastify-type-provider-zod";
+import cors from "@fastify/cors";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { logger } from "@/observability/logger.js";
 import rawBody from "fastify-raw-body";
 import { authRoutes } from "@/auth/routes.js";
@@ -25,6 +32,43 @@ const app = Fastify({
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
+
+// CORS: lê FRONTEND_ORIGIN do .env. Em dev, default permite Vite (5173).
+// Aceita múltiplas origens separadas por vírgula (ex: dev local + Vercel preview).
+const frontendOrigin = process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
+const allowedOrigins = frontendOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+await app.register(cors, {
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  exposedHeaders: ["x-request-id"],
+});
+
+// OpenAPI spec (servida em /openapi.json) — derivada dos schemas Zod via jsonSchemaTransform.
+// Swagger UI fica em /docs para inspeção manual durante desenvolvimento.
+await app.register(swagger, {
+  openapi: {
+    info: {
+      title: "Aicfo API",
+      description:
+        "Backend Aicfo (CFO-IA para PMEs). SKU piloto: monthly-analysis. " +
+        "Auth: Bearer JWT em Authorization. Tokens API: prefixo sap_.",
+      version: "0.1.0",
+    },
+    servers: [{ url: process.env.PUBLIC_API_URL ?? `http://localhost:${port}` }],
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      },
+    },
+  },
+  transform: jsonSchemaTransform,
+});
+app.get("/openapi.json", { schema: { hide: true } }, async () => app.swagger());
+await app.register(swaggerUi, {
+  routePrefix: "/docs",
+  uiConfig: { docExpansion: "list", deepLinking: true },
+});
 
 // req.auth populado por requireAuth nas rotas protegidas (null por padrão)
 // rawBody necessário para verificação de assinatura do webhook Stripe

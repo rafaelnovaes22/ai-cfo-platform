@@ -39,11 +39,19 @@ Single skill that runs the **monthly audit** of a Forge-consuming project. Valid
 - [ ] 1. Verify environment (Python 3.11+, ripgrep available, working tree readable)
 - [ ] 2. Load `docs/forge/manifest.json` → identify Constitution version, principles, artifacts
 - [ ] 3. Detect project name, scope, audit period (--month parameter or last closed month)
+- [ ] 3.5. **Load `docs/forge/project.json`** (if present) → extract `project.type`, `project.ai_enabled`, `modules[]`
+       - If absent: default to `project_type=agentic_saas`, `ai_enabled=true` (backwards compat v0.7.0)
+       - If `ai_enabled=false`: switch discovery (step 5) and principle rubrics (step 6) to platform mode
+       - **CRITICAL: NEVER mark FAIL for absence of LLM/Langfuse/prompts when `ai_enabled=false`**
 - [ ] 4. Prime Tier 1 caches via L0 loaders: `company-dna`, `icp-loader`, `offerings-loader`
-- [ ] 5. Discover subscriptions in ASSISTED/AUTONOMOUS in `--month` (sample 5-10%)
+- [ ] 5. **Discover audit scope** (branched by project_type):
+       - `agentic_saas`: subscriptions in ASSISTED/AUTONOMOUS in `--month` (sample 5-10%)
+       - `platform`: modules in PILOT/CANONICAL from `project.modules[]` (all, not sampled — usually ≤20)
+       - `hybrid`: both, per module's own `ai_enabled`
 - [ ] 6. Spawn 8 parallel `task` sub-agents — one per principle C1-C8
-      - Each sub-agent reports `{ id, name, status, evidence, metrics, findings, recommendations }`
-- [ ] 7. Spawn 1 parallel `task` for structural audit (manifest sync, drift signals)
+       - Each sub-agent receives `project_type` and `ai_enabled` and applies the matching rubric
+       - Each sub-agent reports `{ id, name, status, evidence, metrics, findings, recommendations }`
+- [ ] 7. Spawn 1 parallel `task` for structural audit (manifest sync, drift signals, project.json freshness)
 - [ ] 8. Aggregate results; compute `overall_status` and `drift_detected`
 - [ ] 9. Render markdown report from `templates/monthly-audit.template.md`
 - [ ] 10. Write `docs/forge/audits/{YYYY-MM}.md` + `docs/forge/audits/{YYYY-MM}-findings.json`
@@ -139,26 +147,25 @@ Each `task` returns:
 
 ## Per-principle check rubric (high-level)
 
-### C1 — Diagnose-before-design
-- For each `subscription` in production: does `docs/clients/{client_id}/diagnostic.md` exist?
-- For each `prompts/{artifact_id}/v*/system.md`: does frontmatter reference a `linked_diagnostic`?
-- FAIL if ratio with diagnostic < 100%.
+> Each rubric has two branches — apply based on `ai_enabled` loaded in step 3.5.
+
+### C1 — Diagnose-before-build
+- **agentic**: For each subscription in production: `docs/clients/{client_id}/diagnostic.md` exists? FAIL if ratio < 100%.
+- **platform**: For each module in project.modules[]: `diagnostic-{module_id}.md` or `docs/clients/{client_id}/diagnostic-{module_id}.md` exists? FAIL if ratio < 100%.
 
 ### C2 — Outcome-first
-- For each spec: `outcome_clause_hash` declared?
-- Match against `prompts/{artifact_id}/v*/system.md` Section 3 hash.
-- FAIL on hash divergence; WARN on missing categories.
+- **agentic**: For each spec: `outcome_clause_hash` declared? Match against `prompts/{artifact_id}/v*/system.md` Section 3 hash. FAIL on hash divergence.
+- **platform**: For each module spec: `outcome_clause` present with `outcome_kind: operational_action_with_observable_evidence`? `audited_actions[]` declared? FAIL if missing.
 
 ### C3 — Cost ≤ 25%
-- For each subscription: read `baseline-cost-*.md` → `c3_check.status`.
-- For each `prompts/{artifact_id}/v*/system.md`: is `recalc_unit_economics_required: false`?
-- FAIL if `unviable` OR `recalc_required: true` for >7 days.
+- **agentic**: For each subscription: `baseline-cost-*.md` → `c3_check.status`. FAIL if `unviable` OR `recalc_unit_economics_required: true` for >7 days.
+- **platform**: For each module with `delivery-economics-{id}.md`: `platform_margin ≤ 0.25`? FAIL if `unviable`. WARN if file missing (not yet measured).
 
-### C4 — SHADOW antes de cobrar
-- For each promotion in `subscriptions/{id}/promotions.md`: 5 gates passed?
-- `min_window_days >= 14` enforced?
-- `delivered: false` em todos os traces SHADOW?
-- FAIL on any gate-pass without evidence.
+### C4 — Gradual promotion gate
+- **agentic**: For each promotion in `subscriptions/{id}/promotions.md`: 5 gates passed? `min_window_days >= 14` enforced?
+- **platform**: For each module in PILOT/CANONICAL: `pilot-state.md` present? State transitions documented with dates? Minimum window respected (critical: 14d, standard: 7d, simple: 3d)? CANONICAL modules: `acceptance-report.md` signed?
+- **agentic only**: `delivered: false` in all SHADOW traces? FAIL on gate-pass without evidence.
+- **platform only**: pilot-state.md transition log shows evidence (spec link, acceptance reference)?
 
 ### C5 — Three-tier context
 - All skills L0 declare `helper_pattern: bmad`?
@@ -167,23 +174,23 @@ Each `task` returns:
 - FAIL on hierarchy break.
 
 ### C6 — Telemetry-by-default
-- `% runs with trace` in audit period (target: 100%; alert if <99%)
-- All `prompts/.../system.md` have Section 8 (instrumentation)?
-- FAIL if instrumentation absent in any production prompt.
+- **agentic**: `% runs with trace` in audit period (target: 100%; alert if <99%). All `prompts/.../system.md` have Section 8 (instrumentation)? FAIL if absent.
+- **platform**: `audit_log_provider` declared in `project.json`? `auditLog.write()` calls present in module service files? `structured_logging_provider` configured? WARN if audit log coverage < 100% of declared `audited_actions[]`.
+- **NEVER FAIL for absence of Langfuse/llm_trace_provider when `ai_enabled=false`.**
 
 ### C7 — Portability
-- `grep -r "import .* from '@anthropic-ai/sdk\|openai\|@google-ai" src/ | grep -v 'src/llm/adapters/'`
-- 0 matches → PASS; ≥1 → FAIL.
+- **agentic**: `grep -r "import .* from '@anthropic-ai/sdk\|openai\|@google-ai" src/ | grep -v 'src/llm/adapters/'`. 0 matches → PASS; ≥1 → FAIL.
+- **platform**: Check that `src/infra/`, `src/integrations/`, `src/payments/` abstraction layers exist and 3rd-party SDK imports are isolated to those directories. 0 leaks → PASS; ≥1 → FAIL.
 
 ### C8 — Anti-customização heroica
-- `grep -rE "if\s*\(\s*tenantId\s*===\s*'.*?'" src/skus/ src/products/`
+- `grep -rE "if\s*\(\s*tenantId\s*===\s*'.*?'" src/skus/ src/products/ src/services/ src/modules/`
 - `grep -rE "switch\s*\(\s*tenantName" ...`
 - 0 matches → PASS; ≥1 → FAIL with paths/lines.
 
 ### Structural drift
 - For each artifact in `manifest.json`: file exists? sha256 matches (when populated)?
-- For each `prompts/{id}/v*/system.md`: `prompt_hash` matches latest eval run?
-- WARN on drift; FAIL if drift > 7 days without recalc/eval.
+- **agentic**: For each `prompts/{id}/v*/system.md`: `prompt_hash` matches latest eval run? WARN on drift; FAIL if drift > 7 days.
+- **platform**: `project.json` updated within 90 days? `delivery-economics-{module}.md` updated within 90 days? WARN if stale.
 
 ---
 

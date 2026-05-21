@@ -63,8 +63,26 @@ model User {
   updatedAt     DateTime @updatedAt
 
   sessions      Session[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([tenantId])
+}
+
+// ===== PASSWORD RESET (Wave 2 — Onda 0 extension) =====
+
+model PasswordResetToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash  String   @unique  // SHA-256 — token bruto entregue só por email
+  expiresAt  DateTime           // TTL 1h
+  usedAt     DateTime?          // single-use; null = ainda válido
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ===== SESSION (refresh tokens) =====

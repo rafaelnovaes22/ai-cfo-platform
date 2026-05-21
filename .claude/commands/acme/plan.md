@@ -1,5 +1,5 @@
 ---
-description: Gera plano técnico do artefato a partir de docs/specs/{artifact_id}.md + c4_thresholds + process-map. Define camadas (C5), abstração de modelo/provider (C7), pontos de instrumentação (C6), estratégia de TenantContext (C8). Output: docs/clients/{client_id}/plan-{artifact_id}.md. NÃO escolhe modelo final — `target_model_advisory` é sugestão do sla-threshold.
+description: Gera plano técnico do artefato/módulo. Para agentic (ai_enabled=true): define camadas, abstração de modelo (C7), instrumentação Langfuse (C6), TenantContext (C8), cronograma SHADOW. Para platform (ai_enabled=false): define camadas de serviço, audit log (C6), abstração de integração (C7), cronograma PILOT. Lê docs/forge/project.json para detectar tipo automaticamente.
 allowed-tools: [Read, Write, Glob, Grep]
 arguments:
   required:
@@ -8,7 +8,8 @@ arguments:
     - client_id
     - target_runtime
     - reuse_components_from
-forge_command_version: 0.1.0
+    - project_type         # auto-detectado de docs/forge/project.json se omitido
+forge_command_version: 0.2.0
 linked_principles: [C5, C6, C7, C8]
 invokes_skills:
   - "@offerings-loader"
@@ -26,11 +27,19 @@ Traduz a cadeia `spec → c4_thresholds → process-map → baseline-cost` em **
 
 ## Pre-conditions
 
-1. `docs/specs/{artifact_id}.md` existe com `c2_validation: pass` e `c4_thresholds` declarados (output de `/acme:sla-threshold`)
-2. `docs/clients/{client_id}/baseline-cost-*.md` existe com `c3_check.status` ∈ {viable, tight}
-3. `docs/clients/{client_id}/process-*.md` existe com `agent_readiness_score >= 0.5`
-4. `__forge_cache.offerings` disponível
-5. Tracing configurado
+**Comuns:**
+1. `docs/specs/{artifact_id}.md` existe com `c2_validation: pass`
+2. `__forge_cache.offerings` disponível
+
+**Agentic (ai_enabled=true):**
+3. `c4_thresholds` declarados na spec (output de `/acme:sla-threshold`)
+4. `docs/clients/{client_id}/baseline-cost-*.md` com `c3_check.status` ∈ {viable, tight}
+5. `docs/clients/{client_id}/process-*.md` com `agent_readiness_score >= 0.5`
+6. Tracing Langfuse configurado
+
+**Platform (ai_enabled=false):**
+3. `docs/modules/{artifact_id}/pilot-state.md` existe (ou será criado neste plan)
+4. `audit_log_provider` declarado em `docs/forge/project.json`
 
 ## Inputs
 
@@ -39,23 +48,35 @@ artifact_id: <slug>
 # opcionais
 client_id: <slug>                          # auto-detect via spec.linked_cliente_artifacts
 target_runtime: node-ts | python | other   # advisory; default lê de spec.target_runtime ou env
-reuse_components_from: [<artifact_id>...]  # se houver SKU/produto irmão para reuso de helpers
+reuse_components_from: [<artifact_id>...]  # se houver SKU/módulo irmão para reuso de helpers
+project_type: agentic_saas | platform | automation | hybrid   # auto-detect de project.json se omitido
 ```
 
 ## Execução
 
 ```
+0. Resolver project_type:
+   - Ler docs/forge/project.json → project.type, project.ai_enabled
+   - Se ausente: default agentic_saas / ai_enabled=true (compat v0.7.0)
+   - Selecionar template de plano: agentic (seções 1-8 canônicas) ou platform (seções 1-8P)
+
 1. Trace start
 
 2. Helpers Tier 1:
    - @offerings-loader (validar artifact_id + lifecycle_stage; identificar variantes/parents)
 
 3. Tier 2 — leitura cruzada:
-   - spec.outcome_clause + outcome_categories + c4_thresholds (define o que precisa rodar)
-   - process-map.steps + decision_points + automatable_hypotheses (define como roda)
-   - baseline-cost.c3_check.cost_per_outcome_max (orçamento por execução)
+   [agentic]
+   - spec.outcome_clause + outcome_categories + c4_thresholds
+   - process-map.steps + decision_points + automatable_hypotheses
+   - baseline-cost.c3_check.cost_per_outcome_max
 
-4. Compor plano em 8 seções canônicas (abaixo)
+   [platform]
+   - spec.outcome_clause + audited_actions[]
+   - module_spec.acceptance_criteria + criticality
+   - delivery-economics.platform_margin (se existir)
+
+4. Compor plano nas 8 seções canônicas (agentic abaixo) OU 8P seções platform (ver seção platform)
 
 5. Persistir docs/clients/{client_id}/plan-{artifact_id}.md
 
@@ -147,6 +168,88 @@ generated_at: 2026-04-30T...
 - Próximo passo: `/acme:tasks --artifact_id=<>`
 ```
 
+## Estrutura canônica do plan — variante platform (ai_enabled=false)
+
+> Gerada quando `project.ai_enabled=false`. Substitui seções 2, 4 e 6 do plano agentic.
+
+```markdown
+---
+artifact_id: <>
+module_id: <>
+plan_version: 0.1.0
+plan_variant: platform
+spec_path: docs/specs/<>.md
+forge_command_version: plan@0.2.0
+linked_principles: [C2, C5, C6, C7, C8]
+generated_at: <>
+---
+
+## 1. Escopo derivado da spec
+- Outcome operacional (literal): <copiado da spec.outcome_clause>
+- Ações auditáveis (audited_actions[]): [...]
+- Criticidade: critical | standard | simple
+- Acceptance criteria: <do module-spec>
+
+## 2P. Camadas de código — platform (princípio C5/C7)
+| Camada | Path proposto | Responsabilidade | Princípio |
+|---|---|---|---|
+| Route handler | src/app/{module}/route.ts | Recebe request, valida auth | C5 (Tier 3) |
+| Service layer | src/services/{module}.ts | Lógica de negócio, orquestra | C5 (Tier 2) |
+| Data access | src/lib/{module}/ | Prisma queries isoladas | C5 |
+| Audit logger | src/lib/audit.ts | auditLog.write() em toda ação auditável | C6 hard rule |
+| Integration adapter | src/integrations/{provider}/ | **Única** dependência de SDK externo | C7 hard rule |
+| TenantContext | src/lib/tenant/ | Resolve tenant config via DB/yaml | C8 |
+
+> **SDKs externos proibidos fora de `src/integrations/{provider}/`**. Infra isolada em `src/infra/`.
+
+## 3. Fluxo de dados (input → output)
+1. Request recebida (API route ou UI action)
+2. Autenticação + autorização (tenant context)
+3. Validação de schema (zod/joi)
+4. Executa lógica de negócio via service layer
+5. Persiste resultado (Prisma)
+6. **Escreve entrada no audit log** (`auditLog.write({ action, userId, tenantId, payload, result })`)
+7. Retorna response
+
+## 4P. Pontos de auditoria (C6 — platform)
+| Ponto | Evento auditável | Campos no audit log |
+|---|---|---|
+| Criação | record_created | action, userId, tenantId, recordId, payload_hash |
+| Atualização | record_updated | action, userId, tenantId, recordId, diff_hash |
+| Exclusão | record_deleted | action, userId, tenantId, recordId, reason |
+| Acesso sensível | sensitive_read | action, userId, tenantId, resource |
+
+> Audit log **obrigatório** em todos os `audited_actions[]` declarados na spec. Sem log = ação não rastreável.
+
+## 5. TenantContext (C8)
+- Schema: `{ tenant_id, name, config: {...} }`
+- Resolução: configuração via DB/yaml, **nunca** hardcoded em `if (tenantId === '...')`
+
+## 6P. Cronograma platform (DRAFT → CANONICAL)
+| Fase | Output | Estimativa | Próximo estado |
+|---|---|---|---|
+| DRAFT | spec aprovada + plan | 1-3 dias | → STAGING |
+| STAGING | implementação + testes unitários | 3-10 dias | → PILOT (manual) |
+| PILOT | módulo em uso real | ≥7 dias (standard) | → CANONICAL (aceite) |
+| CANONICAL | acceptance-report.md assinado | — | em produção estável |
+
+## 7. Riscos identificados
+- [ ] Risco de dado: campo sem audit log mapeado?
+- [ ] Risco de integração: SDK de terceiro sem abstraction layer?
+- [ ] Risco de tenant: config hardcoded no código?
+- [ ] Risco de regressão: módulo sem E2E test coverage?
+- [ ] Risco de aceite: stakeholder não disponível para sign-off?
+
+## 8P. Critérios de pronto do plan
+- Seções 1, 2P, 3, 4P, 5, 6P, 7 preenchidas com referência rastreável
+- audit_log_provider declarado em project.json
+- TenantContext schema declarado
+- Cronograma com janela mínima de PILOT declarada (≥7 dias para standard)
+- Próximo passo: `/acme:tasks --artifact_id=<>`
+```
+
+---
+
 ## 9. Classificação AIOS (quando `aios_tier` presente na spec)
 
 > Esta seção é **opcional** — gerada automaticamente quando `spec.aios_tier` está definido.
@@ -183,17 +286,28 @@ status: ok | warn | error
 artifact_id: <>
 plan_path: docs/clients/<>/plan-<>.md
 plan_version: 0.1.0
+plan_variant: agentic | platform        # detectado de project.json
 sections_present: [1, 2, 3, 4, 5, 6, 7, 8]  # inclui seção 9 se aios_tier definido
-aios_tier: A | B | C | null              # null se spec não tem aios_tier
+
+# campos agentic (plan_variant=agentic)
+aios_tier: A | B | C | null
 target_runtime_advisory: node-ts
 target_model_advisory: claude-sonnet
 abstraction_layer_declared: true     # C7 — src/llm/adapters/
 instrumentation_points_count: 4      # C6 — mínimo 4
+
+# campos platform (plan_variant=platform)
+audit_log_provider_declared: true    # C6 — audit_log_provider em project.json
+audit_actions_count: 4               # C6 — ações auditáveis da spec
+integration_abstraction_declared: true  # C7 — src/integrations/
+pilot_window_days: 7                 # C4 — janela mínima PILOT declarada
+
+# comuns
 tenant_context_schema_present: true  # C8
 risks_identified: 5
 warnings: [...]
 trace_id: <>
-generated_at: 2026-04-30T...
+generated_at: <>
 next_step: "/acme:tasks --artifact_id=<>"
 ```
 
@@ -239,3 +353,4 @@ trace_id: <>
 | Versão | Data | Mudança |
 |---|---|---|
 | 0.1.0 | 2026-04-30 | Versão inicial — Forge-2 onda 2 (implementation) |
+| 0.2.0 | 2026-05-08 | Forge-9: lê docs/forge/project.json; ramo platform (seções 2P/4P/6P); output com plan_variant; pre-conditions bifurcadas (F9.14) |

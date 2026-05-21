@@ -20,7 +20,7 @@ receitaLiquida: 500000
 lucroBruto: 500000
 ebitda: 500000
 lucroLiquido: 500000
-margemLiquida: 1.0000
+margemLiquida: 100
 naoClassificado: 0
 ```
 

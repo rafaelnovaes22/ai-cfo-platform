@@ -1,5 +1,5 @@
 ---
-description: Gera spec do artefato (platform-sku | product | diagnostic) a partir de docs/clients/{client}/diagnostic.md + process-map + helpers Tier 1. Usa o template apropriado ao --type. Persiste em docs/specs/{artifact_id}.md com cláusula de outcome literal e categorias declaradas.
+description: Gera spec do artefato (platform-sku | product | diagnostic | platform-module | automation-job) a partir de docs/clients/{client}/diagnostic.md + process-map + helpers Tier 1. Usa o template apropriado ao --type. Persiste em docs/specs/{artifact_id}.md com cláusula de outcome literal e categorias declaradas. v0.2.0 (Forge-9): suporta tipos platform-module e automation-job.
 allowed-tools: [Read, Write, Glob, Grep]
 arguments:
   required:
@@ -9,7 +9,10 @@ arguments:
   optional:
     - source_diagnostic_path
     - source_process_map_path
-forge_command_version: 0.1.0
+    - project_type
+    - ai_enabled
+    - criticality
+forge_command_version: 0.2.0
 linked_principles: [C1, C2, C8]
 invokes_skills:
   - "@company-dna"
@@ -17,10 +20,18 @@ invokes_skills:
   - "@process-mapper"
 output_artifact: docs/specs/{artifact_id}.md
 trace_required: true
+project_type_aware: true
 templates_by_type:
   platform-sku: templates/platform-sku-spec.template.md
   product: templates/product-spec.template.md
   diagnostic: templates/diagnostic-spec.template.md
+  platform-module: templates/platform-module-spec.template.md
+  automation-job: templates/platform-module-spec.template.md
+type_compatibility_matrix:
+  agentic_saas: [platform-sku, product, diagnostic]
+  platform: [platform-module, diagnostic]
+  automation: [automation-job, diagnostic]
+  hybrid: [platform-sku, product, platform-module, automation-job, diagnostic]
 ---
 
 # /acme:spec — Gera spec do artefato
@@ -35,7 +46,7 @@ Transforma diagnóstico aprovado em **spec contratual**: cláusula de outcome li
 
 1. `docs/clients/{client_id}/diagnostic.md` existe com `go_no_go: go` (ou `needs-paid-diagnostic` resolvido)
 2. `docs/clients/{client_id}/process-{name}.md` existe com `agent_readiness_score ≥ 0.5`
-3. `--type` ∈ {platform-sku, product, diagnostic}
+3. `--type` ∈ {platform-sku, product, diagnostic, platform-module, automation-job} **E** compatível com o `project_type` resolvido (ver `type_compatibility_matrix` no frontmatter)
 4. `artifact_id` único — não pode colidir com entrada existente em `__forge_cache.offerings`
 5. Diretório `docs/specs/` existe e gravável
 
@@ -66,10 +77,16 @@ source_process_map_path: docs/clients/{client_id}/process-*.md   # auto-detect s
    - Carregar source_process_map_path → extrair: triggers, atores, decision points, automatable_hypotheses
    - Carregar baseline-cost-{process}.md (se existir) → c3_check; se ausente, marcar "baseline_pending: true"
 
-4. Resolver template via --type:
-   - platform-sku → templates/platform-sku-spec.template.md
-   - product → templates/product-spec.template.md
-   - diagnostic → templates/diagnostic-spec.template.md
+4. Resolver project_type:
+   - --project_type fornecido OU lido de docs/forge/project.json OU default agentic_saas
+   - Validar que --type é compatível com project_type via type_compatibility_matrix; se não, error: incompatible_type_for_project
+
+5. Resolver template via --type:
+   - platform-sku → templates/platform-sku-spec.template.md (agentic_saas)
+   - product → templates/product-spec.template.md (agentic_saas)
+   - diagnostic → templates/diagnostic-spec.template.md (qualquer)
+   - platform-module → templates/platform-module-spec.template.md (platform / hybrid)
+   - automation-job → templates/platform-module-spec.template.md (automation; mesmo template, ai_enabled=false e module_type=automation-job no frontmatter)
 
 5. Compor spec preenchendo o template com:
    - Cláusula de outcome ipsis literis do diagnostic.proposed_outcome.clause
@@ -153,3 +170,4 @@ trace_id: <>
 | Versão | Data | Mudança |
 |---|---|---|
 | 0.1.0 | 2026-04-30 | Versão inicial — renomeada de `/acme:spec-sku` para `/acme:spec` com `--type` (Forge-2 onda 1) |
+| 0.2.0 | 2026-05-08 | **Delivery-type aware** — adiciona `--type=platform-module` e `--type=automation-job` (template `platform-module-spec.template.md`); `type_compatibility_matrix` com `project_type` resolvido de `docs/forge/project.json`; defaults legados (agentic_saas) quando ausente. Forge-9. |

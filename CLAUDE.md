@@ -1,7 +1,10 @@
 # Aicfo — Guia para Claude Code
 
 > CFO-IA / Plataforma de gestão financeira inteligente para PMEs. Produto self-serve do guarda-chuva **Acme SaaS²**.
-> Operado pelo framework **Acme Forge** ([`docs/forge/README.md`](docs/forge/README.md)).
+> Operado pelo framework **Acme Forge v0.15.0** ([`docs/forge/README.md`](docs/forge/README.md)).
+>
+> **Prompt de orquestração**: [`MASTER_PROMPT.md`](MASTER_PROMPT.md) — lifecycle, Constitution e stack.
+> **Onboarding não-técnico**: [`HELLO.md`](HELLO.md) | **Dev novo**: [`QUICKSTART_DEV.md`](QUICKSTART_DEV.md) | **Erros comuns**: [`COMMON_ERRORS.md`](COMMON_ERRORS.md)
 
 ---
 
@@ -91,7 +94,11 @@ Promoção entre modos exige eval suite passing + N execuções no modo atual + 
 
 ### Frontend
 
-Frontend é desenvolvido em **repositório separado** por **dev interno** da empresa (não Rafael; não terceiro). Backend (este repo) entrega **contratos** (OpenAPI 3.1 + Zod schemas + handoff doc) — frontend implementa UI/design por conta própria.
+Frontend React está **neste mesmo repositório** sob [`app/`](app/) (integrado em 2026-05-14, ADR-006). Stack: Vite + React 18 + TypeScript + TailwindCSS + TanStack Query + React Router 6.
+
+Consome o backend Fastify via api client tipado em [`app/src/lib/api/`](app/src/lib/api/) — sem dependência de Supabase. Tipos gerados por `openapi-typescript` apontando para `VITE_API_URL/openapi.json`.
+
+Para rodar o frontend: `cd app && npm run dev` (porta 5173). Configurar `VITE_API_URL=http://localhost:3000` em `app/.env.local`.
 
 `frontend_agent` do AIOS está reposicionado como **Contract Agent**: gera `docs/contracts/{module}.openapi.yml` + `docs/contracts/{module}.zod.ts` + `docs/frontend-handoff/{module}.md` — **não gera código React**.
 
@@ -119,6 +126,32 @@ O sync `aios:sync` do `clickup-automation` casa PRs com módulos buscando termos
 | Commits | conventional commits — `feat(ingest): ...`, `fix(dre-narrative): ...` |
 
 **Module keys válidos**: `auth-tenant`, `workspace-setup`, `billing`, `tenant-config`, `ingest`, `classification`, `dre-narrative`, `action-plan`, `hub`, `export`, `cashflow`, `kpis`, `score`, `alerts`, `dashboard-ceo`, `decision-engine`, `scenarios`, `benchmarking`, `conversational-agent`, `integrations-banks`, `integrations-erp-crm-payroll`, `payment-execution`, `revenue-forecast`, `tax-suite`, `accounts-management`, `bank-reconciliation`, `profitability`, `anomaly-fraud-detection`, `audit-governance`, `financial-planning`.
+
+### Fluxo obrigatório: branch → PR → merge
+
+**Nunca fazer push direto em `main`.** Com frontend e backend no mesmo repo, múltiplos contribuidores (Rafael, Eduardo, agentes) podem trabalhar em paralelo. Push direto em `main` gera conflitos silenciosos e impossibilita revisão.
+
+Fluxo padrão para qualquer trabalho:
+
+```bash
+# 1. Criar branch a partir de main atualizado
+git checkout main && git pull
+git checkout -b feat/aicfo-{module}-{descrição}
+
+# 2. Commits convencionais na branch
+git commit -m "feat({module}): ..."
+
+# 3. Abrir PR (gh cli ou GitHub UI)
+gh pr create --title "feat({module}): ..." --base main
+
+# 4. Merge via PR (squash preferido para features, merge para hotfixes)
+```
+
+**Regras de PR:**
+- Título segue o padrão `feat/fix/docs({module}): descrição` para o sync ClickUp funcionar
+- Toda mudança em `src/` passa por `/acme:pre-merge-check` antes do merge
+- Frontend (`app/`) e backend (`src/`) podem ir no mesmo PR se fizerem parte da mesma feature
+- Exceção permitida: hotfix crítico de segurança com aprovação explícita do CEO
 
 ---
 

@@ -2,8 +2,19 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import * as authService from "@/auth/service.js";
+import * as passwordReset from "@/auth/password-reset.js";
 import { requireAuth } from "@/auth/middleware.js";
-import { RegisterBody, LoginBody, RefreshBody, TokenResponse, MeResponse } from "@/auth/schemas.js";
+import { getPrisma } from "@/persistence/prisma.js";
+import {
+  RegisterBody,
+  LoginBody,
+  RefreshBody,
+  TokenResponse,
+  MeResponse,
+  PasswordResetRequestBody,
+  PasswordResetConfirmBody,
+  PasswordResetResponse,
+} from "@/auth/schemas.js";
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
@@ -45,11 +56,36 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     schema: { response: { 200: MeResponse } },
     preHandler: [requireAuth],
     handler: async (req, reply) => {
+      const db = getPrisma();
+      const user = await db.user.findUnique({
+        where: { id: req.auth!.userId },
+        select: { name: true, email: true },
+      });
+      if (!user) throw Object.assign(new Error("Usuário não encontrado"), { statusCode: 404 });
       return reply.send({
         userId: req.auth!.userId,
         tenantId: req.auth!.tenantId,
         role: req.auth!.role,
+        name: user.name,
+        email: user.email,
       });
+    },
+  });
+
+  // Always 200 — não revela existência de email na base.
+  f.post("/auth/password-reset/request", {
+    schema: { body: PasswordResetRequestBody, response: { 200: PasswordResetResponse } },
+    handler: async (req, reply) => {
+      await passwordReset.requestPasswordReset(req.body.email);
+      return reply.send({ ok: true });
+    },
+  });
+
+  f.post("/auth/password-reset/confirm", {
+    schema: { body: PasswordResetConfirmBody, response: { 200: PasswordResetResponse } },
+    handler: async (req, reply) => {
+      await passwordReset.confirmPasswordReset(req.body.token, req.body.password);
+      return reply.send({ ok: true });
     },
   });
 };

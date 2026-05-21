@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import AppLayout from "./lumen/layout/AppLayout.tsx";
+import Hub from "./lumen/pages/Hub.tsx";
 import Dashboard from "./lumen/pages/Dashboard.tsx";
 import DRE from "./lumen/pages/DRE.tsx";
 import Plan from "./lumen/pages/Plan.tsx";
@@ -38,7 +39,8 @@ const Router = () => {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Hub />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dre" element={<DRE />} />
         <Route path="/plano" element={<Plan />} />
         <Route path="/importar" element={<Import />} />

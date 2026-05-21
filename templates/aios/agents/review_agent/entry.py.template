@@ -56,21 +56,34 @@ _TENANT_FIELD = _CONFIG.get("project", {}).get("tenant_field", "tenantId")
 
 SYSTEM_PROMPT = f"""Você é o Review Agent do projeto {_PROJECT_NAME}.
 
-Responsabilidade única: revisar o código gerado contra a spec e contra os 8 princípios
-da Constitution Forge. Apontar BLOCKERs, WARNINGs e SUGGESTIONs com precisão.
+Responsabilidade única: revisar o código gerado contra a spec, contra a suíte de testes TDD
+e contra os 8 princípios da Constitution Forge. Apontar BLOCKERs, WARNINGs e SUGGESTIONs
+com precisão.
 
 LEIA APENAS:
 - docs/specs/{{module}}.md (spec aprovada)
 - docs/specs/_backend_{{module}}.md
 - docs/specs/_frontend_{{module}}.md
-- docs/specs/_tests_{{module}}.md
-- aios/config.yaml (apenas project.* e stack.*)
+- docs/specs/_tests_{{module}}.md (plano de testes RED)
+- docs/specs/_test_results_{{module}}.md (verificação de cobertura pós-build, se existir)
+- tests/{{module}}/ (lista de arquivos físicos, não precisa abrir o conteúdo todo)
+- aios/config.yaml (apenas project.*, stack.*, coverage_targets.*)
 
 NÃO LEIA:
 - Specs/código de outros módulos
 - Dados de produção
 
 Checklist obrigatório (cada item gera BLOCKER se falhar):
+
+[TDD compliance — gate adicionado v0.9.0]
+- Existe plano RED em docs/specs/_tests_{{module}}.md com matriz "requisito → teste"
+- Existem arquivos físicos em tests/{{module}}/unit/ E tests/{{module}}/integration/
+- Para módulos com UI, existem arquivos em tests/{{module}}/e2e/
+- O _test_results_{{module}}.md (modo verify) tem VEREDICTO: TESTES SUFICIENTES, OU
+  os testes adicionais sugeridos foram materializados em tests/{{module}}/
+- A matriz de cobertura cobre 100% dos requisitos declarados na spec
+- Tier C: cada edge case financeiro/cancelamento da spec tem teste unit + integration
+- Não há código de produção que claramente não tem teste correspondente (revisão por amostragem)
 
 [Spec compliance]
 - Todas as entidades da spec estão implementadas
@@ -79,6 +92,7 @@ Checklist obrigatório (cada item gera BLOCKER se falhar):
 - Critério de pronto da spec é satisfeito
 
 [Constitution]
+- C4: testes RED foram gerados ANTES do build (verificável pela ordem do _tests vs. _backend)
 - C8: multi-tenancy via {_TENANT_FIELD} presente em todas as queries que carregam dados de tenant
 - C8: nenhum hardcode de tenant, escola, unidade, cliente específico
 - C8: nenhum `if tenantId === '...'` ou `switch tenantName`
@@ -103,10 +117,21 @@ Formato de output (literal — usado por scripts de status):
 ## SUGGESTIONS (melhoria opcional)
 - [SUGGESTION] Descrição
 
+## CHECKLIST TDD
+- [x] / [ ] Plano RED presente
+- [x] / [ ] Arquivos físicos em tests/{{module}}/unit/
+- [x] / [ ] Arquivos físicos em tests/{{module}}/integration/
+- [x] / [ ] Arquivos físicos em tests/{{module}}/e2e/ (ou justificado N/A — backend-only)
+- [x] / [ ] Verify VEREDICTO: TESTES SUFICIENTES
+- [x] / [ ] Cobertura ≥ target do tier declarado
+
 ## APROVADO PARA MERGE: Sim / Não
 
 A última linha é parseada pelo orchestrator — deve ser exatamente "APROVADO PARA MERGE: Sim"
 ou "APROVADO PARA MERGE: Não".
+
+Regra: se QUALQUER item do CHECKLIST TDD estiver desmarcado, o veredito é "Não" — exceto
+e2e para módulos backend-only (justificar explicitamente).
 """
 
 
@@ -122,9 +147,25 @@ class ReviewAgent(BaseAgent):
             "spec": PROJECT_ROOT / "docs" / "specs" / f"{module_name}.md",
             "backend": PROJECT_ROOT / "docs" / "specs" / f"_backend_{module_name}.md",
             "frontend": PROJECT_ROOT / "docs" / "specs" / f"_frontend_{module_name}.md",
-            "tests": PROJECT_ROOT / "docs" / "specs" / f"_tests_{module_name}.md",
+            "tests_plan": PROJECT_ROOT / "docs" / "specs" / f"_tests_{module_name}.md",
+            "test_results": PROJECT_ROOT / "docs" / "specs" / f"_test_results_{module_name}.md",
         }
-        return {k: p.read_text(encoding="utf-8") if p.exists() else None for k, p in paths.items()}
+        ctx = {k: p.read_text(encoding="utf-8") if p.exists() else None for k, p in paths.items()}
+
+        # Inventário de arquivos físicos de teste (gate TDD)
+        tests_dir = PROJECT_ROOT / "tests" / module_name
+        tests_inventory: dict[str, list[str]] = {"unit": [], "integration": [], "e2e": []}
+        if tests_dir.exists():
+            for layer in tests_inventory:
+                layer_dir = tests_dir / layer
+                if layer_dir.exists():
+                    tests_inventory[layer] = [
+                        str(p.relative_to(PROJECT_ROOT))
+                        for p in layer_dir.rglob("*")
+                        if p.is_file() and not p.name.endswith(".proposed")
+                    ]
+        ctx["tests_inventory"] = tests_inventory
+        return ctx
 
     def run(self, task_input: dict) -> dict:
         module_name = task_input.get("module")
@@ -147,6 +188,21 @@ class ReviewAgent(BaseAgent):
         ) if _LF_AVAILABLE else _MockTrace()
 
         content_parts = [f"Revise o módulo: **{module_name}**\n"]
+
+        inventory = ctx.pop("tests_inventory", {"unit": [], "integration": [], "e2e": []})
+        content_parts.append(
+            "### INVENTÁRIO DE TESTES FÍSICOS (tests/" + module_name + "/)\n"
+            f"- unit: {len(inventory['unit'])} arquivo(s)\n"
+            f"- integration: {len(inventory['integration'])} arquivo(s)\n"
+            f"- e2e: {len(inventory['e2e'])} arquivo(s)\n"
+            + (
+                "Arquivos:\n  - " + "\n  - ".join(
+                    inventory["unit"] + inventory["integration"] + inventory["e2e"]
+                ) if (inventory["unit"] or inventory["integration"] or inventory["e2e"])
+                else "(diretório vazio ou ausente — BLOCKER candidato)"
+            )
+        )
+
         for label, content in ctx.items():
             if content:
                 content_parts.append(f"### {label.upper()}\n{content}")

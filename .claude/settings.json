@@ -34,7 +34,35 @@
       "WebSearch",
       "WebFetch",
       "Bash(git remote *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(awk -F/ '{print $1}')",
+      "Bash(git push *)",
+      "Read(//c/c/Users/Rafael/Projetos/clickup-automation/**)",
+      "Bash(npm run *)",
+      "Read(//c/Users/Rafael/AppData/Local/Temp/claude/c--Users-Rafael-Projetos-Aicfo/d0eaeb45-1006-44ca-8cc8-929829ef2f9d/tasks/**)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation status --short)",
+      "Bash(git check-ignore *)",
+      "Read(//c/Users/Rafael/AppData/Local/Temp/claude/c--Users-Rafael-Projetos-Aicfo/c2d20a00-a974-4d71-9715-723ce0842406/tasks/**)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation add config/aios-module-functionalities.json scripts/update-aicfo-descriptions.mjs package.json)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation commit -m ' *)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation push origin master)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" log --oneline -15)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" status --short)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" show ef3ab63 --stat)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" diff .claude/settings.json)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" checkout -- .claude/settings.json)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" add prisma/migrations/)",
+      "Bash(git -C c:/Users/Rafael/Projetos/Aicfo commit -m ' *)",
+      "Skill(acme:unit-economics)",
+      "Skill(acme:unit-economics:*)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" add src/llm/router.ts src/llm/cost.ts docs/onda-0/unit_economics.md scripts/smoke-google.ts)",
+      "Bash(git restore *)",
+      "Bash(tsx --env-file=.env evals/run-llm.ts --module=dre-narrative --no-write)",
+      "Bash(git fetch *)",
+      "Bash(npm i *)",
+      "Bash(node -e \"const p = require\\('fastify-type-provider-zod'\\); console.log\\(Object.keys\\(p\\).sort\\(\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(npm uninstall *)",
+      "Bash(git stash *)"
     ],
     "deny": [
       "Bash(rm -rf*)",
@@ -51,10 +79,26 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/session-start/forge-context.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/persona-detect.sh",
+            "timeout": 2000
+          },
           {
             "type": "command",
             "command": "bash hooks/pre-tool-use/outcome-clause-guard.sh",
@@ -96,6 +140,11 @@
             "type": "command",
             "command": "bash hooks/post-tool-use/manifest-sync.sh",
             "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/friendly-errors.sh",
+            "timeout": 3000
           }
         ]
       }
@@ -112,14 +161,19 @@
             "type": "command",
             "command": "bash hooks/stop/eval-suite-fresh.sh",
             "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/stop/learning-snapshot.sh",
+            "timeout": 10000
           }
         ]
       }
     ]
   },
   "_comment": "Acme Forge layer (versioned). Per-developer overrides go in settings.local.json (gitignored).",
-  "_forge_version": "0.6.0",
-  "_constitution_version": "0.2.0",
+  "_forge_version": "0.21.0",
+  "_constitution_version": "0.3.0",
   "_forge_features": {
     "skills_path": ".claude/skills/{L0,L1,L2}/",
     "agents_path": ".claude/agents/",

@@ -14,6 +14,8 @@ metadata:
 
 # Skill: artifact-prompt-builder — Tier 3 Operational (Forge)
 
+> **applies_when**: `project.ai_enabled = true` — This skill builds LLM system prompts and is only applicable to agentic artifacts. For platform modules (`ai_enabled=false`), there are no prompts to build; use `platform-module-spec.template.md` and `acceptance-report.template.md` instead.
+
 Translates the chain `diagnostic → spec → process-map → baseline-cost` into a **versioned, instrumented system prompt** ready to deploy. Output is the artifact-of-record under `prompts/{artifact_id}/v{version}/system.md`.
 
 ---

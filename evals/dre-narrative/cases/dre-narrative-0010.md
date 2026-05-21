@@ -31,8 +31,8 @@ resultadoFinanceiro: 0
 lucroAntesIR: 1000000
 irCsll: 0
 lucroLiquido: 1000000
-margemBruta: 1.0000
-margemLiquida: 1.0000
+margemBruta: 100
+margemLiquida: 100
 naoClassificado: 0
 ```
 

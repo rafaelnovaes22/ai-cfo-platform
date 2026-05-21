@@ -1,25 +1,33 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createElement } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext.tsx";
+
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+function deriveName(referenceMonth: string): string {
+  const [year, month] = referenceMonth.split("-");
+  return `${MONTHS[Number(month) - 1] ?? month} ${year}`;
+}
 
 export interface Analysis {
   id: string;
-  user_id: string;
+  referenceMonth: string;
   name: string;
-  description: string | null;
-  period_start: string | null;
-  period_end: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type NewAnalysis = {
-  name: string;
+  status: string;
+  mode: string;
+  deliveredAt: string | null;
+  approvedAt: string | null;
+  costCents: number | null;
+  totalImpactCents: number | null;
+  // Optional legacy fields (not populated by API — kept for exportDRE.ts compat)
   description?: string | null;
   period_start?: string | null;
   period_end?: string | null;
-};
+}
 
 const STORAGE_KEY = "lumen.activeAnalysisId";
 
@@ -30,9 +38,6 @@ interface Ctx {
   activeAnalysis: Analysis | null;
   setActiveId: (id: string | null) => void;
   refresh: () => Promise<void>;
-  create: (input: NewAnalysis) => Promise<Analysis>;
-  update: (id: string, patch: Partial<NewAnalysis>) => Promise<void>;
-  remove: (id: string) => Promise<void>;
 }
 
 const AnalysisContext = createContext<Ctx | null>(null);
@@ -55,84 +60,41 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { analyses: raw } = await api.analyses.list();
+      const list: Analysis[] = raw.map((a) => ({ ...a, name: deriveName(a.referenceMonth) }));
+      setAnalyses(list);
+    } catch {
+      setAnalyses([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!user) {
       setAnalyses([]);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    const { data } = await supabase
-      .from("analyses")
-      .select("*")
-      .order("created_at", { ascending: false });
-    const list = (data ?? []) as Analysis[];
-    setAnalyses(list);
-    // garantir que activeId é válido
-    if (list.length > 0 && (!activeId || !list.some((a) => a.id === activeId))) {
-      setActiveId(list[0].id);
-    } else if (list.length === 0 && activeId) {
-      setActiveId(null);
-    }
-    setLoading(false);
-  }, [user, activeId, setActiveId]);
+    refresh();
+  }, [user, refresh]);
 
   useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const create = useCallback(
-    async (input: NewAnalysis): Promise<Analysis> => {
-      if (!user) throw new Error("Não autenticado");
-      const { data, error } = await supabase
-        .from("analyses")
-        .insert({ ...input, user_id: user.id })
-        .select()
-        .single();
-      if (error) throw error;
-      const created = data as Analysis;
-      setAnalyses((prev) => [created, ...prev]);
-      setActiveId(created.id);
-      return created;
-    },
-    [user, setActiveId]
-  );
-
-  const update = useCallback(
-    async (id: string, patch: Partial<NewAnalysis>) => {
-      const { error } = await supabase.from("analyses").update(patch).eq("id", id);
-      if (error) throw error;
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const remove = useCallback(
-    async (id: string) => {
-      const { error } = await supabase.from("analyses").delete().eq("id", id);
-      if (error) throw error;
-      if (activeId === id) setActiveId(null);
-      await refresh();
-    },
-    [refresh, activeId, setActiveId]
-  );
+    if (analyses.length > 0 && (!activeId || !analyses.some((a) => a.id === activeId))) {
+      setActiveId(analyses[0].id);
+    } else if (analyses.length === 0 && activeId) {
+      setActiveId(null);
+    }
+  }, [analyses, activeId, setActiveId]);
 
   const activeAnalysis = useMemo(
     () => analyses.find((a) => a.id === activeId) ?? null,
     [analyses, activeId]
   );
 
-  const value: Ctx = {
-    analyses,
-    loading,
-    activeId,
-    activeAnalysis,
-    setActiveId,
-    refresh,
-    create,
-    update,
-    remove,
-  };
+  const value: Ctx = { analyses, loading, activeId, activeAnalysis, setActiveId, refresh };
 
   return createElement(AnalysisContext.Provider, { value }, children);
 }

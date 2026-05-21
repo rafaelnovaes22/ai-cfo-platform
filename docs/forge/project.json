@@ -1,0 +1,114 @@
+{
+  "$schema": "https://acme.com.br/forge/project-config-v1.json",
+  "_doc": "Configuração canônica do projeto Aicfo. project_type=agentic_saas, ai_enabled=true. Gerado em 2026-05-13 com forge-sync v1.0.0 (upgrade v0.7.0→v0.15.0). Reviewer DeepAgent usa este arquivo antes de qualquer check.",
+
+  "project_config_version": "0.1.0",
+  "framework_version_required": ">=0.15.0",
+  "constitution_version_required": ">=0.3.0",
+
+  "project": {
+    "name": "Aicfo",
+    "owner": "Acme / Novais Digital",
+    "type": "agentic_saas",
+    "ai_enabled": true,
+    "description": "CFO-IA self-serve para PMEs. Centraliza dados financeiros, projeta caixa, recomenda decisões e gera relatórios — substituindo trabalho operacional financeiro por agentes auditáveis.",
+    "icp": "CEO/sócio/CFO de PME R$500k–R$10M faturamento",
+    "repo": "private"
+  },
+
+  "lifecycle_states": {
+    "active": "agentic",
+    "agentic": ["SHADOW", "ASSISTED", "AUTONOMOUS"]
+  },
+
+  "telemetry": {
+    "llm_trace_provider": "langfuse",
+    "audit_log_provider": "postgres-audit",
+    "structured_logging_provider": "custom",
+    "metrics_provider": null,
+    "error_tracking_provider": null
+  },
+
+  "economics": {
+    "model": "cost_per_outcome",
+    "cost_to_price_ratio_max": 0.25,
+    "platform_margin_inputs": null
+  },
+
+  "principle_overrides": {
+    "C1": {
+      "trigger_artifact": "diagnostic.md",
+      "applies_to": "every SKU before build"
+    },
+    "C2": {
+      "outcome_clause_required": true,
+      "outcome_kind": "cobrável — análise entregue + aceita pelo cliente"
+    },
+    "C3": {
+      "model": "cost_per_outcome",
+      "ratio_max": 0.25,
+      "note": "custo de inferência (tokens Anthropic) / preço por análise ≤ 25%"
+    },
+    "C4": {
+      "agentic_modes": ["SHADOW", "ASSISTED", "AUTONOMOUS"],
+      "note": "SHADOW: análise gerada mas não entregue ao cliente; humano (Rafael) revisa em paralelo"
+    },
+    "C6": {
+      "telemetry_default": "langfuse",
+      "langfuse_required": true,
+      "trace_coverage_target_pct": 100
+    },
+    "C7": {
+      "abstraction_layers_required_for": ["llm", "infra", "integrations", "payments", "storage"]
+    },
+    "C8": {
+      "tenant_customization_via": "config + tenant settings (DB-driven)",
+      "forbidden_patterns": ["if (tenantId === '...')", "switch (tenantName)", "src/skus/clients/{nome}/"]
+    }
+  },
+  "principle_overrides_signature": "Rafael Novaes <rafaeldenovaes@gmail.com> — 2026-05-13",
+
+  "modules": [
+    {
+      "id": "monthly-analysis",
+      "type": "agentic-skill",
+      "ai_enabled": true,
+      "lifecycle_state": "SHADOW",
+      "criticality": "critical",
+      "description": "SKU piloto — gera DRE Facilitado + narrativa + Plano de Ação 3-horizontes a partir de lançamentos financeiros",
+      "nodes": ["ingest", "classification", "dre-narrative", "action-plan", "hub", "export"],
+      "linked_spec": "src/skus/monthly-analysis/spec.md"
+    },
+    {
+      "id": "cashflow",
+      "type": "agentic-skill",
+      "ai_enabled": true,
+      "lifecycle_state": "DRAFT",
+      "criticality": "standard",
+      "onda": 2
+    },
+    {
+      "id": "kpis",
+      "type": "agentic-skill",
+      "ai_enabled": true,
+      "lifecycle_state": "DRAFT",
+      "criticality": "standard",
+      "onda": 2
+    },
+    {
+      "id": "decision-engine",
+      "type": "agentic-skill",
+      "ai_enabled": true,
+      "lifecycle_state": "DRAFT",
+      "criticality": "critical",
+      "onda": 3
+    }
+  ],
+
+  "_meta": {
+    "created_at": "2026-05-13",
+    "last_updated": "2026-05-13",
+    "validated_by_forge_doctor": false,
+    "notes": "Gerado durante upgrade v0.7.0→v0.15.0 via forge-sync. Ondas 2-8 representadas parcialmente — expandir conforme ondas avançam. Reviewer DeepAgent lê este arquivo antes de qualquer check."
+  }
+}
