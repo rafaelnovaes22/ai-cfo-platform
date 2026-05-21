@@ -13,14 +13,23 @@ export function parseText(raw: string): ParseResult {
   const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return { entries: [], orphanCount: 0 };
 
-  // lines[0] é garantido != undefined pelo length-check acima, mas TS exige guard.
-  const headerLine = lines[0] ?? "";
-  const headers = splitRow(headerLine);
-  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = detectColumns(headers);
+  // Escaneia até 30 linhas para encontrar o cabeçalho real.
+  // Extratos bancários (ex: Itaú) têm metadados antes dos dados.
+  let headerLineIdx = 0;
+  let cols = detectColumns(splitRow(lines[0] ?? ""));
+  for (let i = 0; i < Math.min(lines.length - 1, 30); i++) {
+    const c = detectColumns(splitRow(lines[i] ?? ""));
+    if (c.dateIdx >= 0 && c.descIdx >= 0) {
+      headerLineIdx = i;
+      cols = c;
+      break;
+    }
+  }
 
-  logger.info({ headers, dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx }, "parseText detectColumns");
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = cols;
+  logger.info({ headerLineIdx, headers: splitRow(lines[headerLineIdx] ?? ""), dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx }, "parseText detectColumns");
 
-  const dataLines = lines.slice(1);
+  const dataLines = lines.slice(headerLineIdx + 1);
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
