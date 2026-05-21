@@ -1,12 +1,28 @@
+import { randomUUID } from "crypto";
 import Langfuse from "langfuse";
+
+const noopChild = { end: () => {} };
+
+function makeNoopTrace(id: string) {
+  return {
+    id,
+    generation: () => noopChild,
+    span: () => noopChild,
+    update: async () => {},
+  };
+}
 
 let _client: Langfuse | null = null;
 
-function getClient(): Langfuse {
+function getClient(): Langfuse | null {
+  const secret = process.env.LANGFUSE_SECRET_KEY;
+  const pub = process.env.LANGFUSE_PUBLIC_KEY;
+  if (!secret || !pub) return null;
+
   if (!_client) {
     _client = new Langfuse({
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY ?? "",
-      secretKey: process.env.LANGFUSE_SECRET_KEY ?? "",
+      publicKey: pub,
+      secretKey: secret,
       baseUrl: process.env.LANGFUSE_HOST ?? "https://cloud.langfuse.com",
       flushAt: 20,
       flushInterval: 10_000,
@@ -23,7 +39,10 @@ export interface TraceOptions {
 }
 
 export function createTrace(opts: TraceOptions) {
-  return getClient().trace({
+  const client = getClient();
+  if (!client) return makeNoopTrace(opts.traceId ?? randomUUID());
+
+  return client.trace({
     id: opts.traceId,
     name: opts.name,
     userId: opts.tenantId,
