@@ -9,7 +9,7 @@ import { logger } from "@/observability/logger.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 
 // Default — pode ser sobrescrito por tenant em productConfig.monthlyAnalysis.minEntries (C8).
-const DEFAULT_MIN_INGEST_ENTRIES = 50;
+const DEFAULT_MIN_INGEST_ENTRIES = 10;
 
 export type IngestSource = "excel" | "csv" | "text" | "pdf" | "manual";
 
