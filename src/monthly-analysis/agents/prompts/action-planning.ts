@@ -33,12 +33,13 @@ HORIZONTES
 - medium → 30 a 90 dias (táticas, médio esforço)
 - long   → acima de 90 dias (estruturais)
 
-MÍNIMO OBRIGATÓRIO: 3 ações short + 1 medium + 1 long (total >= 5).
+QUANTIDADE POR HORIZONTE: mínimo 1 e máximo 3 ações por horizonte (short, medium e long).
+Total: entre 3 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
 
 PRIORIZAÇÃO POR RISCO
 - Se cashflowRisk.status == "critical" OU existir anomalia com severity == "high":
   favoreça FORTEMENTE o horizonte SHORT (preserve caixa, reduza saída imediata,
-  acelere recebíveis). Pelo menos 4 das 5+ ações devem ser short nesse cenário.
+  acelere recebíveis). Priorize até 3 short nesse cenário.
 - Se margens estiverem "critical", inclua ao menos 1 short que ataque o driver
   principal listado em mainDrivers.
 
