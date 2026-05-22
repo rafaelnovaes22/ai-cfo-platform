@@ -1,12 +1,10 @@
 // Parser para DRE consolidado em PDF (relatório do contador, não extrato por lançamento).
 // Quando parsePdf() retorna 0 entries, este parser usa LLM para extrair as linhas do DRE
 // e cria entradas sintéticas com confirmedCategory já preenchida — pula classificação.
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 import { z } from "zod";
 import { callLlm } from "@/llm/index.js";
 import { buildTaxonomyBlock, DRE_CATEGORIES } from "@/classification/taxonomy.js";
+import { extractPdfText } from "@/ingest/parsers/pdf-text.js";
 import { logger } from "@/observability/logger.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
@@ -53,8 +51,7 @@ export async function parsePdfDre(
   referenceMonth: string,
   tenantId: string,
 ): Promise<ParseResult> {
-  const data = await pdfParse(buffer);
-  const pdfText = data.text.trim();
+  const pdfText = (await extractPdfText(buffer)).trim();
 
   if (!pdfText) {
     logger.warn({ tenantId, referenceMonth }, "parsePdfDre: PDF sem texto extraível");

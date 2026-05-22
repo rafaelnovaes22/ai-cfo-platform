@@ -2,7 +2,6 @@ import { getPrisma } from "@/persistence/prisma.js";
 import { enqueueClassification } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
-import { parsePdf } from "@/ingest/parsers/pdf.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { createTrace } from "@/observability/langfuse.js";
@@ -138,19 +137,10 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
     case "excel":
     case "csv":
       return parseExcel(params.buffer!);
-    case "pdf": {
-      // parsePdf pode lançar exceção em PDFs sem texto extraível ou malformados.
-      // Nesse caso, tentamos parsePdfDre (LLM) como fallback.
-      let result: ParseResult = { entries: [], orphanCount: 0 };
-      try {
-        result = await parsePdf(params.buffer!);
-      } catch (err) {
-        logger.warn({ err: String(err), tenantId: params.tenantId }, "parsePdf lançou exceção — tentando parsePdfDre");
-      }
-      if (result.entries.length > 0) return result;
-      logger.info({ tenantId: params.tenantId }, "parsePdf sem entries — tentando parsePdfDre");
+    case "pdf":
+      // No Aicfo, upload PDF representa DRE consolidado do contador.
+      // Extratos/ledgers devem entrar como Excel, CSV ou texto colado.
       return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
-    }
     case "text":
       return parseText(params.text!);
     case "manual":
