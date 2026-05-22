@@ -57,6 +57,7 @@ export async function ingest(params: {
   } catch (err) {
     parseSpan.end({ level: "ERROR", output: { error: String(err) } });
     await trace.update({ metadata: { outcome: "failed", reason: "parse_error" } });
+    await trace.end({ outcome: "failed" });
     logger.error({ err, source, referenceMonth, tenantId }, "Ingest parse error");
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
@@ -186,6 +187,7 @@ export async function ingest(params: {
       minEntries,
     },
   });
+  await trace.end({ outcome, entryCount: entries.length });
 
   return {
     analysisId: analysis.id,

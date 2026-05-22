@@ -39,7 +39,8 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
       response = await dispatch(fallback, req);
     } catch (fallbackErr) {
       generation.end({ output: null, level: "ERROR" });
-      trace.update({ metadata: { status: "ERROR" } });
+      await trace.update({ metadata: { status: "ERROR" } });
+      await trace.end({ error: String(fallbackErr) });
       throw fallbackErr;
     }
   }
@@ -48,6 +49,14 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
     output: response.content,
     usage: { input: response.inputTokens, output: response.outputTokens, unit: "TOKENS" },
     metadata: { costCents: response.costCents },
+  });
+
+  await trace.end({
+    output: response.content,
+    model: response.model,
+    costCents: response.costCents,
+    inputTokens: response.inputTokens,
+    outputTokens: response.outputTokens,
   });
 
   response.traceId = trace.id ?? null;
