@@ -63,6 +63,12 @@ function thisMonth(): string {
   return `${y}-${m}`;
 }
 
+function formatReferenceMonth(referenceMonth: string): string {
+  const [year, month] = referenceMonth.split("-");
+  if (!year || !month) return referenceMonth;
+  return `${month}/${year}`;
+}
+
 function sheetToText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -210,7 +216,7 @@ function FileModal({
         toast.error("Nenhum lançamento reconhecido. Verifique se o arquivo tem colunas de data, descrição e valor.");
         return;
       }
-      toast.success(`${result.entryCount} lançamentos importados.`);
+      toast.success(`${result.entryCount} lançamentos importados em ${formatReferenceMonth(result.referenceMonth)}.`);
       onImported(result.entryCount);
     } catch (e) {
       toast.error(errorMessage(e));

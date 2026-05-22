@@ -17,9 +17,68 @@ const DreLineSchema = z.array(
   }),
 );
 
+const MONTH_NAMES: Record<string, string> = {
+  janeiro: "01",
+  fevereiro: "02",
+  marco: "03",
+  mar: "03",
+  abril: "04",
+  maio: "05",
+  junho: "06",
+  julho: "07",
+  agosto: "08",
+  setembro: "09",
+  outubro: "10",
+  novembro: "11",
+  dezembro: "12",
+};
+
 function lastDayOfMonth(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   return new Date(Date.UTC(y!, m!, 0)).toISOString().slice(0, 10);
+}
+
+function toReferenceMonth(day: string, month: string, year: string): string | null {
+  const d = Number(day);
+  const m = Number(month);
+  const y = Number(year);
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+function normalizeTextForMonth(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+export function detectDreReferenceMonth(pdfText: string): string | null {
+  const normalized = normalizeTextForMonth(pdfText);
+
+  const periodMatch = normalized.match(
+    /periodo\s+de\s+competencia:\s*(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\s+a\s+(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/,
+  );
+  if (periodMatch) {
+    const start = toReferenceMonth(periodMatch[1]!, periodMatch[2]!, periodMatch[3]!);
+    const end = toReferenceMonth(periodMatch[4]!, periodMatch[5]!, periodMatch[6]!);
+    if (start && start === end) return start;
+  }
+
+  const numericMonthMatch = normalized.match(/\b(?:dre|competencia|periodo)[^\n]{0,40}\b(0?[1-9]|1[0-2])\/(\d{4})\b/);
+  if (numericMonthMatch) {
+    return `${numericMonthMatch[2]}-${numericMonthMatch[1]!.padStart(2, "0")}`;
+  }
+
+  const namedMonthMatch = normalized.match(
+    /\b(janeiro|fevereiro|marco|mar|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+(?:de\s+)?(\d{4})\b/,
+  );
+  if (namedMonthMatch) {
+    const month = MONTH_NAMES[namedMonthMatch[1]!];
+    if (month) return `${namedMonthMatch[2]}-${month}`;
+  }
+
+  return null;
 }
 
 function buildSystemPrompt(): string {
@@ -58,6 +117,15 @@ export async function parsePdfDre(
     return { entries: [], orphanCount: 0 };
   }
 
+  const detectedReferenceMonth = detectDreReferenceMonth(pdfText);
+  const effectiveReferenceMonth = detectedReferenceMonth ?? referenceMonth;
+  if (detectedReferenceMonth && detectedReferenceMonth !== referenceMonth) {
+    logger.info(
+      { tenantId, requestedReferenceMonth: referenceMonth, detectedReferenceMonth },
+      "parsePdfDre: competência do PDF difere do mês informado; usando mês detectado",
+    );
+  }
+
   let parsed: z.infer<typeof DreLineSchema>;
 
   try {
@@ -71,14 +139,17 @@ export async function parsePdfDre(
 
     // Remove markdown code fences que alguns modelos adicionam mesmo com jsonMode
     const cleaned = response.content.replace(/```(?:json)?\s*/gi, "").trim();
-    logger.info({ tenantId, referenceMonth, contentPreview: cleaned.slice(0, 200) }, "parsePdfDre: resposta LLM recebida");
+    logger.info(
+      { tenantId, referenceMonth: effectiveReferenceMonth, contentPreview: cleaned.slice(0, 200) },
+      "parsePdfDre: resposta LLM recebida",
+    );
     parsed = DreLineSchema.parse(JSON.parse(cleaned));
   } catch (err) {
-    logger.error({ err, tenantId, referenceMonth }, "parsePdfDre: erro na extração LLM");
+    logger.error({ err, tenantId, referenceMonth: effectiveReferenceMonth }, "parsePdfDre: erro na extração LLM");
     return { entries: [], orphanCount: 0 };
   }
 
-  const date = lastDayOfMonth(referenceMonth);
+  const date = lastDayOfMonth(effectiveReferenceMonth);
   const entries: RawLedger[] = [];
 
   for (const line of parsed) {
@@ -102,9 +173,9 @@ export async function parsePdfDre(
   }
 
   logger.info(
-    { tenantId, referenceMonth, entryCount: entries.length },
+    { tenantId, referenceMonth: effectiveReferenceMonth, entryCount: entries.length },
     "parsePdfDre: extração concluída",
   );
 
-  return { entries, orphanCount: 0 };
+  return { entries, orphanCount: 0, referenceMonth: effectiveReferenceMonth };
 }

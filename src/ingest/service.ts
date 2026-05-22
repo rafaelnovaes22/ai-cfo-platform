@@ -46,11 +46,15 @@ export async function ingest(params: {
   }
 
   const { entries, orphanCount } = parseResult;
-  logger.info({ source, referenceMonth, tenantId, entryCount: entries.length, orphanCount }, "Ingest parse concluído");
+  const effectiveReferenceMonth = parseResult.referenceMonth ?? referenceMonth;
+  logger.info(
+    { source, requestedReferenceMonth: referenceMonth, referenceMonth: effectiveReferenceMonth, tenantId, entryCount: entries.length, orphanCount },
+    "Ingest parse concluído",
+  );
 
   if (entries.length === 0) {
     await trace.update({ metadata: { outcome: "failed", reason: "no_entries", orphanCount } });
-    return buildResult("failed", tenantId, referenceMonth, 0, orphanCount);
+    return buildResult("failed", tenantId, effectiveReferenceMonth, 0, orphanCount);
   }
 
   // 2. Upsert MonthlyAnalysis + ler threshold por tenant (C8) na mesma transação
@@ -68,7 +72,7 @@ export async function ingest(params: {
       (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
 
     const existing = await tx.monthlyAnalysis.findUnique({
-      where: { tenantId_referenceMonth: { tenantId, referenceMonth } },
+      where: { tenantId_referenceMonth: { tenantId, referenceMonth: effectiveReferenceMonth } },
     });
 
     if (existing) {
@@ -84,7 +88,7 @@ export async function ingest(params: {
 
     const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
     const created = await tx.monthlyAnalysis.create({
-      data: { tenantId, referenceMonth, status: "pending", mode: subscription.mode },
+      data: { tenantId, referenceMonth: effectiveReferenceMonth, status: "pending", mode: subscription.mode },
     });
     return { analysis: created, minEntries: threshold };
   });
@@ -120,12 +124,20 @@ export async function ingest(params: {
   }
 
   await trace.update({
-    metadata: { outcome, analysisId: analysis.id, entryCount: entries.length, orphanCount, minEntries },
+    metadata: {
+      outcome,
+      analysisId: analysis.id,
+      requestedReferenceMonth: referenceMonth,
+      referenceMonth: effectiveReferenceMonth,
+      entryCount: entries.length,
+      orphanCount,
+      minEntries,
+    },
   });
 
   return {
     analysisId: analysis.id,
-    referenceMonth,
+    referenceMonth: effectiveReferenceMonth,
     entryCount: entries.length,
     orphanCount,
     outcome,

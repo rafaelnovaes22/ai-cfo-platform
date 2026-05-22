@@ -40,9 +40,10 @@ describe("ingest/parsers/pdf-dre — DRE consolidado", () => {
   it("converte DRE texto-selecionável em lançamentos sintéticos categorizados", async () => {
     const { parsePdfDre } = await import("@/ingest/parsers/pdf-dre.js");
 
-    const result = await parsePdfDre(Buffer.from("pdf"), "2026-03", "tenant-test");
+    const result = await parsePdfDre(Buffer.from("pdf"), "2026-05", "tenant-test");
 
     expect(result.entries).toHaveLength(2);
+    expect(result.referenceMonth).toBe("2026-03");
     expect(result.entries[0]).toMatchObject({
       date: "2026-03-31",
       description: "Servicos recorrentes MRR",
@@ -58,5 +59,13 @@ describe("ingest/parsers/pdf-dre — DRE consolidado", () => {
       direction: "debit",
       confirmedCategory: "despesas_comerciais",
     });
+  });
+
+  it("detecta competência por padrões comuns de DRE", async () => {
+    const { detectDreReferenceMonth } = await import("@/ingest/parsers/pdf-dre.js");
+
+    expect(detectDreReferenceMonth("DRE 03/2026 — Acme Marketing")).toBe("2026-03");
+    expect(detectDreReferenceMonth("Período de competência: 01/03/2026 a 31/03/2026")).toBe("2026-03");
+    expect(detectDreReferenceMonth("Relatório de março de 2026")).toBe("2026-03");
   });
 });
