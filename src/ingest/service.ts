@@ -17,6 +17,17 @@ export function shouldSkipClassification(entries: RawLedger[]): boolean {
   return entries.length > 0 && entries.every((entry) => entry.confirmedCategory != null);
 }
 
+export function filterEntriesByReferenceMonth(
+  entries: RawLedger[],
+  referenceMonth: string,
+): { entries: RawLedger[]; ignoredCount: number } {
+  const filtered = entries.filter((entry) => entry.date.startsWith(`${referenceMonth}-`));
+  return {
+    entries: filtered,
+    ignoredCount: entries.length - filtered.length,
+  };
+}
+
 export async function ingest(params: {
   tenantId: string;
   referenceMonth: string; // "YYYY-MM"
@@ -49,15 +60,34 @@ export async function ingest(params: {
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
-  const { entries, orphanCount } = parseResult;
   const effectiveReferenceMonth = parseResult.referenceMonth ?? referenceMonth;
+  const { entries, ignoredCount: outOfReferenceMonthCount } = filterEntriesByReferenceMonth(
+    parseResult.entries,
+    effectiveReferenceMonth,
+  );
+  const { orphanCount } = parseResult;
   logger.info(
-    { source, requestedReferenceMonth: referenceMonth, referenceMonth: effectiveReferenceMonth, tenantId, entryCount: entries.length, orphanCount },
+    {
+      source,
+      requestedReferenceMonth: referenceMonth,
+      referenceMonth: effectiveReferenceMonth,
+      tenantId,
+      entryCount: entries.length,
+      orphanCount,
+      outOfReferenceMonthCount,
+    },
     "Ingest parse concluído",
   );
 
   if (entries.length === 0) {
-    await trace.update({ metadata: { outcome: "failed", reason: "no_entries", orphanCount } });
+    await trace.update({
+      metadata: {
+        outcome: "failed",
+        reason: "no_entries",
+        orphanCount,
+        outOfReferenceMonthCount,
+      },
+    });
     return buildResult("failed", tenantId, effectiveReferenceMonth, 0, orphanCount);
   }
 
@@ -85,7 +115,19 @@ export async function ingest(params: {
       await tx.actionPlanItem.deleteMany({ where: { analysisId: existing.id } });
       await tx.monthlyAnalysis.update({
         where: { id: existing.id },
-        data: { status: "pending", generatedAt: null, deliveredAt: null, approvedAt: null },
+        data: {
+          status: "pending",
+          generatedAt: null,
+          deliveredAt: null,
+          approvedAt: null,
+          dreJson: null,
+          narrativeJson: null,
+          actionPlanJson: null,
+          clientEditedNarrative: null,
+          clientEditedActionPlan: null,
+          costCents: 0,
+          langfuseTraceId: null,
+        },
       });
       return { analysis: existing, minEntries: threshold };
     }
@@ -139,6 +181,7 @@ export async function ingest(params: {
       referenceMonth: effectiveReferenceMonth,
       entryCount: entries.length,
       orphanCount,
+      outOfReferenceMonthCount,
       minEntries,
     },
   });
