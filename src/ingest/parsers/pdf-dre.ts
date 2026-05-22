@@ -14,7 +14,7 @@ const DreLineSchema = z.array(
   z.object({
     category:    z.string(),
     description: z.string(),
-    value:       z.number().positive(),
+    value:       z.number(),
     direction:   z.enum(["credit", "debit"]),
   }),
 );
@@ -72,7 +72,10 @@ export async function parsePdfDre(
       jsonMode: true,
     });
 
-    parsed = DreLineSchema.parse(JSON.parse(response.content));
+    // Remove markdown code fences que alguns modelos adicionam mesmo com jsonMode
+    const cleaned = response.content.replace(/```(?:json)?\s*/gi, "").trim();
+    logger.info({ tenantId, referenceMonth, contentPreview: cleaned.slice(0, 200) }, "parsePdfDre: resposta LLM recebida");
+    parsed = DreLineSchema.parse(JSON.parse(cleaned));
   } catch (err) {
     logger.error({ err, tenantId, referenceMonth }, "parsePdfDre: erro na extração LLM");
     return { entries: [], orphanCount: 0 };
@@ -82,6 +85,9 @@ export async function parsePdfDre(
   const entries: RawLedger[] = [];
 
   for (const line of parsed) {
+    const absValue = Math.abs(line.value);
+    if (absValue === 0) continue; // ignora linhas de total/zerado
+
     const isValidCategory = DRE_CATEGORIES.includes(line.category as never);
     const category = isValidCategory
       ? line.category
@@ -90,7 +96,7 @@ export async function parsePdfDre(
     entries.push({
       date,
       description: line.description,
-      amountCents: Math.round(line.value * 100),
+      amountCents: Math.round(absValue * 100),
       direction: line.direction,
       confirmedCategory: category,
       correctionSource: "dre-import",

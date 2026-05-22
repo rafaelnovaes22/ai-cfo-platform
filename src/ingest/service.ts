@@ -139,9 +139,15 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
     case "csv":
       return parseExcel(params.buffer!);
     case "pdf": {
-      const result = await parsePdf(params.buffer!);
+      // parsePdf pode lançar exceção em PDFs sem texto extraível ou malformados.
+      // Nesse caso, tentamos parsePdfDre (LLM) como fallback.
+      let result: ParseResult = { entries: [], orphanCount: 0 };
+      try {
+        result = await parsePdf(params.buffer!);
+      } catch (err) {
+        logger.warn({ err: String(err), tenantId: params.tenantId }, "parsePdf lançou exceção — tentando parsePdfDre");
+      }
       if (result.entries.length > 0) return result;
-      // Sem lançamentos por linha — tenta interpretar como DRE consolidado do contador
       logger.info({ tenantId: params.tenantId }, "parsePdf sem entries — tentando parsePdfDre");
       return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
     }

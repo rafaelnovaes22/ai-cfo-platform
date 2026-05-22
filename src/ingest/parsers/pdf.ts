@@ -4,6 +4,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 import { normalizeDate, normalizeAmountCents, normalizeDirection } from "@/ingest/normalize.js";
+import { logger } from "@/observability/logger.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 // Regex para detectar linha com data + valor (padrão BR)
@@ -13,6 +14,7 @@ const AMOUNT_IN_LINE   = /([\d.,]+(?:[,.]\d{2})?)(?:\s*(C|D|CR|DB|crédito|débi
 export async function parsePdf(buffer: Buffer): Promise<ParseResult> {
   const data = await pdfParse(buffer);
   const lines = data.text.split(/\r?\n/).filter((l) => l.trim().length > 3);
+  logger.info({ totalLines: lines.length, textPreview: data.text.slice(0, 300) }, "parsePdf: texto extraído do PDF");
 
   const entries: RawLedger[] = [];
   let orphanCount = 0;
