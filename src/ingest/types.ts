@@ -3,6 +3,10 @@ export interface RawLedger {
   description: string;
   amountCents: number; // sempre positivo; direction indica sentido
   direction: "credit" | "debit";
+  // Preenchido pelo parsePdfDre — pula classificação LLM
+  confirmedCategory?: string;
+  correctionSource?: string;
+  classificationConfidence?: number;
 }
 
 export type IngestOutcome = "completed" | "partial" | "failed";

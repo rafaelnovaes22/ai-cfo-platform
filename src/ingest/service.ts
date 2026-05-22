@@ -3,6 +3,7 @@ import { enqueueClassification } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdf } from "@/ingest/parsers/pdf.js";
+import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { createTrace } from "@/observability/langfuse.js";
 import { logger } from "@/observability/logger.js";
@@ -98,6 +99,12 @@ export async function ingest(params: {
       description: e.description,
       amountCents: e.amountCents,
       direction: e.direction,
+      ...(e.confirmedCategory != null ? {
+        predictedCategory:        e.confirmedCategory,
+        confirmedCategory:        e.confirmedCategory,
+        correctionSource:         e.correctionSource ?? "dre-import",
+        classificationConfidence: e.classificationConfidence ?? 1.0,
+      } : {}),
     })),
   });
   persistSpan.end({ output: { analysisId: analysis.id, minEntries } });
@@ -131,8 +138,13 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
     case "excel":
     case "csv":
       return parseExcel(params.buffer!);
-    case "pdf":
-      return parsePdf(params.buffer!);
+    case "pdf": {
+      const result = await parsePdf(params.buffer!);
+      if (result.entries.length > 0) return result;
+      // Sem lançamentos por linha — tenta interpretar como DRE consolidado do contador
+      logger.info({ tenantId: params.tenantId }, "parsePdf sem entries — tentando parsePdfDre");
+      return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
+    }
     case "text":
       return parseText(params.text!);
     case "manual":

@@ -13,6 +13,7 @@ const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
   "dre-narrative":        { provider: "google", model: "gemini-2.5-flash" },
   "action-plan":          { provider: "google", model: "gemini-2.5-flash", thinkingBudget: 2048 },
   "eval-judge":           { provider: "openai", model: "gpt-4.1-mini" },
+  "dre-extraction":       { provider: "openai", model: "gpt-4.1-mini" },
 
   // Pipeline agentic/LangGraph — SLM first.
   "normalization":        { provider: "openai", model: "gpt-4.1-nano" },
@@ -34,6 +35,7 @@ const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
   "dre-narrative":        { provider: "anthropic", model: "claude-sonnet-4-6" },
   "action-plan":          { provider: "anthropic", model: "claude-sonnet-4-6" },
   "eval-judge":           { provider: "anthropic", model: "claude-sonnet-4-6" },
+  "dre-extraction":       { provider: "anthropic", model: "claude-haiku-4-5" },
 
   // Pipeline agentic/LangGraph.
   "normalization":        { provider: "openai", model: "gpt-4.1-mini" },
