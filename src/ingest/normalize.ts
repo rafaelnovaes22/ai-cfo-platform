@@ -54,7 +54,7 @@ export function normalizeAmountCents(raw: string | number): number | null {
   // Remove R$, espaços, aspas
   s = s.replace(/R\$\s*/gi, "").replace(/\s/g, "").replace(/"/g, "");
   // Parênteses → negativo (formato contábil)
-  const negative = s.startsWith("(") && s.endsWith(")");
+  const negative = (s.startsWith("(") && s.endsWith(")")) || s.startsWith("-");
   s = s.replace(/[()]/g, "");
 
   // Formato BR: 1.234,56 → 1234.56
@@ -108,7 +108,10 @@ export function detectColumns(headers: string[]): {
   creditIdx: number | null;
   debitIdx: number | null;
 } {
-  const find = (re: RegExp) => headers.findIndex((h) => re.test(h.trim()));
+  const normalizedHeaders = headers.map((h) =>
+    h.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim(),
+  );
+  const find = (re: RegExp) => normalizedHeaders.findIndex((h) => re.test(h));
   const creditIdx = find(COL_CREDIT);
   const debitIdx  = find(COL_DEBIT);
   // Quando ambas as colunas existem, são colunas de valor (não de direção)
