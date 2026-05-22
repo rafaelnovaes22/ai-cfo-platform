@@ -20,14 +20,20 @@ function setupCredentials(): void {
 
 function getClient(): GoogleGenAI {
   if (!_client) {
-    setupCredentials();
-
     const project = process.env.GOOGLE_CLOUD_PROJECT;
-    if (!project) throw new Error("GOOGLE_CLOUD_PROJECT não configurado");
+    const apiKey = process.env.GOOGLE_API_KEY;
 
-    const location = process.env.GOOGLE_CLOUD_LOCATION ?? "southamerica-east1";
-
-    _client = new GoogleGenAI({ vertexai: true, project, location });
+    if (project) {
+      // PROD: Vertex AI (southamerica-east1) — dados não saem do Brasil, sem treino.
+      setupCredentials();
+      const location = process.env.GOOGLE_CLOUD_LOCATION ?? "southamerica-east1";
+      _client = new GoogleGenAI({ vertexai: true, project, location });
+    } else if (apiKey) {
+      // DEV local: Google AI Studio via API key (só para testes/evals).
+      _client = new GoogleGenAI({ apiKey });
+    } else {
+      throw new Error("Configure GOOGLE_CLOUD_PROJECT (prod) ou GOOGLE_API_KEY (dev)");
+    }
   }
   return _client;
 }
