@@ -1,5 +1,5 @@
 import { getPrisma } from "@/persistence/prisma.js";
-import { enqueueClassification } from "@/queue/index.js";
+import { enqueueClassification, enqueueDreNarrative } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
@@ -12,6 +12,10 @@ import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 const DEFAULT_MIN_INGEST_ENTRIES = 10;
 
 export type IngestSource = "excel" | "csv" | "text" | "pdf" | "manual";
+
+export function shouldSkipClassification(entries: RawLedger[]): boolean {
+  return entries.length > 0 && entries.every((entry) => entry.confirmedCategory != null);
+}
 
 export async function ingest(params: {
   tenantId: string;
@@ -116,7 +120,11 @@ export async function ingest(params: {
   const outcome = entries.length >= minEntries ? "completed" : "partial";
 
   if (outcome === "completed") {
-    await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    if (shouldSkipClassification(entries)) {
+      await enqueueDreNarrative({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    } else {
+      await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    }
     await db.monthlyAnalysis.update({
       where: { id: analysis.id },
       data: { status: "generating" },
