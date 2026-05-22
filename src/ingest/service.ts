@@ -1,4 +1,5 @@
 import { getPrisma } from "@/persistence/prisma.js";
+import { Prisma } from "@prisma/client";
 import { enqueueClassification, enqueueDreNarrative } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
@@ -120,9 +121,9 @@ export async function ingest(params: {
           generatedAt: null,
           deliveredAt: null,
           approvedAt: null,
-          dreJson: null,
-          narrativeJson: null,
-          actionPlanJson: null,
+          dreJson: Prisma.DbNull,
+          narrativeJson: Prisma.DbNull,
+          actionPlanJson: Prisma.DbNull,
           clientEditedNarrative: null,
           clientEditedActionPlan: null,
           costCents: 0,

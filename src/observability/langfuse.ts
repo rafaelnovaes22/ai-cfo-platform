@@ -50,7 +50,23 @@ export function createTrace(opts: TraceOptions) {
       end: (endOpts: ChildOpts) => {
         const outputs =
           endOpts.output != null ? { output: endOpts.output } : (endOpts as Record<string, unknown>);
-        void child.end(outputs).then(() => child.patchRun());
+
+        // LangSmith exige usage em extra.usage com as chaves prompt_tokens/completion_tokens
+        // para exibir tokens e custo no painel.
+        const usage = endOpts.usage as { input?: number; output?: number } | undefined;
+        const extra: Record<string, unknown> = {};
+        if (usage?.input != null || usage?.output != null) {
+          const promptTokens = usage.input ?? 0;
+          const completionTokens = usage.output ?? 0;
+          extra["usage"] = {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: promptTokens + completionTokens,
+          };
+        }
+        if (endOpts.metadata != null) extra["metadata"] = endOpts.metadata;
+
+        void child.end({ ...outputs, extra }).then(() => child.patchRun());
       },
     };
   }
