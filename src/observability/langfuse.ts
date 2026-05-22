@@ -57,17 +57,22 @@ export function createTrace(opts: TraceOptions) {
         await child.end(outputs);
 
         if (usage?.input != null || usage?.output != null) {
-          const promptTokens = usage.input ?? 0;
-          const completionTokens = usage.output ?? 0;
+          const inputTokens = usage.input ?? 0;
+          const outputTokens = usage.output ?? 0;
+          // LangSmith lê tokens de extra.metadata.usage_metadata (input_tokens/output_tokens)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const existingExtra = ((child as any).extra as Record<string, unknown>) ?? {};
+          const existing = (child as any).extra as Record<string, unknown> ?? {};
+          const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (child as any).extra = {
-            ...existingExtra,
-            usage: {
-              prompt_tokens: promptTokens,
-              completion_tokens: completionTokens,
-              total_tokens: promptTokens + completionTokens,
+            ...existing,
+            metadata: {
+              ...existingMeta,
+              usage_metadata: {
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                total_tokens: inputTokens + outputTokens,
+              },
             },
           };
         }
