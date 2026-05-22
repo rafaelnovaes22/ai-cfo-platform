@@ -53,23 +53,28 @@ export function createTrace(opts: TraceOptions) {
         const outputs =
           endOpts.output != null ? { output: endOpts.output } : (endOpts as Record<string, unknown>);
 
-        // LangSmith lê tokens de extra.usage com prompt_tokens/completion_tokens.
-        // Precisa estar no objeto RunTree ANTES de end() ser chamado.
         const usage = endOpts.usage as { input?: number; output?: number } | undefined;
-        if (usage?.input != null || usage?.output != null) {
-          const promptTokens = usage.input ?? 0;
-          const completionTokens = usage.output ?? 0;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (child as any).extra = {
-            usage: {
-              prompt_tokens: promptTokens,
-              completion_tokens: completionTokens,
-              total_tokens: promptTokens + completionTokens,
-            },
-          };
-        }
 
-        void child.end(outputs).then(() => child.patchRun());
+        // extra.usage deve ser setado APÓS child.end() (que pode sobrescrever extra)
+        // e ANTES de patchRun() para que o PATCH inclua os tokens.
+        void child.end(outputs).then(() => {
+          if (usage?.input != null || usage?.output != null) {
+            const promptTokens = usage.input ?? 0;
+            const completionTokens = usage.output ?? 0;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const existingExtra = ((child as any).extra as Record<string, unknown>) ?? {};
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (child as any).extra = {
+              ...existingExtra,
+              usage: {
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                total_tokens: promptTokens + completionTokens,
+              },
+            };
+          }
+          return child.patchRun();
+        });
       },
     };
   }
