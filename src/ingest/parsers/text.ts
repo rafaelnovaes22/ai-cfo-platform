@@ -1,6 +1,5 @@
 // Parser para texto colado (clipboard) — TSV ou CSV simples
 import { normalizeDate, normalizeAmountCents, normalizeDirection, detectColumns } from "@/ingest/normalize.js";
-import { logger } from "@/observability/logger.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 function splitRow(line: string): string[] {
@@ -27,23 +26,16 @@ export function parseText(raw: string): ParseResult {
   }
 
   const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = cols;
-  logger.info({ headerLineIdx, headers: splitRow(lines[headerLineIdx] ?? ""), dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx }, "parseText detectColumns");
 
   const dataLines = lines.slice(headerLineIdx + 1);
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
-  let debugCount = 0;
   for (const line of dataLines) {
     const cells = splitRow(line);
 
     const rawDate = dateIdx >= 0 ? (cells[dateIdx] ?? "") : (cells[0] ?? "");
     const rawDesc = descIdx >= 0 ? (cells[descIdx] ?? "") : (cells[1] ?? "");
-
-    if (debugCount < 3) {
-      logger.info({ cells, rawDate, rawDesc, creditCell: creditIdx !== null ? cells[creditIdx] : null, debitCell: debitIdx !== null ? cells[debitIdx] : null }, "parseText row sample");
-      debugCount++;
-    }
 
     if (!rawDate.trim() && !rawDesc.trim()) continue;
 

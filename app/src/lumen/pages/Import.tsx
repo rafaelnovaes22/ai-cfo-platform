@@ -98,7 +98,7 @@ function PasteModal({
   onImported,
 }: {
   onClose: () => void;
-  onImported: () => void;
+  onImported: (entryCount: number) => void;
 }) {
   const [text, setText] = useState("");
   const [referenceMonth, setReferenceMonth] = useState(thisMonth());
@@ -116,7 +116,7 @@ function PasteModal({
       toast.success(
         `${result.entryCount} lançamentos importados (${result.outcome}).`
       );
-      onImported();
+      onImported(result.entryCount);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -180,7 +180,7 @@ function FileModal({
   kind,
 }: {
   onClose: () => void;
-  onImported: () => void;
+  onImported: (entryCount: number) => void;
   format: string;
   title: string;
   accept: string;
@@ -211,7 +211,7 @@ function FileModal({
         return;
       }
       toast.success(`${result.entryCount} lançamentos importados.`);
-      onImported();
+      onImported(result.entryCount);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -292,7 +292,7 @@ function ManualEntry({
   onSaved,
 }: {
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (entryCount: number) => void;
 }) {
   const [referenceMonth, setReferenceMonth] = useState(thisMonth());
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -329,7 +329,7 @@ function ManualEntry({
         ],
       });
       toast.success(`Lançamento importado (${result.outcome}).`);
-      onSaved();
+      onSaved(result.entryCount ?? 1);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -500,9 +500,9 @@ export default function Import() {
   const initial = params.get("method") as Method;
   const [open, setOpen] = useState<Method>(initial);
 
-  const handleImported = () => {
+  const handleImported = (entryCount: number) => {
     setOpen(null);
-    navigate("/");
+    navigate("/", { state: { entryCount } });
   };
 
   return (

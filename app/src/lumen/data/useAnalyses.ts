@@ -31,6 +31,10 @@ export interface Analysis {
 
 const STORAGE_KEY = "lumen.activeAnalysisId";
 
+const TERMINAL_STATUSES = new Set([
+  "pending", "completed", "ready", "delivered", "approved", "failed",
+]);
+
 interface Ctx {
   analyses: Analysis[];
   loading: boolean;
@@ -88,6 +92,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       setActiveId(null);
     }
   }, [analyses, activeId, setActiveId]);
+
+  const needsPolling = user != null && analyses.some((a) => !TERMINAL_STATUSES.has(a.status));
+  useEffect(() => {
+    if (!needsPolling) return;
+    const id = setInterval(refresh, 4000);
+    return () => clearInterval(id);
+  }, [needsPolling, refresh]);
 
   const activeAnalysis = useMemo(
     () => analyses.find((a) => a.id === activeId) ?? null,
