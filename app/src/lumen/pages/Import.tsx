@@ -69,20 +69,29 @@ function formatReferenceMonth(referenceMonth: string): string {
   return `${month}/${year}`;
 }
 
-function sheetToText(file: File): Promise<string> {
+function inferReferenceMonthFromSheet(file: File): Promise<string | null> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: "array", cellDates: true });
-        const parts: string[] = [];
+        const counts = new Map<string, number>();
+
         wb.SheetNames.forEach((name) => {
           const ws = wb.Sheets[name];
-          const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false, FS: ";" });
-          parts.push(`--- Aba: ${name} ---\n${csv}`);
+          const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+
+          for (const row of rows.slice(0, 2_000)) {
+            for (const cell of row) {
+              const month = monthFromCell(cell);
+              if (month) counts.set(month, (counts.get(month) ?? 0) + 1);
+            }
+          }
         });
-        resolve(parts.join("\n\n"));
+
+        const [month] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+        resolve(month ?? null);
       } catch (err) {
         reject(err);
       }
@@ -90,6 +99,21 @@ function sheetToText(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsArrayBuffer(file);
   });
+}
+
+function monthFromCell(cell: unknown): string | null {
+  if (cell instanceof Date && !Number.isNaN(cell.getTime())) {
+    return cell.toISOString().slice(0, 7);
+  }
+
+  const value = String(cell ?? "").trim();
+  const iso = value.match(/^(\d{4})-(\d{2})-\d{2}/);
+  if (iso?.[1] && iso[2]) return `${iso[1]}-${iso[2]}`;
+
+  const br = value.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (br?.[2] && br[3]) return `${br[3]}-${br[2].padStart(2, "0")}`;
+
+  return null;
 }
 
 function errorMessage(e: unknown): string {
@@ -205,13 +229,7 @@ function FileModal({
     }
     setSubmitting(true);
     try {
-      let result;
-      if (kind === "pdf") {
-        result = await api.ingest.upload(file, referenceMonth);
-      } else {
-        const text = await sheetToText(file);
-        result = await api.ingest.clipboard({ referenceMonth, text });
-      }
+      const result = await api.ingest.upload(file, referenceMonth);
       if (!result || result.outcome === "failed" || result.entryCount === 0) {
         toast.error("Nenhum lançamento reconhecido. Verifique se o arquivo tem colunas de data, descrição e valor.");
         return;
@@ -222,6 +240,18 @@ function FileModal({
       toast.error(errorMessage(e));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleFileChange(selected: File | null) {
+    setFile(selected);
+    if (!selected || kind !== "xls") return;
+
+    try {
+      const inferredMonth = await inferReferenceMonthFromSheet(selected);
+      if (inferredMonth) setReferenceMonth(inferredMonth);
+    } catch {
+      // Mantem o mes selecionado manualmente se a planilha nao puder ser inspecionada no navegador.
     }
   }
 
@@ -260,7 +290,7 @@ function FileModal({
         type="file"
         accept={accept}
         className="hidden"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => void handleFileChange(e.target.files?.[0] ?? null)}
       />
       <div className="flex justify-end gap-2 mt-5">
         <div className="mr-auto">

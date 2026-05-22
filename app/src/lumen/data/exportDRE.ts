@@ -20,7 +20,7 @@ function flatten(lines: DRELine[], depth = 0): Array<{ depth: number; line: DREL
 
 function safeSheetName(name: string): string {
   // Excel: max 31 chars, sem : \ / ? * [ ]
-  return name.replace(/[\\/:*?\[\]]/g, " ").slice(0, 31);
+  return name.replace(/[\\/:*?[\]]/g, " ").slice(0, 31);
 }
 
 function sanitizeFileName(name: string): string {

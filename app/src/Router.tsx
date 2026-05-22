@@ -21,7 +21,7 @@ import Credit from "./lumen/pages/Credit.tsx";
 const queryClient = new QueryClient();
 
 const Router = () => {
-  let location = useLocation();
+  const location = useLocation();
 
   useEffect(() => {
     console.log("Route changed:", location.pathname);
