@@ -38,14 +38,14 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
     try {
       response = await dispatch(fallback, req);
     } catch (fallbackErr) {
-      generation.end({ output: null, level: "ERROR" });
+      await generation.end({ output: null, level: "ERROR" });
       await trace.update({ metadata: { status: "ERROR" } });
       await trace.end({ error: String(fallbackErr) });
       throw fallbackErr;
     }
   }
 
-  generation.end({
+  await generation.end({
     output: response.content,
     usage: { input: response.inputTokens, output: response.outputTokens, unit: "TOKENS" },
     metadata: { costCents: response.costCents },

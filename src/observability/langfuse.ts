@@ -1,8 +1,7 @@
 import { randomUUID } from "crypto";
 import { RunTree } from "langsmith";
 
-// No-op child returned when LangSmith is not configured
-const noopChild = { end: (_opts?: unknown) => {} };
+const noopChild = { end: async (_opts?: unknown): Promise<void> => {} };
 
 function makeNoopTrace(id: string) {
   return {
@@ -49,32 +48,31 @@ export function createTrace(opts: TraceOptions) {
     void child.postRun();
 
     return {
-      end: (endOpts: ChildOpts) => {
+      end: async (endOpts: ChildOpts): Promise<void> => {
         const outputs =
           endOpts.output != null ? { output: endOpts.output } : (endOpts as Record<string, unknown>);
 
         const usage = endOpts.usage as { input?: number; output?: number } | undefined;
 
-        // extra.usage deve ser setado APÓS child.end() (que pode sobrescrever extra)
-        // e ANTES de patchRun() para que o PATCH inclua os tokens.
-        void child.end(outputs).then(() => {
-          if (usage?.input != null || usage?.output != null) {
-            const promptTokens = usage.input ?? 0;
-            const completionTokens = usage.output ?? 0;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const existingExtra = ((child as any).extra as Record<string, unknown>) ?? {};
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (child as any).extra = {
-              ...existingExtra,
-              usage: {
-                prompt_tokens: promptTokens,
-                completion_tokens: completionTokens,
-                total_tokens: promptTokens + completionTokens,
-              },
-            };
-          }
-          return child.patchRun();
-        });
+        await child.end(outputs);
+
+        if (usage?.input != null || usage?.output != null) {
+          const promptTokens = usage.input ?? 0;
+          const completionTokens = usage.output ?? 0;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existingExtra = ((child as any).extra as Record<string, unknown>) ?? {};
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (child as any).extra = {
+            ...existingExtra,
+            usage: {
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              total_tokens: promptTokens + completionTokens,
+            },
+          };
+        }
+
+        await child.patchRun();
       },
     };
   }
@@ -87,7 +85,6 @@ export function createTrace(opts: TraceOptions) {
       run.metadata = { ...(run.metadata as Record<string, unknown>), ...(updateOpts.metadata ?? {}) };
       await run.patchRun();
     },
-    // Fecha o trace pai — sem isso a trace fica "spinning" para sempre no LangSmith
     end: async (outputs?: Record<string, unknown>) => {
       await run.end(outputs ?? {});
       await run.patchRun();
