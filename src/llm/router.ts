@@ -27,15 +27,15 @@ const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
   "financial-qa-review":  { provider: "google", model: "gemini-2.5-flash" },
 };
 
-// Fallback quando provider primário falha.
+// Fallback quando provider primário falha — tudo em Vertex AI (LGPD).
 const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
   // Pipeline legado.
   "classification":       { provider: "google", model: "gemini-2.5-flash" },
   "classification-judge": { provider: "google", model: "gemini-2.5-flash" },
-  "dre-narrative":        { provider: "anthropic", model: "claude-sonnet-4-6" },
-  "action-plan":          { provider: "anthropic", model: "claude-sonnet-4-6" },
-  "eval-judge":           { provider: "anthropic", model: "claude-sonnet-4-6" },
-  "dre-extraction":       { provider: "anthropic", model: "claude-haiku-4-5" },
+  "dre-narrative":        { provider: "google", model: "gemini-2.5-flash" },
+  "action-plan":          { provider: "google", model: "gemini-2.5-flash", thinkingBudget: 2048 },
+  "eval-judge":           { provider: "google", model: "gemini-2.5-flash" },
+  "dre-extraction":       { provider: "google", model: "gemini-2.5-flash" },
 
   // Pipeline agentic/LangGraph.
   "normalization":        { provider: "google", model: "gemini-2.5-flash" },
@@ -44,9 +44,9 @@ const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
   "anomaly-detection":    { provider: "google", model: "gemini-2.5-flash" },
   "margin-diagnosis":     { provider: "google", model: "gemini-2.5-flash" },
   "cashflow-risk":        { provider: "google", model: "gemini-2.5-flash" },
-  "narrative-synthesis":  { provider: "anthropic", model: "claude-sonnet-4-6" },
-  "action-planning":      { provider: "anthropic", model: "claude-sonnet-4-6" },
-  "financial-qa-review":  { provider: "anthropic", model: "claude-sonnet-4-6" },
+  "narrative-synthesis":  { provider: "google", model: "gemini-2.5-flash" },
+  "action-planning":      { provider: "google", model: "gemini-2.5-flash", thinkingBudget: 2048 },
+  "financial-qa-review":  { provider: "google", model: "gemini-2.5-flash" },
 };
 
 export function resolveRoute(task: LlmTask, useFallback = false): RouteConfig {
