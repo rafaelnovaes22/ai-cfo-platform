@@ -5,14 +5,15 @@ import type { LlmTask, RouteConfig } from "@/llm/types.js";
 //
 // Todos os providers são Google (Vertex AI southamerica-east1) para conformidade LGPD:
 // dados não saem do Brasil e não são usados para treino de modelos externos.
-// `eval-judge` usa Anthropic por independência de provider (C4 — avaliador ≠ gerador).
+// `eval-judge` usa gemini-2.5-flash (modelo maior) para independência de modelo em relação
+// aos geradores (gemini-2.5-flash-lite) — independência de modelo satisfaz C4 sem DPA Anthropic.
 const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
   // Pipeline legado — compatibilidade.
   "classification":       { provider: "google", model: "gemini-2.5-flash-lite" },
   "classification-judge": { provider: "google", model: "gemini-2.5-flash-lite" },
   "dre-narrative":        { provider: "google", model: "gemini-2.5-flash" },
   "action-plan":          { provider: "google", model: "gemini-2.5-flash", thinkingBudget: 2048 },
-  "eval-judge":           { provider: "anthropic", model: "claude-haiku-4-5" },
+  "eval-judge":           { provider: "google", model: "gemini-2.5-flash" },
   "dre-extraction":       { provider: "google", model: "gemini-2.5-flash" },
 
   // Pipeline agentic/LangGraph — SLM first.
