@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { shouldSkipClassification } from "@/ingest/service.js";
+import { filterEntriesByReferenceMonth, shouldSkipClassification } from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
 
 vi.mock("@/persistence/prisma.js", () => ({ getPrisma: vi.fn() }));
@@ -41,5 +41,16 @@ describe("ingest/service pipeline routing", () => {
 
   it("mantem classificacao para listas vazias", () => {
     expect(shouldSkipClassification([])).toBe(false);
+  });
+
+  it("mantem apenas lancamentos da competencia selecionada", () => {
+    const result = filterEntriesByReferenceMonth([
+      entry({ date: "2026-03-02", description: "Marco 1" }),
+      entry({ date: "2026-04-10", description: "Abril" }),
+      entry({ date: "2026-03-31", description: "Marco 2" }),
+    ], "2026-03");
+
+    expect(result.ignoredCount).toBe(1);
+    expect(result.entries.map((e) => e.description)).toEqual(["Marco 1", "Marco 2"]);
   });
 });
