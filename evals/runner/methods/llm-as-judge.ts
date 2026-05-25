@@ -27,7 +27,7 @@ import {
   buildActionPlanSystemPrompt,
   buildActionPlanUserPrompt,
 } from "@/action-plan/prompts.js";
-import { PlanResponseSchema } from "@/action-plan/generator.js";
+import { parsePlanResponse } from "@/action-plan/generator.js";
 import { normalizeActionPlanActions } from "@/action-plan/postprocess.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { normalizeNarrativeCards } from "@/dre-narrative/postprocess.js";
@@ -255,7 +255,7 @@ async function executeActionPlanGenerated(
   }
 
   try {
-    const parsedPlan = PlanResponseSchema.parse(planJson);
+    const parsedPlan = parsePlanResponse(planJson);
     planJson = {
       actions: normalizeActionPlanActions(
         parsedPlan.actions,
@@ -270,7 +270,7 @@ async function executeActionPlanGenerated(
       false,
       `generator_invalid_shape: ${(err as Error).message.slice(0, 300)}`,
       generator.content.slice(0, 200),
-      "PlanResponseSchema",
+      "parsePlanResponse",
       generator.inputTokens,
       generator.outputTokens,
       generator.costCents,
@@ -495,20 +495,8 @@ function parseActionPlanCase(file: CaseFile): ParsedActionPlanCase {
   let dre = expandFromReferencedCase(inputBlock, file.filePath);
   dre = mergeInlineDre(dre, inputBlock);
   dre = mergeLooseActionPlanDre(dre, inputBlock);
-  if (dre.receitaBruta === 0 && /DRE:\s*v[aá]lido|saud[áa]vel/i.test(inputBlock)) {
-    dre = {
-      ...dre,
-      receitaBruta: 100_000_00,
-      receitaLiquida: 95_000_00,
-      custosDiretos: 50_000_00,
-      lucroBruto: 45_000_00,
-      margemBruta: 47.37,
-      ebitda: 22_000_00,
-      ebit: 22_000_00,
-      despesasFinanceiras: 2_000_00,
-      lucroLiquido: 14_250_00,
-      margemLiquida: 15,
-    };
+  if (dre.receitaBruta === 0 && /(DRE:\s*v\S*lido|saud\S*vel|igual ao action-plan-0001|id\S*ntic\S* ao action-plan-0001)/i.test(inputBlock)) {
+    dre = defaultHealthyActionPlanDre(dre);
   }
 
   const segment = matchKv(inputBlock, "industrySegment") ?? "geral";
@@ -643,6 +631,22 @@ function expandFromReferencedCase(inputBlock: string, currentFilePath: string): 
   return dre;
 }
 
+function defaultHealthyActionPlanDre(base: DreLines): DreLines {
+  return {
+    ...base,
+    receitaBruta: 100_000_00,
+    receitaLiquida: 95_000_00,
+    custosDiretos: 50_000_00,
+    lucroBruto: 45_000_00,
+    margemBruta: 47.37,
+    ebitda: 22_000_00,
+    ebit: 22_000_00,
+    despesasFinanceiras: 2_000_00,
+    lucroLiquido: 14_250_00,
+    margemLiquida: 15,
+  };
+}
+
 function emptyDreLines(): DreLines {
   return {
     receitaBruta: 0, deducoes: 0, receitaLiquida: 0,
@@ -702,16 +706,16 @@ function mergeInlineDre(base: DreLines, block: string): DreLines {
 function mergeLooseActionPlanDre(base: DreLines, block: string): DreLines {
   const out = { ...base };
   const aliases: Array<[RegExp, keyof DreLines, "money" | "pct"]> = [
-    [/\breceitaBruta\s+(-?R\$\s*[\d.,]+k?)/i, "receitaBruta", "money"],
-    [/\breceitaLiquida\s+(-?R\$\s*[\d.,]+k?)/i, "receitaLiquida", "money"],
-    [/\bcmv\s+(-?R\$\s*[\d.,]+k?)/i, "custosDiretos", "money"],
-    [/\bcustosDiretos\s+(-?R\$\s*[\d.,]+k?)/i, "custosDiretos", "money"],
-    [/\bebitda\s+(-?R\$\s*[\d.,]+k?)/i, "ebitda", "money"],
-    [/\blucroLiquido\s+(-?R\$\s*[\d.,]+k?)/i, "lucroLiquido", "money"],
-    [/\bdespesasPessoal\s+(-?R\$\s*[\d.,]+k?)/i, "despesasPessoal", "money"],
-    [/\bdespesasAdministrativas\s+(-?R\$\s*[\d.,]+k?)/i, "despesasAdm", "money"],
-    [/\bdespesasComerciais\s+(-?R\$\s*[\d.,]+k?)/i, "despesasComerciais", "money"],
-    [/\bnaoClassificado\s+(-?R\$\s*[\d.,]+k?)/i, "naoClassificado", "money"],
+    [/\breceitaBruta\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "receitaBruta", "money"],
+    [/\breceitaLiquida\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "receitaLiquida", "money"],
+    [/\bcmv\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "custosDiretos", "money"],
+    [/\bcustosDiretos\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "custosDiretos", "money"],
+    [/\bebitda\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "ebitda", "money"],
+    [/\blucroLiquido\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "lucroLiquido", "money"],
+    [/\bdespesasPessoal\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "despesasPessoal", "money"],
+    [/\bdespesasAdministrativas\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "despesasAdm", "money"],
+    [/\bdespesasComerciais\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "despesasComerciais", "money"],
+    [/\bnaoClassificado\s+(-?R\$\s*[\d.,]+[kKmM]?)/i, "naoClassificado", "money"],
     [/\bmargemLiquida\s+(-?\d+(?:[,.]\d+)?%?)/i, "margemLiquida", "pct"],
   ];
   for (const [regex, key, kind] of aliases) {
@@ -748,12 +752,13 @@ function parsePctOrNumber(raw: string): number | null {
 }
 
 function parseLooseMoneyToCents(raw: string): number | null {
-  const match = raw.match(/(-?)R\$\s*([\d.,]+)\s*(k)?/i);
+  const match = raw.match(/(-?)R\$\s*([\d.,]+)\s*([km])?/i);
   if (!match?.[2]) return null;
   const normalized = match[2].replace(/\./g, "").replace(",", ".");
   const value = parseFloat(normalized);
   if (isNaN(value)) return null;
-  return Math.round(value * (match[3] ? 1000 : 1) * 100) * (match[1] === "-" ? -1 : 1);
+  const multiplier = match[3]?.toLowerCase() === "m" ? 1_000_000 : match[3]?.toLowerCase() === "k" ? 1_000 : 1;
+  return Math.round(value * multiplier * 100) * (match[1] === "-" ? -1 : 1);
 }
 
 function parseBrlToCents(raw: string): number {
@@ -823,6 +828,11 @@ interface JudgePromptArgs {
 function buildJudgePrompt(args: JudgePromptArgs): string {
   return `DIMENSÕES A AVALIAR (escala ${args.scale}):
 ${args.dimensions.map((d) => `- ${d}`).join("\n")}
+
+CONTRATO DE UNIDADES PARA ACTION-PLAN:
+- Se o OUTPUT tiver actions[].impactCents, esse campo esta em CENTAVOS.
+- Exemplos: impactCents=400000 => R$ 4.000; impactCents=250000 => R$ 2.500; impactCents=50000000 => R$ 500.000.
+- Ao avaliar impacto_plausivel, sempre converta impactCents para reais antes de comparar com receitaBruta.
 
 RUBRICA (do case):
 ${args.rubric}
