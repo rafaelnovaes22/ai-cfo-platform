@@ -20,6 +20,7 @@ receitaBruta: 10000000
 receitaLiquida: 10000000
 cmv: 3000000
 lucroBruto: 7000000
+margemBruta: 70
 despesasPessoal: 3000000
 prolabore: 1000000
 despesasAdministrativas: 800000

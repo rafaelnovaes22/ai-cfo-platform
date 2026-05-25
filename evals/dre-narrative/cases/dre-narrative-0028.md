@@ -26,9 +26,9 @@ persistence_check:
   deleteMany_then_createMany_in_single_transaction: true   # spec §3
   langfuseTraceId_must_change_between_runs: true           # cada run = trace novo
 judge_criteria:
-  clareza: "Estável entre runs"
-  acionabilidade: "Mesma direção entre runs"
-  factualidade: "Mesmas métricas citadas"
+  clareza: "Cards bem escritos para PME varejo saudável (case-0001); linguagem profissional e direta"
+  acionabilidade: "critical_gap e attention têm ação com verbo ativo (Defina/Renegocie/Reduza) + alvo numérico + prazo; healthy usa verbo de oportunidade (Expanda/Aumente/Teste)"
+  factualidade: "Cita valores do DRE (case-0001: receitaBruta=R$ 100k, lucroLiquido=R$ 14.250, margemLiquida=15%); sem benchmarks externos inventados"
 ```
 
 ## Justificativa

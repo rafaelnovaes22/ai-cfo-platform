@@ -10,7 +10,7 @@ created_at: "2026-05-12"
 # Case dre-narrative-0026 — Margem borderline 4,99% (deve disparar critical_gap)
 
 ## Input
-- DRE: margemLiquida=0.0499 (4,99% — abaixo do threshold §7); receitaLiquida=R$ 100.000,00; lucroLiquido=R$ 4.990,00 (vide dre-narrative-0011)
+- DRE: margemLiquida=4,99%; receitaLiquida=R$ 100.000,00; lucroLiquido=R$ 4.990,00 (vide dre-narrative-0011)
 - Tenant: industrySegment=servicos, taxRegime=simples, toneOfVoice=formal
 - referenceMonth: "2026-04"
 
@@ -22,9 +22,9 @@ critical_gap_card:
   must_treat_as_critical: true              # 4,99% < 5%
   must_NOT_round_up_to_5: true              # narrar NUNCA pode arredondar para mascarar
 judge_criteria:
-  clareza: "Mostra margem real (4,99%) com formato BR"
-  acionabilidade: "Aponta '0,01 ponto abaixo do limite'; sugere alavanca"
-  factualidade: "Margem exata, não arredondada para 5,0%"
+  clareza: "Mostra margem real de 4,99% sem arredondar para 5%; evidencia que está abaixo do limite"
+  acionabilidade: "Sugere ação concreta para melhorar margem (Renegocie/Corte/Reduza) com alvo numérico e prazo"
+  factualidade: "Margem citada como 4,99% (exata); lucroLiquido=R$ 4.990 correto"
 forbidden_actions: ["arredondar para cima na narrativa"]
 required_metrics_in_evidence: ["margemLiquida"]
 ```

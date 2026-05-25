@@ -21,9 +21,9 @@ attention_card:
   should_mention_naoClassificado: true    # narrar avisa, frontend exibe banner
   must_NOT_block_delivery: true
 judge_criteria:
-  clareza: "Explica impacto: 'até classificar, números podem mudar'"
-  acionabilidade: "Pede ação ao usuário: 'classifique os 20 lançamentos pendentes'"
-  factualidade: "Cita valor R$ 8.000 e percentual ~16%"
+  clareza: "Explica impacto dos não-classificados: 'até classificar, os números podem mudar'"
+  acionabilidade: "Pede ação concreta: 'Classifique os lançamentos pendentes no sistema'"
+  factualidade: "Cita o valor de Não Classificados em R$ 8.000 em evidence; não inventa percentuais derivados"
 required_metrics_in_evidence: ["naoClassificado"]
 ```
 

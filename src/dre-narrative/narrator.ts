@@ -3,6 +3,7 @@ import { getPrisma } from "@/persistence/prisma.js";
 import { callLlm } from "@/llm/index.js";
 import { aggregateDre } from "@/dre-narrative/aggregator.js";
 import { buildNarrativeSystemPrompt, buildNarrativeUserPrompt } from "@/dre-narrative/prompts.js";
+import { normalizeNarrativeCards } from "@/dre-narrative/postprocess.js";
 import { enqueueActionPlan } from "@/queue/index.js";
 import { logger } from "@/observability/logger.js";
 
@@ -60,6 +61,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
   });
 
   const parsed = NarrativeResponseSchema.parse(JSON.parse(llmResponse.content));
+  const cards = normalizeNarrativeCards(parsed.cards, dre, tenant.industrySegment, toneOfVoice);
 
   // 3. Persistir NarrativeCards + atualizar MonthlyAnalysis
   await db.$transaction(async (tx) => {
@@ -67,7 +69,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
     await tx.narrativeCard.deleteMany({ where: { analysisId } });
 
     await tx.narrativeCard.createMany({
-      data: parsed.cards.map((card) => ({
+      data: cards.map((card) => ({
         analysisId,
         cardType: card.type,
         title: card.title,
@@ -82,7 +84,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
         // DreLines/parsed.cards são serializáveis em JSON; Prisma exige InputJsonValue.
         // Cast explícito porque DreLines não declara index signature (mas é puro number/string).
         dreJson:       dre as unknown as object,
-        narrativeJson: parsed.cards as unknown as object,
+        narrativeJson: cards as unknown as object,
         costCents:     (analysis.costCents ?? 0) + llmResponse.costCents,
         langfuseTraceId: llmResponse.traceId,
       },
@@ -90,7 +92,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
   });
 
   logger.info(
-    { analysisId, costCents: llmResponse.costCents, cards: parsed.cards.map((c) => c.type) },
+    { analysisId, costCents: llmResponse.costCents, cards: cards.map((c) => c.type) },
     "Narrativa DRE gerada",
   );
 

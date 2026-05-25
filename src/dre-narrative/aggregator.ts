@@ -125,6 +125,11 @@ export function formatDreForPrompt(dre: DreLines, referenceMonth: string): strin
 
   const pctFmt = (f: number) => f.toFixed(2);
 
+  // Quando não há receita, margens são indefinidas — não exibir para evitar
+  // que o modelo as cite como 0% (valores sem significado econômico).
+  const hasRevenue = dre.receitaLiquida !== 0;
+  const margem = (pct: number) => hasRevenue ? ` (margem ${pctFmt(pct)}%)` : "";
+
   return `DRE FACILITADO — ${referenceMonth}
 
 RECEITAS
@@ -134,7 +139,7 @@ RECEITAS
 
 CUSTOS
   (-) Custos Diretos:     ${brl(dre.custosDiretos)}
-  = Lucro Bruto:          ${brl(dre.lucroBruto)} (margem ${pctFmt(dre.margemBruta)}%)
+  = Lucro Bruto:          ${brl(dre.lucroBruto)}${margem(dre.margemBruta)}
 
 DESPESAS OPERACIONAIS
   Pessoal (CLT):          ${brl(dre.despesasPessoal)}
@@ -150,14 +155,14 @@ DESPESAS OPERACIONAIS
   TOTAL Despesas Op.:     ${brl(dre.totalDespesasOp)}
 
 RESULTADOS
-  = EBITDA:               ${brl(dre.ebitda)} (margem ${pctFmt(dre.margemEbitda)}%)
+  = EBITDA:               ${brl(dre.ebitda)}${margem(dre.margemEbitda)}
   (-) Depreciação:        ${brl(dre.depreciacao)}
   (-) Amortização:        ${brl(dre.amortizacao)}
-  = EBIT (Lucro Op.):     ${brl(dre.ebit)} (margem ${pctFmt(dre.margemOperacional)}%)
+  = EBIT (Lucro Op.):     ${brl(dre.ebit)}${margem(dre.margemOperacional)}
   Resultado Financeiro:   ${brl(dre.resultadoFinanceiro)}
   = Antes de Impostos:    ${brl(dre.resultadoAntesImpostos)}
   (-) Impostos:           ${brl(dre.impostos)}
-  = LUCRO LÍQUIDO:        ${brl(dre.lucroLiquido)} (margem ${pctFmt(dre.margemLiquida)}%)
+  = LUCRO LÍQUIDO:        ${brl(dre.lucroLiquido)}${margem(dre.margemLiquida)}
 
 NÃO-P&L (não impactam resultado)
   Entradas de Empréstimos: ${brl(dre.emprestimosEntrada)}

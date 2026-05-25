@@ -20,11 +20,11 @@ expected_cards_count: 3
 attention_card:
   must_reference: ["despesasPessoal", "prolabore", "receitaLiquida"]
   must_mention_threshold: "~40%"
-  must_propose_action: "ex: 'avalie quanto da folha é investimento vs. operação' — não 'monitore'"
+  must_propose_action: "ex: 'Defina teto de pessoal + pró-labore de 35% da RL até fim do mês' ou 'Mapeie quais funções podem migrar para PJ' — nunca 'monitore' nem 'avalie'"
 judge_criteria:
-  clareza: "PME de serviços entende; tom informal aceito (você, vamos)"
-  acionabilidade: "Aponta análise concreta da folha por função/área"
-  factualidade: "Soma exata 30k+10k; ratio derivado do DRE"
+  clareza: "PME de serviços entende; tom informal aceito (você, vamos, olha); sem termos técnicos distantes"
+  acionabilidade: "Propõe ação concreta com verbo permitido (Defina/Reduza/Estabeleça/Crie regra), alvo numérico em % ou R$ e prazo explícito em dias; sem 'monitore', 'avalie', 'revise' nem 'analise'"
+  factualidade: "Soma exata 30k+10k; ratio derivado do DRE; sem inventar dados externos"
 forbidden_terms: ["compliance", "EBITDA", "stakeholder"]   # toneOfVoice=informal
 tone_check: "Permite 'tá pressionando', 'olha', 'vamos olhar'"
 ```

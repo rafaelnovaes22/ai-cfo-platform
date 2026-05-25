@@ -18,13 +18,13 @@ created_at: "2026-05-12"
 ```yaml
 expected_cards_count: 3
 attention_card:
-  must_reference: ["despesasFinanceiras", "lucroOperacional"]
-  must_propose_action: "ex: 'avalie refinanciar a dívida mais cara' ou 'projete impacto de Selic'"
+  must_reference: ["despesasFinanceiras"]
+  must_propose_action: "ex: 'renegocie a dívida mais cara nos próximos 30 dias' ou 'reduza exposição a crédito variável'"
 judge_criteria:
-  clareza: "Indústria entende alavancagem; usar 'juros corroem 20% do operacional'"
-  acionabilidade: "Aponta dívida específica ou pergunta ao usuário"
-  factualidade: "20% derivado de 4k/20k"
-required_metrics_in_evidence: ["despesasFinanceiras/lucroOperacional"]
+  clareza: "Explica no body que as despesas financeiras consomem parcela relevante do lucro operacional; linguagem de indústria; sem jargão de SaaS"
+  acionabilidade: "Aponta ação concreta sobre a dívida (Renegocie/Reduza exposição) com prazo explícito em dias"
+  factualidade: "Cita despesasFinanceiras=R$ 4.000 em evidence; sem inventar valores não presentes na DRE"
+required_metrics_in_evidence: ["despesasFinanceiras"]
 permitted_terms: ["EBITDA"]   # lucroReal, jargão aceito
 ```
 

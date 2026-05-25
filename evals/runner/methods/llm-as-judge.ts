@@ -24,6 +24,7 @@ import {
   buildNarrativeUserPrompt,
 } from "@/dre-narrative/prompts.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
+import { normalizeNarrativeCards } from "@/dre-narrative/postprocess.js";
 import { loadCases } from "../case-loader.js";
 import { hashPrompt } from "../prompt-hash.js";
 import type { BucketSummary, CaseFile, CaseResult, RunSummary } from "../types.js";
@@ -37,6 +38,19 @@ interface JudgeManifest {
   pass_rate_threshold: number;
   pass_rate_per_outcome?: Record<string, number>;
 }
+
+const NarrativeEvalResponseSchema = z.object({
+  cards: z.array(z.object({
+    type: z.enum(["critical_gap", "attention", "healthy"]),
+    title: z.string(),
+    body: z.string(),
+    evidence: z.array(z.object({
+      metric: z.string(),
+      value: z.number(),
+      unit: z.string(),
+    })),
+  })).length(3),
+});
 
 function loadJudgeManifest(module: string): JudgeManifest {
   const path = join(resolve(process.cwd(), "evals"), module, "manifest.json");
@@ -234,12 +248,32 @@ async function executeDreNarrated(
       generator.costCents,
     );
   }
+  let parsedCards: z.infer<typeof NarrativeEvalResponseSchema>;
+  try {
+    parsedCards = NarrativeEvalResponseSchema.parse(cardsJson);
+  } catch (err) {
+    return makeResult(
+      file,
+      false,
+      `generator_invalid_shape: ${(err as Error).message.slice(0, 200)}`,
+      generator.content.slice(0, 200),
+      "valid JSON with exactly 3 cards",
+      generator.inputTokens,
+      generator.outputTokens,
+      generator.costCents,
+    );
+  }
+  const normalizedCards = normalizeNarrativeCards(parsedCards.cards, parsed.dre, parsed.segment, parsed.toneOfVoice);
+  const normalizedContent = JSON.stringify({ cards: normalizedCards });
 
-  // 4. Monta rubric + invoca judge
+  // 4. Monta rubric + invoca judge.
+  // inputText = prompt completo que o gerador recebeu (DRE formatada + tenant context),
+  // não o rawInput do case. Isso permite que o judge verifique factualidade contra o
+  // mesmo texto que o gerador viu — e não contra o input abreviado do case file.
   const rubric = buildRubricFromCase(file, manifest);
   const judgePrompt = buildJudgePrompt({
-    inputText: parsed.rawInput,
-    output: generator.content,
+    inputText: generatorReq.userPrompt,
+    output: normalizedContent,
     rubric,
     dimensions: manifest.judge_dimensions,
     scale: manifest.judge_scale,
@@ -473,6 +507,7 @@ function mergeInlineDre(base: DreLines, block: string): DreLines {
     if (eq === -1) continue;
     const keyPart = segment.slice(0, eq).trim();
     const valuePart = segment.slice(eq + 1).trim();
+    if (keyPart.includes("/")) continue;
     const words = keyPart.match(/[a-zA-Z][a-zA-Z0-9]*/g) ?? [];
     const found = words.find((w) => w in YAML_KEY_TO_DRELINE);
     if (!found) continue;
@@ -516,22 +551,30 @@ Sua função: dar nota objetiva (1-5) por dimensão a partir de uma rubrica expl
 
 CONTRATO DE UNIDADES DO OUTPUT (regras do produto Aicfo — você DEVE conhecer):
 - O OUTPUT a avaliar é um JSON com cards[]. Cada card tem evidence[] = [{ metric, value, unit }].
-- Quando unit="R$", o campo "value" está em CENTAVOS (inteiros). Exemplos:
-    value=5000000 unit="R$"   → R$ 50.000,00
-    value=10000000 unit="R$"  → R$ 100.000,00
-    value=-380000 unit="R$"   → −R$ 3.800,00
-- Quando unit="%", o campo "value" está em CENTI-PORCENTO (basis points / 100). Exemplos:
-    value=1500 unit="%"   → 15,00%
-    value=4737 unit="%"   → 47,37%
-    value=-500 unit="%"   → −5,00%
-- O INPUT que aparece abaixo da rubrica está em formato humano ("receitaBruta=R$ 100.000,00", "margemLiquida=15,00%"). Os valores DEVEM bater com o OUTPUT após conversão. NÃO trate centavos ou centi-porcento como erro.
+- Quando unit="R$", o campo "value" está em REAIS como número decimal. Exemplos:
+    value=50000.00 unit="R$"  → R$ 50.000,00
+    value=100000.00 unit="R$" → R$ 100.000,00
+    value=2000.00 unit="R$"   → R$ 2.000,00
+    value=14250.00 unit="R$"  → R$ 14.250,00
+- Quando unit="%", o campo "value" é a porcentagem como número decimal. Exemplos:
+    value=15.00 unit="%"  → 15,00%
+    value=47.37 unit="%"  → 47,37%
+    value=5.00 unit="%"   → 5,00%
+- O INPUT que aparece abaixo da rubrica está em formato humano ("receitaBruta=R$ 100.000,00", "margemLiquida=15,00%"). Os valores DEVEM bater com o OUTPUT. NÃO penalize arredondamentos de centavos (ex: 14250 vs 14250.00).
+
+INTERPRETAÇÃO DA RUBRICA
+- required_metrics_in_evidence: [X, Y] — ao menos UM card deve ter X em evidence; ao menos UM card deve ter Y. Não exige que TODOS os cards tenham X ou Y — cards diferentes cobrem métricas diferentes.
+- critical_gap_card.must_reference: [A, B] — o card critical_gap especificamente deve incluir A e B em evidence.
+- attention_card.must_reference: [A] — o card attention especificamente deve incluir A em evidence.
+- healthy_card.must_mention_metric: [A] — o card healthy deve mencionar A no body ou evidence.
+- forbidden_terms: ["EBITDA"] — nenhuma palavra proibida pode aparecer em body, title ou metric name de nenhum card.
 
 REGRAS DE PONTUAÇÃO (1-5 por dimensão):
 - 5: excelente; atende plenamente todos os pontos da definição
 - 4: bom; pequenos pontos de melhoria, mas atende o essencial
 - 3: aceitável; uma deficiência relevante
 - 2: ruim; duas ou mais deficiências relevantes
-- 1: inaceitável; falha grave (alucinação, contradição com input após conversão de unidade, regra explícita violada)
+- 1: inaceitável; falha grave (alucinação comprovada, contradição com input, regra explícita violada)
 
 VIOLATIONS:
 - Liste APENAS violações que você verificou de fato no output. Não invente.
