@@ -29,14 +29,15 @@ REGRAS DE CATEGORIA
 REGRAS DE CONFIDENCE
 confidence deve refletir sua certeza real. Use confidence ≤ 0.65 em QUALQUER um dos casos abaixo:
 1. TED/PIX/transferência para pessoa física ou sócio sem nota fiscal (ex: "TED JOAO SILVA", "PIX SOCIO")
-2. Descrição com menos de 3 palavras semânticas (ex: "TED 1200", "PIX 500", "PAGAMENTO")
+2. Descrição com menos de 3 palavras semânticas (ex: "TED 1200", "PIX 500", "PAGAMENTO") — placas, números de NF e códigos alfanuméricos de referência (ex: "NF 7788", "PLACA ABC1D23") NÃO contam como ambiguidade
 3. Aluguel ou pagamento sem indicação de finalidade comercial/residencial (ex: "PAGAMENTO ALUGUEL JOAO")
 4. Reembolso sem especificação do tipo de despesa (ex: "REEMBOLSO DESPESA COLABORADOR")
 5. Estorno com direction=credit onde a semântica é de despesa (ex: "ESTORNO TARIFA INDEVIDA")
 6. Nome de fornecedor que sugere uma categoria mas pode ser outra (ex: "RH SERVICOS LTDA" pode ser consultoria, não folha)
-7. Descrição muito longa (>200 chars), com idioma misto ou emojis — tokens irrelevantes reduzem certeza
+7. Descrição longa (>200 chars), com idioma misto ou emojis — extraia as palavras-chave semânticas (ex: "consultoria", "advisory", "coaching" → despesas_juridicas) e ignore o ruído; confidence ≤ 0.65
+8. Descrição com caracteres que corrompem o sentido (aspas, ponto-e-vírgula, "--", "/*", "*/") → confidence ≤ 0.55, preferir "nao_classificado" ou despesa genérica
 
-Use "nao_classificado" com confidence ≤ 0.40 quando não houver nenhuma categoria razoável.
+Piso de confidence: confidence nunca deve ser menor que 0.40, mesmo escolhendo "nao_classificado". A única exceção é quando a descrição é semanticamente vazia (regra 2 — ex: "TED 1200", "PIX 500"), onde 0.30–0.39 é aceitável.
 
 EXEMPLOS — ALTA CONFIANÇA
 Entrada: [{"entryId":"a1","date":"2026-04-05","description":"SALARIO FUNCIONARIOS ABRIL","amountCents":850000,"direction":"debit"}]
@@ -44,6 +45,9 @@ Saída:   [{"entryId":"a1","category":"despesas_pessoal","confidence":0.97}]
 
 Entrada: [{"entryId":"b2","date":"2026-04-10","description":"NF 1234 CLIENTE ABC LTDA","amountCents":1200000,"direction":"credit"}]
 Saída:   [{"entryId":"b2","category":"receita_bruta","confidence":0.95}]
+
+Entrada: [{"entryId":"a3","date":"2026-04-22","description":"MULTA DETRAN PLACA ABC1D23 VEICULO EMPRESA","amountCents":19500,"direction":"debit"}]
+Saída:   [{"entryId":"a3","category":"outras_despesas","confidence":0.88}]
 
 EXEMPLOS — BAIXA CONFIANÇA (regra 1: TED para sócio sem NF)
 Entrada: [{"entryId":"d1","date":"2026-04-30","description":"TED PARA JOAO SILVA SOCIO R$ 10.000","amountCents":1000000,"direction":"debit"}]
@@ -59,7 +63,19 @@ Saída:   [{"entryId":"d3","category":"despesas_administrativas","confidence":0.
 
 EXEMPLOS — BAIXA CONFIANÇA (regra 5: estorno com sinal cruzado)
 Entrada: [{"entryId":"d4","date":"2026-04-03","description":"ESTORNO TARIFA INDEVIDA REF 03/2026","amountCents":5990,"direction":"credit"}]
-Saída:   [{"entryId":"d4","category":"despesas_financeiras","confidence":0.58}]`;
+Saída:   [{"entryId":"d4","category":"despesas_financeiras","confidence":0.58}]
+
+EXEMPLOS — BAIXA CONFIANÇA (regra 1: PIX de pessoa física sem NF — piso ≥ 0.40)
+Entrada: [{"entryId":"d5","date":"2026-04-15","description":"PIX RECEBIDO MARIA","amountCents":50000,"direction":"credit"}]
+Saída:   [{"entryId":"d5","category":"receita_bruta","confidence":0.48}]
+
+EXEMPLOS — BAIXA CONFIANÇA (regra 8: caracteres que corrompem semântica)
+Entrada: [{"entryId":"d6","date":"2026-04-19","description":"PAGAMENTO'); DROP TABLE ledger_entries;-- FORNECEDOR XYZ","amountCents":50000,"direction":"debit"}]
+Saída:   [{"entryId":"d6","category":"nao_classificado","confidence":0.45}]
+
+EXEMPLOS — BAIXA CONFIANÇA (regra 7: descrição longa — extrair palavras-chave semânticas)
+Entrada: [{"entryId":"d7","date":"2026-04-28","description":"PAGAMENTO 🚀 SERVICE FEE invoice #4521 cliente internacional ACME GMBH zahlung für beratung consultoria estratégica trimestral advisory sessions strategy workshops executive coaching","amountCents":1850000,"direction":"debit"}]
+Saída:   [{"entryId":"d7","category":"despesas_juridicas","confidence":0.58}]`;
 }
 
 export interface EntryForClassification {
