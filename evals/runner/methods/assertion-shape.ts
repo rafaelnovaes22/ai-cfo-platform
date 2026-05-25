@@ -7,6 +7,8 @@
 // banco — marcados como "skipped:db_fixture_required" e excluídos do cálculo de pass rate.
 
 import { aggregateDre, type DreLines } from "@/dre-narrative/aggregator.js";
+import { runDeterministicFinancialQaReview } from "@/monthly-analysis/agents/financial-qa-review.js";
+import type { ActionPlanDraft, Anomaly, CashflowRisk, MarginDiagnosis, NarrativeCardDraft } from "@/monthly-analysis/schemas/agents.js";
 import { loadCases } from "../case-loader.js";
 import { hashPrompt } from "../prompt-hash.js";
 import type { BucketSummary, CaseFile, CaseResult, RunSummary } from "../types.js";
@@ -171,6 +173,9 @@ function executeCase(file: CaseFile): CaseResult {
   if (file.outcome === "dre_aggregated") {
     return executeDreAggregated(file);
   }
+  if (file.module === "monthly-analysis/financial-qa-review") {
+    return executeFinancialQaReview(file);
+  }
   return makeResult(
     file, true,
     "skipped:db_fixture_required — outcome requer fixture de banco",
@@ -179,6 +184,166 @@ function executeCase(file: CaseFile): CaseResult {
 }
 
 // ─── Executor dre_aggregated (função pura — sem LLM, sem DB) ─────────────────
+
+function executeFinancialQaReview(file: CaseFile): CaseResult {
+  const review = runDeterministicFinancialQaReview(buildFinancialQaFixture(file.caseId));
+  const expected = parseFinancialQaExpected(file);
+  const failures: string[] = [];
+
+  if (review.publishable !== expected.publishable) {
+    failures.push(`publishable esperado=${expected.publishable} atual=${review.publishable}`);
+  }
+  for (const target of expected.retryTargets) {
+    if (!review.retryTargets.includes(target)) failures.push(`retryTarget ausente=${target}`);
+  }
+  if (!expected.publishable && review.issues.length === 0) failures.push("esperava ao menos 1 issue");
+  if (expected.issueCode && !review.issues.some((issue) => issue.code === expected.issueCode)) {
+    failures.push(`issue code ausente=${expected.issueCode}`);
+  }
+
+  return makeResult(
+    file,
+    failures.length === 0,
+    failures.length === 0 ? "ok" : failures.join("; "),
+    JSON.stringify(review).slice(0, 500),
+    JSON.stringify(expected),
+  );
+}
+
+function parseFinancialQaExpected(file: CaseFile): {
+  publishable: boolean;
+  retryTargets: Array<"narrative-synthesis" | "action-planning">;
+  issueCode?: string;
+} {
+  const expectedText = file.body.match(/expected:\s*"([^"]+)"/i)?.[1] ?? "";
+  return {
+    publishable: /publishable=true/i.test(expectedText),
+    retryTargets: [
+      ...(expectedText.includes("narrative-synthesis") ? ["narrative-synthesis" as const] : []),
+      ...(expectedText.includes("action-planning") ? ["action-planning" as const] : []),
+    ],
+    issueCode: issueCodeForFinancialQaOutcome(file.outcome),
+  };
+}
+
+function issueCodeForFinancialQaOutcome(outcome: string): string | undefined {
+  switch (outcome) {
+    case "detect_metric_mismatch": return "NUMBER_MISMATCH";
+    case "detect_schema_gap": return "MISSING_DONEWHEN";
+    case "detect_evidence_gap": return "MISSING_EVIDENCE";
+    case "detect_contradiction": return "CONTRADICTION";
+    case "detect_review_need":
+    case "detect_overclaim":
+    case "detect_implausible_impact":
+    case "detect_tax_overreach":
+      return "UNFOUNDED_CLAIM";
+    case "detect_omission": return "MISSING_EVIDENCE";
+    default: return undefined;
+  }
+}
+
+function buildFinancialQaFixture(caseId: string): {
+  dre: DreLines;
+  anomalies: Anomaly[];
+  marginDiagnosis: MarginDiagnosis;
+  cashflowRisk: CashflowRisk;
+  narrativeCards: NarrativeCardDraft[];
+  actionPlan: ActionPlanDraft;
+} {
+  const dre = financialQaDre();
+  const anomalies: Anomaly[] = [];
+  const marginDiagnosis: MarginDiagnosis = {
+    grossMarginStatus: "healthy",
+    operatingMarginStatus: "healthy",
+    mainDrivers: [{ driver: "margem bruta estavel", evidenceMetric: "margemBruta", impactCents: 0, severity: "low" }],
+  };
+  const cashflowRisk: CashflowRisk = { status: "healthy", reasons: ["Caixa sem alerta material."], limitations: [] };
+  const narrativeCards = financialQaCards();
+  const actionPlan = financialQaActionPlan();
+
+  if (caseId === "financial-qa-review-0001") {
+    narrativeCards[0] = { ...narrativeCards[0]!, body: "Margem bruta de 62% mostra melhora relevante no mes." };
+  } else if (caseId === "financial-qa-review-0002") {
+    actionPlan.actions[0] = { ...actionPlan.actions[0]!, doneWhen: "" };
+  } else if (caseId === "financial-qa-review-0003") {
+    actionPlan.actions[0] = { ...actionPlan.actions[0]!, evidenceRefs: [] };
+  } else if (caseId === "financial-qa-review-0004") {
+    dre.margemLiquida = -7;
+    narrativeCards[2] = { type: "healthy", title: "Mes altamente lucrativo", body: "Mes altamente lucrativo e saudavel para seguir expandindo.", evidenceRefs: ["margemLiquida"] };
+  } else if (caseId === "financial-qa-review-0005") {
+    anomalies.push({ code: "data_conflict_high", title: "Dados contraditorios", description: "Lancamentos severos precisam revisao.", severity: "high", evidenceMetric: "naoClassificado" });
+    actionPlan.actions[0] = {
+      ...actionPlan.actions[0]!,
+      title: "Demitir 30% imediatamente",
+      description: "Desligar 30% da equipe sem etapa de revisao para reduzir custo.",
+      doneWhen: "30% da equipe desligada ate 2026-07-01.",
+      evidenceRefs: ["data_conflict_high"],
+    };
+    narrativeCards[0] = { ...narrativeCards[0]!, evidenceRefs: ["data_conflict_high"] };
+  } else if (caseId === "financial-qa-review-0006") {
+    anomalies.push({ code: "DUPLICATE_SUSPECT", title: "Duplicidade suspeita", description: "Possivel pagamento duplicado ainda nao comprovado.", severity: "medium", evidenceMetric: "entry:dup" });
+    narrativeCards[0] = { title: "Fraude comprovada", type: "critical_gap", body: "Ha fraude comprovada no pagamento duplicado.", evidenceRefs: ["DUPLICATE_SUSPECT"] };
+  } else if (caseId === "financial-qa-review-0007") {
+    dre.naoClassificado = 38_000_00;
+  } else if (caseId === "financial-qa-review-0008") {
+    actionPlan.actions[0] = { ...actionPlan.actions[0]!, impactCents: 50_000_000 };
+  } else if (caseId === "financial-qa-review-0010") {
+    actionPlan.actions[0] = {
+      ...actionPlan.actions[0]!,
+      title: "Trocar regime tributario",
+      description: "Trocar regime para reduzir 40% imposto ja no proximo mes.",
+      doneWhen: "Imposto reduzido em 40% ate 2026-07-01.",
+    };
+  }
+
+  return { dre, anomalies, marginDiagnosis, cashflowRisk, narrativeCards, actionPlan };
+}
+
+function financialQaDre(): DreLines {
+  return {
+    receitaBruta: 10_000_000, deducoes: 0, receitaLiquida: 10_000_000,
+    custosDiretos: 5_263_000, lucroBruto: 4_737_000, margemBruta: 47.37,
+    despesasPessoal: 1_000_000, prolabore: 0, despesasAdm: 500_000,
+    despesasComerciais: 300_000, despesasTi: 100_000, despesasViagem: 0,
+    despesasJuridicas: 0, despesasFinanceiras: 100_000, outrasDespesas: 0,
+    outrasReceitasOp: 0, totalDespesasOp: 1_900_000, ebitda: 2_837_000,
+    margemEbitda: 28.37, depreciacao: 0, amortizacao: 0, ebit: 2_837_000,
+    margemOperacional: 28.37, receitaFinanceira: 0, resultadoFinanceiro: -100_000,
+    resultadoAntesImpostos: 2_737_000, impostos: 1_237_000, lucroLiquido: 1_500_000,
+    margemLiquida: 15, emprestimosEntrada: 0, amortizacaoDividas: 0, capex: 0,
+    transferenciaInterna: 0, naoClassificado: 0,
+  };
+}
+
+function financialQaCards(): NarrativeCardDraft[] {
+  return [
+    { type: "critical_gap", title: "Margem bruta monitorada", body: "Margem bruta de 47.37% esta coerente com a DRE.", evidenceRefs: ["margemBruta"] },
+    { type: "attention", title: "Despesa comercial sob controle", body: "Despesa comercial deve seguir monitorada.", evidenceRefs: ["despesasComerciais"] },
+    { type: "healthy", title: "Lucro liquido saudavel", body: "Margem liquida de 15% sustenta plano conservador.", evidenceRefs: ["margemLiquida"] },
+  ];
+}
+
+function financialQaActionPlan(): ActionPlanDraft {
+  const base = {
+    description: "Executar rotina com evidencia financeira rastreavel.",
+    effortLevel: "low" as const,
+    riskLevel: "low" as const,
+    impactCents: 300_000,
+    doneWhen: "Resultado registrado em R$ 3.000 ate 2026-07-01.",
+    evidenceRefs: ["margemBruta"],
+    assumptions: [],
+    confidence: 0.8,
+  };
+  return {
+    actions: [
+      { ...base, horizon: "short", title: "Revisar margem por categoria" },
+      { ...base, horizon: "short", title: "Acompanhar despesas comerciais" },
+      { ...base, horizon: "short", title: "Validar caixa semanal" },
+      { ...base, horizon: "medium", title: "Padronizar compras" },
+      { ...base, horizon: "long", title: "Criar governanca mensal" },
+    ],
+  };
+}
 
 function executeDreAggregated(file: CaseFile): CaseResult {
   let entries: EntryRow[];

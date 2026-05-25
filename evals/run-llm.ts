@@ -86,6 +86,7 @@ function resolveDispatch(manifest: Manifest, methodOverride?: string): { method:
       : ["llm_as_judge", "assertion_shape", "exact_match_category"];
     for (const m of candidates) {
       const outcomes = outcomesForMethod(manifest.eval_methods, m);
+      if (outcomes.includes("default")) return { method: m };
       if (outcomes.length > 0) return { method: m, outcomes };
     }
     return { method: "unsupported" };
