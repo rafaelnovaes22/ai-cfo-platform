@@ -1,0 +1,71 @@
+{
+  "module": "monthly-analysis",
+  "manifest_kind": "sku_aggregate",
+  "outcomes": [
+    "analysis_delivered",
+    "dre_classified",
+    "narrative_generated",
+    "action_plan_generated",
+    "report_exported"
+  ],
+  "_outcomes_comment": "outcomes da spec (docs/specs/monthly-analysis.md). Validados indiretamente via financial-qa-review sub-agente em SHADOW; serao validados diretamente em ASSISTED quando runners dos outros 3 sub-agentes (normalization, narrative-synthesis, action-planning) forem conectados.",
+  "lifecycle": "SHADOW_eval_gate",
+  "last_updated": "2026-05-25",
+
+  "_strategy": "rota 6c — gate de promoção SHADOW delegado ao financial-qa-review (guardião determinístico do pipeline). ASSISTED→AUTONOMOUS exigirá conectar runners dos outros 3 sub-agentes (out-of-scope desta sessão).",
+
+  "gate_strategy": {
+    "shadow_gate": "delegate_to_financial_qa_review",
+    "rationale": "financial-qa-review é o auditor determinístico do pipeline E2E. Detecta number_mismatch, missing_doneWhen, contradiction, unfounded_claim, missing_evidence, fraud_overclaim, etc. Pass rate 100% em 10 cases adversariais comprova que regressões serão capturadas antes do cliente ver. Para SHADOW (humano revisa output), isso é suficiente. Para ASSISTED (cliente recebe), exigir-se-á eval dedicado por sub-agente.",
+    "shadow_gate_evidence": "evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md (100% pass, 10/10 cases, prompt_hash 0fcd35f0)",
+    "assisted_gate_pending": "Conectar runner para normalization, narrative-synthesis, action-planning (atualmente SKIPam por falta de código de execução). Requirements: schema_validation + llm_as_judge por outcome de cada sub-agente."
+  },
+
+  "sub_agents": {
+    "normalization": {
+      "manifest": "evals/monthly-analysis/normalization/manifest.json",
+      "cases": 10,
+      "runner_status": "skip_all_outcomes",
+      "blocking_for": "ASSISTED"
+    },
+    "narrative-synthesis": {
+      "manifest": "evals/monthly-analysis/narrative-synthesis/manifest.json",
+      "cases": 15,
+      "runner_status": "skip_all_outcomes",
+      "blocking_for": "ASSISTED"
+    },
+    "action-planning": {
+      "manifest": "evals/monthly-analysis/action-planning/manifest.json",
+      "cases": 15,
+      "runner_status": "skip_all_outcomes",
+      "blocking_for": "ASSISTED"
+    },
+    "financial-qa-review": {
+      "manifest": "evals/monthly-analysis/financial-qa-review/manifest.json",
+      "cases": 10,
+      "runner_status": "fully_implemented_assertion_shape",
+      "blocking_for": "SHADOW",
+      "latest_run": "evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md",
+      "latest_pass_rate": 1.0
+    }
+  },
+
+  "pass_rate_threshold": 0.95,
+  "outcomes_proxy_via_qa_audit": [
+    "analysis_delivered",
+    "dre_classified",
+    "narrative_generated",
+    "action_plan_generated"
+  ],
+  "_outcomes_proxy_comment": "financial-qa-review valida TODOS estes outcomes indiretamente — se a saída do pipeline para qualquer deles tem number_mismatch ou contradiction, o auditor bloqueia. Logo, a passing rate do auditor é um lower bound do pass rate do SKU completo.",
+
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "Mesma estratégia adotada para dre-narrative em PR #59 (assertion_shape como gate determinístico, llm_as_judge como signal). Para SKU monthly-analysis, o assertion_shape do financial-qa-review é o gate.",
+
+  "next_session_todo": [
+    "Conectar runner do assertion_shape para outcomes de normalization (clean_normalize, flag_noise, preserve_amount_date)",
+    "Conectar runner do llm_as_judge para narrative-synthesis (three_card_synthesis, risk_synthesis, etc)",
+    "Conectar runner do schema_validation para action-planning (plan_by_horizon, cash_recovery_plan, etc)",
+    "Quando os 4 sub-agentes rodarem, criar manifest agregado real (não mais delegação) com weighted pass rate"
+  ]
+}

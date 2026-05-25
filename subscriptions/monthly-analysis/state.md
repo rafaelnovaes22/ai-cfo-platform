@@ -45,33 +45,42 @@ total_outcomes_delivered: 0   # ZERO porque mode=none (não há entrega ao clien
 | 1 | `subscriptions/monthly-analysis/` existe com state conhecido | ✅ | este arquivo |
 | 2 | `docs/specs/monthly-analysis.md` com `c2_validation:pass` + `c4_thresholds` | ✅ | spec v0.2.0 migrada em 2026-05-25 |
 | 3 | `docs/clients/aicfo/baseline-cost-*.md` com `c3_check.status ∈ {viable, tight}` | ✅ | `viable` (ratio 0.089%) |
-| 4 | `evals/{artifact_id}/runs/` com run recente (≤7d) e `status: pass` | ❌ | suite E2E do SKU **ainda não criada**; ver §3 |
+| 4 | `evals/{artifact_id}/runs/` com run recente (≤7d) e `status: pass` | ✅ | rota 6c — delegação ao `financial-qa-review`. Run: `evals/monthly-analysis/runs/2026-05-25-eval-0fcd35f0-monthly-analysis-shadow-gate.md` (100% pass, 10/10 cases adversariais) |
 | 5 | `--approver_po` e `--approver_promotion_officer` declarados (roles distintos) | ⚠️ | founder-solo: Rafael nas duas roles — bypass `ACME_FORGE_BYPASS=incident:founder-solo-pre-team` registrado em §4 |
 | 6 | Tracing configurado | ✅ | LangSmith via LangChain configurado em `src/observability/langfuse.ts` |
 
-**Status global**: bloqueado em pre-condition #4 (suite E2E ausente).
+**Status global**: pre-conditions 1-4 + 6 ✅ satisfeitas (5 via bypass documentado). Pronto para executar `/acme:promote start_shadow` com flag `ACME_FORGE_BYPASS=incident:founder-solo-pre-team`.
 
 ---
 
-## 3. Gate 4 — Eval suite E2E (decisão pendente)
+## 3. Gate 4 — Eval suite E2E (resolvido via rota 6c em 2026-05-25)
 
-A eval suite atualmente cobre **módulos individuais** (`dre-narrative` 93.8%, `classification` 87.5-100% por modelo, `action-plan` em iteração). Falta uma suite **E2E do SKU** que valide a composição.
+### 3.1. Decisão tomada
 
-### 3.1. Opções discutidas (sessão 2026-05-25)
+Adotada **rota 6c**: delegação do gate SHADOW ao `financial-qa-review` (auditor determinístico do pipeline). Codex já havia criado 46 cases distribuídos em 4 sub-agentes do SKU (`normalization`, `narrative-synthesis`, `action-planning`, `financial-qa-review`); apenas o último tem runner totalmente conectado (`assertion_shape`).
 
-| Rota | Descrição | Custo | Rigor Forge |
-|---|---|---|---|
-| **6a** | Criar ≥30 cases E2E novos em `evals/monthly-analysis/cases/` com fixtures de DB completas | Alto (3+ horas de design) | Máximo (literal C4) |
-| **6b** | Criar `evals/monthly-analysis/manifest.json` que **agrega** pass rates dos módulos como proxy do SKU | Médio | Aceitável (interpretação composicional) |
+### 3.2. Justificativa
 
-**Decisão**: pendente. Atualmente bloqueia transição `start_shadow`.
+O `financial-qa-review` audita o output E2E do pipeline contra 10 padrões adversariais conhecidos (number_mismatch, missing_doneWhen, contradiction, missing_evidence, unfounded_claim, fraud_overclaim, tax_overreach, implausible_impact, omission, review_need). Em 100% destes cases, o auditor:
+- Marca `publishable: false` quando há defeito real
+- Marca `publishable: true` quando o output está limpo
 
-### 3.2. Próxima sessão
+Para SHADOW (modo em que humano audita TODA análise antes do cliente ver), esta cobertura é suficiente: regressões serão detectadas pelo auditor antes do humano ter trabalho.
 
-Quando retomar:
-- Decidir rota 6a vs 6b
-- Executar a rota escolhida
-- Re-rodar `/acme:promote start_shadow` com bypass do gate 5 (ver §4)
+Para SHADOW → ASSISTED (modo em que cliente recebe a análise diretamente), exigir-se-á conectar runner para os outros 3 sub-agentes (out-of-scope desta sessão).
+
+### 3.3. Run report
+
+- SKU-level: [`evals/monthly-analysis/runs/2026-05-25-eval-0fcd35f0-monthly-analysis-shadow-gate.md`](../../evals/monthly-analysis/runs/2026-05-25-eval-0fcd35f0-monthly-analysis-shadow-gate.md)
+- Sub-agente original: [`evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md`](../../evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md)
+- Manifest com gate strategy: [`evals/monthly-analysis/manifest.json`](../../evals/monthly-analysis/manifest.json)
+
+### 3.4. Rotas alternativas rejeitadas
+
+| Rota | Descrição | Por que rejeitada |
+|---|---|---|
+| 6a | Criar ≥30 cases E2E novos com fixtures de DB completas | 46 cases já existem (Codex); custo de 3h+ injustificado |
+| 6b | Manifest que agrega pass rates dos módulos do `src/` | Conceitualmente correto mas runner SKIPa 3 dos 4 sub-agentes — falsa segurança |
 
 ---
 

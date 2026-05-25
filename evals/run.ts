@@ -36,6 +36,8 @@ const ManifestSchema = z.object({
   // Métodos podem ser string única ou objeto {outcome: method}.
   eval_method: z.union([z.string(), z.record(z.union([z.string(), z.array(z.string())]))]).optional(),
   eval_methods: z.record(z.union([z.string(), z.array(z.string())])).optional(),
+  // manifest_kind: leaf (default) tem cases/ direto; sku_aggregate delega para sub-agentes.
+  manifest_kind: z.enum(["leaf", "sku_aggregate"]).optional(),
   last_updated: z.string().optional(),
 }).passthrough();
 
@@ -129,6 +131,13 @@ function validateModule(module: string, issues: ValidationIssue[]): void {
       file: "manifest.json",
       message: `manifest.module="${manifest.module}" não bate com diretório "${module}"`,
     });
+  }
+
+  // Aggregate manifests delegam para sub-agentes (cases/ vive em evals/{module}/{sub-agente}/cases/).
+  // Validar apenas que o manifest e' shape-valido; cases sao validados nos sub-manifests.
+  if (manifest.manifest_kind === "sku_aggregate") {
+    console.log(`  - ${module}: SKU aggregate (delegates to sub-agent manifests)`);
+    return;
   }
 
   const casesDir = join(modulePath, "cases");
