@@ -38,34 +38,63 @@ function getClient(): GoogleGenAI {
   return _client;
 }
 
+const RETRYABLE_CODES = new Set([429, 500, 503]);
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
+function isRetryable(err: unknown): boolean {
+  if (err && typeof err === "object" && "status" in err) {
+    return RETRYABLE_CODES.has((err as { status: number }).status);
+  }
+  const msg = String(err);
+  return msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("RESOURCE_EXHAUSTED");
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
   const client = getClient();
+  let lastErr: unknown;
 
-  const response = await client.models.generateContent({
-    model: config.model,
-    contents: req.userPrompt,
-    config: {
-      systemInstruction: req.systemPrompt,
-      responseMimeType: req.jsonMode ? "application/json" : "text/plain",
-      ...(config.thinkingBudget
-        ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
-        : {}),
-    },
-  });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(BASE_DELAY_MS * 2 ** (attempt - 1));
+    }
 
-  const content = response.text ?? "";
-  const usage = response.usageMetadata;
+    try {
+      const response = await client.models.generateContent({
+        model: config.model,
+        contents: req.userPrompt,
+        config: {
+          systemInstruction: req.systemPrompt,
+          responseMimeType: req.jsonMode ? "application/json" : "text/plain",
+          ...(config.thinkingBudget
+            ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
+            : {}),
+        },
+      });
 
-  const inputTokens = usage?.promptTokenCount ?? 0;
-  const outputTokens = usage?.candidatesTokenCount ?? 0;
+      const content = response.text ?? "";
+      const usage = response.usageMetadata;
+      const inputTokens = usage?.promptTokenCount ?? 0;
+      const outputTokens = usage?.candidatesTokenCount ?? 0;
 
-  return {
-    content,
-    provider: "google",
-    model: config.model,
-    inputTokens,
-    outputTokens,
-    costCents: calculateCostCents(config.model, inputTokens, outputTokens),
-    traceId: null,
-  };
+      return {
+        content,
+        provider: "google",
+        model: config.model,
+        inputTokens,
+        outputTokens,
+        costCents: calculateCostCents(config.model, inputTokens, outputTokens),
+        traceId: null,
+      };
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === MAX_RETRIES) break;
+    }
+  }
+
+  throw lastErr;
 }
