@@ -157,7 +157,7 @@ function matureCompanyPlan(dre: DreLines): Action[] {
   ];
 }
 
-function dataQualityPlan(dre: DreLines): Action[] {
+function dataQualityPlan(_dre: DreLines): Action[] {
   return [
     action({
       horizon: "short",

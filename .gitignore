@@ -53,3 +53,7 @@ imagens_front/
 .claude/scheduled_tasks.lock
 docs/forge/persona-detection.log
 docs/forge/sync-history.md
+
+# Learning snapshots — templates auto-gerados por hooks/stop/learning-snapshot.sh
+# (revisão humana/Hermes antes de promover para agent-memory.md; sem valor versionado)
+docs/learnings/

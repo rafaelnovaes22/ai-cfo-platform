@@ -8,6 +8,8 @@
     "dre_aggregated": "assertion_shape",
     "dre_narrated": "llm_as_judge"
   },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape é o gate determinístico (binding para promoção). llm_as_judge sobre dre_narrated é signal de qualidade narrativa (não-bloqueante). Force via --method=llm_as_judge.",
   "judge_dimensions": [
     "clareza",
     "acionabilidade",

@@ -58,6 +58,7 @@ function parseArgs(): CliArgs {
 interface Manifest {
   eval_method?: string;
   eval_methods?: Record<string, string | string[]>;
+  gate_method?: string;
   pass_rate_threshold: number;
   pass_rate_per_outcome?: Record<string, number>;
   total_cases?: number;
@@ -71,8 +72,12 @@ function outcomesForMethod(methods: Record<string, string | string[]>, target: s
 }
 
 // Resolve qual método despachar e quais outcomes filtrar.
-// Quando o manifest declara múltiplos métodos por outcome, prioriza llm_as_judge
-// (mais informativo). CLI pode forçar via --method=<m>.
+//
+// Prioridade quando sem --method:
+//   1. manifest.gate_method (explícito, binding para promoção)
+//   2. fallback heurístico — llm_as_judge primeiro (signal mais informativo)
+//
+// CLI sempre pode forçar via --method=<m>.
 function resolveDispatch(manifest: Manifest, methodOverride?: string): { method: string; outcomes?: string[] } {
   if (manifest.eval_method) {
     if (methodOverride && methodOverride !== manifest.eval_method) {
@@ -81,9 +86,11 @@ function resolveDispatch(manifest: Manifest, methodOverride?: string): { method:
     return { method: manifest.eval_method };
   }
   if (manifest.eval_methods) {
+    const fallback = ["llm_as_judge", "assertion_shape", "exact_match_category"];
+    const gatePriority = manifest.gate_method ? [manifest.gate_method] : [];
     const candidates = methodOverride
       ? [methodOverride]
-      : ["llm_as_judge", "assertion_shape", "exact_match_category"];
+      : [...gatePriority, ...fallback.filter((m) => m !== manifest.gate_method)];
     for (const m of candidates) {
       const outcomes = outcomesForMethod(manifest.eval_methods, m);
       if (outcomes.includes("default")) return { method: m };

@@ -74,7 +74,8 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
         cardType: card.type,
         title: card.title,
         body: card.body,
-        evidence: card.evidence,
+        // NarrativeEvidence[] é serializável; Prisma exige InputJsonValue.
+        evidence: card.evidence as unknown as object,
       })),
     });
 
