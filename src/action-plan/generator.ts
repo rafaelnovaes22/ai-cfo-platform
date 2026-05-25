@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { callLlm } from "@/llm/index.js";
 import { buildActionPlanSystemPrompt, buildActionPlanUserPrompt } from "@/action-plan/prompts.js";
+import { normalizeActionPlanActions } from "@/action-plan/postprocess.js";
 import { logger } from "@/observability/logger.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 
@@ -102,13 +103,19 @@ export async function generateActionPlan(
     parsed = PlanResponseSchema.parse(JSON.parse(retryResponse.content));
   }
 
-  const impact = calcImpactSummary(parsed.actions);
+  const actions = normalizeActionPlanActions(
+    parsed.actions,
+    dre,
+    tenant.industrySegment,
+    narrativeCards.map((card) => `${card.title}\n${card.body}`).join("\n"),
+  );
+  const impact = calcImpactSummary(actions);
 
   await db.$transaction(async (tx) => {
     await tx.actionPlanItem.deleteMany({ where: { analysisId } });
 
     await tx.actionPlanItem.createMany({
-      data: parsed.actions.map((a) => ({
+      data: actions.map((a) => ({
         analysisId,
         horizon:     a.horizon,
         title:       a.title,
@@ -126,7 +133,7 @@ export async function generateActionPlan(
     await tx.monthlyAnalysis.update({
       where: { id: analysisId },
       data: {
-        actionPlanJson: { ...impact, actions: parsed.actions },
+        actionPlanJson: { ...impact, actions },
         costCents:      (analysis.costCents ?? 0) + totalCostCents,
         status:         isAutonomous ? "delivered" : "ready",
         deliveredAt:    isAutonomous ? new Date() : null,
@@ -137,7 +144,7 @@ export async function generateActionPlan(
   logger.info(
     {
       analysisId,
-      actionCount: parsed.actions.length,
+      actionCount: actions.length,
       totalImpactCents: impact.totalImpact,
       costCents: totalCostCents,
       mode: analysis.mode,

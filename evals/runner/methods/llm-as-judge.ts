@@ -23,6 +23,12 @@ import {
   buildNarrativeSystemPrompt,
   buildNarrativeUserPrompt,
 } from "@/dre-narrative/prompts.js";
+import {
+  buildActionPlanSystemPrompt,
+  buildActionPlanUserPrompt,
+} from "@/action-plan/prompts.js";
+import { PlanResponseSchema } from "@/action-plan/generator.js";
+import { normalizeActionPlanActions } from "@/action-plan/postprocess.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { normalizeNarrativeCards } from "@/dre-narrative/postprocess.js";
 import { loadCases } from "../case-loader.js";
@@ -192,6 +198,9 @@ async function executeCase(
   if (file.outcome === "dre_narrated") {
     return executeDreNarrated(file, manifest, generatorOverride);
   }
+  if (file.outcome === "plan_generated") {
+    return executeActionPlanGenerated(file, manifest, generatorOverride);
+  }
   return makeResult(
     file,
     true,
@@ -205,6 +214,121 @@ async function executeCase(
 }
 
 // ─── Executor: dre_narrated ───────────────────────────────────────────────────
+
+async function executeActionPlanGenerated(
+  file: CaseFile,
+  manifest: JudgeManifest,
+  generatorOverride: { provider: LlmProvider; model: string } | undefined,
+): Promise<CaseResult> {
+  const parsed = parseActionPlanCase(file);
+
+  const generatorReq: LlmRequest = {
+    task: "action-plan",
+    systemPrompt: buildActionPlanSystemPrompt(),
+    userPrompt: buildActionPlanUserPrompt({
+      dre: parsed.dre,
+      referenceMonth: parsed.referenceMonth,
+      segment: parsed.segment,
+      taxRegime: parsed.taxRegime,
+      toneOfVoice: parsed.toneOfVoice,
+      narrativeCards: parsed.narrativeCards,
+    }),
+    tenantId: "eval-runner",
+    jsonMode: true,
+  };
+  const generator = await dispatchGenerator(generatorOverride, generatorReq);
+
+  let planJson: unknown;
+  try {
+    planJson = JSON.parse(generator.content);
+  } catch (err) {
+    return makeResult(
+      file,
+      false,
+      `generator_invalid_json: ${(err as Error).message.slice(0, 200)}`,
+      generator.content.slice(0, 200),
+      "valid JSON with actions[]",
+      generator.inputTokens,
+      generator.outputTokens,
+      generator.costCents,
+    );
+  }
+
+  try {
+    const parsedPlan = PlanResponseSchema.parse(planJson);
+    planJson = {
+      actions: normalizeActionPlanActions(
+        parsedPlan.actions,
+        parsed.dre,
+        parsed.segment,
+        parsed.narrativeCards.map((card) => `${card.title}\n${card.body}`).join("\n"),
+      ),
+    };
+  } catch (err) {
+    return makeResult(
+      file,
+      false,
+      `generator_invalid_shape: ${(err as Error).message.slice(0, 300)}`,
+      generator.content.slice(0, 200),
+      "PlanResponseSchema",
+      generator.inputTokens,
+      generator.outputTokens,
+      generator.costCents,
+    );
+  }
+
+  const rubric = buildRubricFromCase(file, manifest);
+  const judgePrompt = buildJudgePrompt({
+    inputText: generatorReq.userPrompt,
+    output: JSON.stringify(planJson),
+    rubric,
+    dimensions: manifest.judge_dimensions,
+    scale: manifest.judge_scale,
+  });
+
+  const judge = await callLlm({
+    task: "eval-judge",
+    systemPrompt: JUDGE_SYSTEM_PROMPT,
+    userPrompt: judgePrompt,
+    tenantId: "eval-judge",
+    jsonMode: true,
+  });
+
+  let judgeResp;
+  try {
+    judgeResp = JudgeResponseSchema.parse(JSON.parse(judge.content));
+  } catch (err) {
+    const retryJudge = await callLlm({
+      task: "eval-judge",
+      systemPrompt: JUDGE_SYSTEM_PROMPT,
+      userPrompt: `${judgePrompt}\n\nRETORNE APENAS JSON valido, sem markdown e sem aspas nao escapadas dentro de strings.`,
+      tenantId: "eval-judge",
+      jsonMode: true,
+    });
+    try {
+      judgeResp = JudgeResponseSchema.parse(JSON.parse(retryJudge.content));
+      return makeJudgeScoredResult(file, manifest, judgeResp, generator, {
+        ...retryJudge,
+        inputTokens: judge.inputTokens + retryJudge.inputTokens,
+        outputTokens: judge.outputTokens + retryJudge.outputTokens,
+        costCents: judge.costCents + retryJudge.costCents,
+      });
+    } catch {
+      return makeResult(
+        file,
+        false,
+        `judge_invalid_response: ${(err as Error).message.slice(0, 300)}`,
+        generator.content.slice(0, 200),
+        "judge JSON",
+        generator.inputTokens + judge.inputTokens + retryJudge.inputTokens,
+        generator.outputTokens + judge.outputTokens + retryJudge.outputTokens,
+        generator.costCents + judge.costCents + retryJudge.costCents,
+      );
+    }
+  }
+
+  return makeJudgeScoredResult(file, manifest, judgeResp, generator, judge);
+}
 
 async function executeDreNarrated(
   file: CaseFile,
@@ -355,6 +479,56 @@ interface ParsedDreNarratedCase {
   toneOfVoice: string;
   rawInput: string;
   groundTruthYaml: string;
+}
+
+interface ParsedActionPlanCase {
+  dre: DreLines;
+  referenceMonth: string;
+  segment: string;
+  taxRegime: string;
+  toneOfVoice: string;
+  narrativeCards: Array<{ type: string; title: string; body: string }>;
+}
+
+function parseActionPlanCase(file: CaseFile): ParsedActionPlanCase {
+  const inputBlock = extractSection(file.body, "Input");
+  let dre = expandFromReferencedCase(inputBlock, file.filePath);
+  dre = mergeInlineDre(dre, inputBlock);
+  dre = mergeLooseActionPlanDre(dre, inputBlock);
+  if (dre.receitaBruta === 0 && /DRE:\s*v[aá]lido|saud[áa]vel/i.test(inputBlock)) {
+    dre = {
+      ...dre,
+      receitaBruta: 100_000_00,
+      receitaLiquida: 95_000_00,
+      custosDiretos: 50_000_00,
+      lucroBruto: 45_000_00,
+      margemBruta: 47.37,
+      ebitda: 22_000_00,
+      ebit: 22_000_00,
+      despesasFinanceiras: 2_000_00,
+      lucroLiquido: 14_250_00,
+      margemLiquida: 15,
+    };
+  }
+
+  const segment = matchKv(inputBlock, "industrySegment") ?? "geral";
+  const taxRegime = matchKv(inputBlock, "taxRegime") ?? "simples";
+  const toneOfVoice = matchKv(inputBlock, "toneOfVoice") ?? "formal";
+  const monthMatch = inputBlock.match(/referenceMonth:\s*"?([\d-]{7,10})"?/);
+  const referenceMonth = monthMatch?.[1] ?? "2026-04";
+
+  const cardsMatch = inputBlock.match(/Narr?ativeCards:\s*(.+)$/im);
+  const cardsText = cardsMatch?.[1] ?? inputBlock;
+  const titleMatches = [...cardsText.matchAll(/title:\s*"([^"]+)"/g)].map((m) => m[1]).filter(Boolean) as string[];
+  const narrativeCards = (titleMatches.length > 0 ? titleMatches : ["Leitura financeira do mes"])
+    .slice(0, 3)
+    .map((title, idx) => ({
+      type: idx === 0 ? "critical_gap" : idx === 1 ? "attention" : "healthy",
+      title,
+      body: cardsText,
+    }));
+
+  return { dre, referenceMonth, segment, taxRegime, toneOfVoice, narrativeCards };
 }
 
 function parseDreNarratedCase(file: CaseFile): ParsedDreNarratedCase {
@@ -525,6 +699,45 @@ function mergeInlineDre(base: DreLines, block: string): DreLines {
   return out;
 }
 
+function mergeLooseActionPlanDre(base: DreLines, block: string): DreLines {
+  const out = { ...base };
+  const aliases: Array<[RegExp, keyof DreLines, "money" | "pct"]> = [
+    [/\breceitaBruta\s+(-?R\$\s*[\d.,]+k?)/i, "receitaBruta", "money"],
+    [/\breceitaLiquida\s+(-?R\$\s*[\d.,]+k?)/i, "receitaLiquida", "money"],
+    [/\bcmv\s+(-?R\$\s*[\d.,]+k?)/i, "custosDiretos", "money"],
+    [/\bcustosDiretos\s+(-?R\$\s*[\d.,]+k?)/i, "custosDiretos", "money"],
+    [/\bebitda\s+(-?R\$\s*[\d.,]+k?)/i, "ebitda", "money"],
+    [/\blucroLiquido\s+(-?R\$\s*[\d.,]+k?)/i, "lucroLiquido", "money"],
+    [/\bdespesasPessoal\s+(-?R\$\s*[\d.,]+k?)/i, "despesasPessoal", "money"],
+    [/\bdespesasAdministrativas\s+(-?R\$\s*[\d.,]+k?)/i, "despesasAdm", "money"],
+    [/\bdespesasComerciais\s+(-?R\$\s*[\d.,]+k?)/i, "despesasComerciais", "money"],
+    [/\bnaoClassificado\s+(-?R\$\s*[\d.,]+k?)/i, "naoClassificado", "money"],
+    [/\bmargemLiquida\s+(-?\d+(?:[,.]\d+)?%?)/i, "margemLiquida", "pct"],
+  ];
+  for (const [regex, key, kind] of aliases) {
+    const match = block.match(regex);
+    if (!match?.[1]) continue;
+    if (kind === "money") {
+      const cents = parseLooseMoneyToCents(match[1]);
+      if (cents !== null) out[key] = cents;
+    } else {
+      const value = parsePctOrNumber(match[1]);
+      if (value !== null) out[key] = value <= 1 && !match[1].includes("%") ? value * 100 : value;
+    }
+  }
+
+  if (out.receitaLiquida === 0 && out.receitaBruta !== 0) out.receitaLiquida = out.receitaBruta;
+  if (out.lucroBruto === 0 && out.receitaLiquida !== 0) out.lucroBruto = out.receitaLiquida - out.custosDiretos;
+  if (out.margemBruta === 0 && out.receitaLiquida !== 0 && out.lucroBruto !== 0) {
+    out.margemBruta = Math.round((out.lucroBruto / out.receitaLiquida) * 10000) / 100;
+  }
+  if (out.ebit === 0 && out.ebitda !== 0) out.ebit = out.ebitda;
+  if (out.totalDespesasOp === 0) {
+    out.totalDespesasOp = out.despesasPessoal + out.despesasAdm + out.despesasComerciais;
+  }
+  return out;
+}
+
 function parsePctOrNumber(raw: string): number | null {
   const cleaned = raw.replace(/%/g, "").trim();
   const num = /^-?(?:\d{1,3}(?:\.\d{3})*,\d{1,4}|\d+(?:[,.]\d{1,4})?)/.exec(cleaned);
@@ -532,6 +745,15 @@ function parsePctOrNumber(raw: string): number | null {
   const norm = num[0].replace(/\./g, "").replace(",", ".");
   const v = parseFloat(norm);
   return isNaN(v) ? null : v;
+}
+
+function parseLooseMoneyToCents(raw: string): number | null {
+  const match = raw.match(/(-?)R\$\s*([\d.,]+)\s*(k)?/i);
+  if (!match?.[2]) return null;
+  const normalized = match[2].replace(/\./g, "").replace(",", ".");
+  const value = parseFloat(normalized);
+  if (isNaN(value)) return null;
+  return Math.round(value * (match[3] ? 1000 : 1) * 100) * (match[1] === "-" ? -1 : 1);
 }
 
 function parseBrlToCents(raw: string): number {
@@ -640,6 +862,50 @@ const JudgeResponseSchema = z.object({
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function makeJudgeScoredResult(
+  file: CaseFile,
+  manifest: JudgeManifest,
+  judgeResp: z.infer<typeof JudgeResponseSchema>,
+  generator: LlmResponse,
+  judge: LlmResponse,
+): CaseResult {
+  const failed: string[] = [];
+  for (const dim of manifest.judge_dimensions) {
+    const s = judgeResp.scores[dim];
+    if (typeof s !== "number") {
+      failed.push(`${dim}=missing`);
+      continue;
+    }
+    if (s < manifest.judge_threshold_per_dim) {
+      const why = judgeResp.justifications?.[dim] ?? "";
+      failed.push(`${dim}=${s}<${manifest.judge_threshold_per_dim}${why ? `: ${why.slice(0, 80)}` : ""}`);
+    }
+  }
+
+  const violations = judgeResp.violations ?? [];
+  const passed = failed.length === 0;
+  const scoresStr = manifest.judge_dimensions
+    .map((d) => `${d}=${judgeResp.scores[d] ?? "?"}`)
+    .join(", ");
+  const violationSuffix = violations.length > 0
+    ? ` [violations: ${violations.map((v) => v.slice(0, 80)).join(" | ")}]`
+    : "";
+  const reason = passed
+    ? `ok (${scoresStr})${violationSuffix}`
+    : failed.join("; ") + violationSuffix;
+
+  return makeResult(
+    file,
+    passed,
+    reason,
+    JSON.stringify(judgeResp.scores),
+    `>=${manifest.judge_threshold_per_dim} in ${manifest.judge_dimensions.join(",")}`,
+    generator.inputTokens + judge.inputTokens,
+    generator.outputTokens + judge.outputTokens,
+    generator.costCents + judge.costCents,
+  );
+}
 
 function makeResult(
   file: CaseFile,

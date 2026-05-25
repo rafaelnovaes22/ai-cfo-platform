@@ -106,6 +106,7 @@ export async function ingest(params: {
       Record<string, unknown> | undefined;
     const threshold =
       (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
+    const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
 
     const existing = await tx.monthlyAnalysis.findUnique({
       where: { tenantId_referenceMonth: { tenantId, referenceMonth: effectiveReferenceMonth } },
@@ -122,6 +123,7 @@ export async function ingest(params: {
           generatedAt: null,
           deliveredAt: null,
           approvedAt: null,
+          mode: subscription.mode,
           dreJson: Prisma.DbNull,
           narrativeJson: Prisma.DbNull,
           actionPlanJson: Prisma.DbNull,
@@ -134,7 +136,6 @@ export async function ingest(params: {
       return { analysis: existing, minEntries: threshold };
     }
 
-    const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
     const created = await tx.monthlyAnalysis.create({
       data: { tenantId, referenceMonth: effectiveReferenceMonth, status: "pending", mode: subscription.mode },
     });
