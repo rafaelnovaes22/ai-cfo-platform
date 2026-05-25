@@ -5,9 +5,20 @@ artifact_type: "product"
 client_id: "aicfo"
 project_type: "agentic_saas"
 ai_enabled: true
-mode: "none"
-mode_history: []
-started_at: null
+mode: "shadow"
+mode_history:
+  - from: "none"
+    to: "shadow"
+    transitioned_at: "2026-05-25T20:50:00.000Z"
+    promotions_log_ref: "subscriptions/monthly-analysis/promotions.md#transition-1"
+started_at: "2026-05-25T20:50:00.000Z"
+shadow_window:
+  started_at: "2026-05-25T20:50:00.000Z"
+  min_window_days: 14
+  window_ends_at_earliest: "2026-06-08T20:50:00.000Z"
+  next_review_at: "2026-06-08"
+  target_tenants: "5-10"
+  status: "open_for_recruitment"
 linked_spec: "docs/specs/monthly-analysis.md"
 linked_baseline_cost: "docs/clients/aicfo/baseline-cost-monthly-analysis-2026-05-25.md"
 linked_process_map: "docs/clients/aicfo/process-monthly-analysis-2026-05-25.md"
@@ -29,12 +40,21 @@ forge_command_version: "promote@0.3.0"
 ## 1. Estado atual
 
 ```yaml
-mode: none                    # ∈ {none, shadow, assisted, autonomous}
-started_at: null              # será preenchido ao executar /acme:promote start_shadow
-last_transition_at: null
-days_in_current_mode: 0
-total_outcomes_delivered: 0   # ZERO porque mode=none (não há entrega ao cliente final ainda)
+mode: shadow                  # ∈ {none, shadow, assisted, autonomous}
+started_at: "2026-05-25T20:50:00.000Z"
+last_transition_at: "2026-05-25T20:50:00.000Z"
+last_transition_from: "none"
+days_in_current_mode: 0       # janela SHADOW recém-iniciada
+total_outcomes_delivered: 0   # SHADOW: cliente não recebe output; Rafael audita TODA análise
+shadow_window:
+  started_at: "2026-05-25T20:50:00.000Z"
+  window_ends_at_earliest: "2026-06-08T20:50:00.000Z"
+  next_review_at: "2026-06-08"
+  status: "open_for_recruitment"
+  recruitment_target: "5-10 PMEs reais"
 ```
+
+> ✅ Transição `none → shadow` registrada em [`promotions.md` Transition 1](promotions.md#transition-1--2026-05-25--none--shadow) (6 gates avaliados; 5 passed, 1 bypassed com rationale `founder-solo-pre-team`, 0 failed).
 
 ---
 
