@@ -21,6 +21,9 @@ export interface ActionPlanningAgentInput {
   marginDiagnosis: MarginDiagnosis;
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
+  segment?: string;
+  taxRegime?: string;
+  toneOfVoice?: string;
 }
 
 export async function runActionPlanningAgent(

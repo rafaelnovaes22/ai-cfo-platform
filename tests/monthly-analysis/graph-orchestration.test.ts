@@ -40,6 +40,7 @@ function setupHappyPath(): void {
     id: ANALYSIS,
     tenantId: TENANT,
     status: "pending",
+    tenant: { industrySegment: "servicos-b2b", taxRegime: "simples", productConfig: {} },
   });
 
   // 8 entries: 4 receita (1000 cents cada), 4 custos (500 cents cada).

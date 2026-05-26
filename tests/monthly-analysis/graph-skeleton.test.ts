@@ -36,6 +36,7 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
       id: "test-id",
       tenantId: "test-tenant",
       status: "pending",
+      tenant: { industrySegment: "servicos-b2b", taxRegime: "simples", productConfig: {} },
     });
     findManyLedgerMock.mockResolvedValueOnce([]);
 

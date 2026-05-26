@@ -22,6 +22,9 @@ export type QaGateDecision = "narrative_synthesis" | "action_planning" | "finali
 export interface MonthlyAnalysisState {
   analysisId: string;
   tenantId: string;
+  segment?: string;
+  taxRegime?: string;
+  toneOfVoice?: string;
 
   rawEntries?: RawLedgerEntry[];
 

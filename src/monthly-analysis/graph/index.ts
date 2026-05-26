@@ -36,6 +36,9 @@ import type {
 export const MonthlyAnalysisAnnotation = Annotation.Root({
   analysisId: Annotation<string>(),
   tenantId: Annotation<string>(),
+  segment: Annotation<string | undefined>(),
+  taxRegime: Annotation<string | undefined>(),
+  toneOfVoice: Annotation<string | undefined>(),
 
   rawEntries: Annotation<RawLedgerEntry[] | undefined>(),
 

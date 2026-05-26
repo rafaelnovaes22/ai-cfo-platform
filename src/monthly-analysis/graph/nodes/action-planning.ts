@@ -21,6 +21,9 @@ export async function actionPlanningNode(
       narrativeCards: state.narrativeCards,
       marginDiagnosis: state.marginDiagnosis,
       cashflowRisk: state.cashflowRisk,
+      segment: state.segment,
+      taxRegime: state.taxRegime,
+      toneOfVoice: state.toneOfVoice,
     },
     { tenantId: state.tenantId },
   );

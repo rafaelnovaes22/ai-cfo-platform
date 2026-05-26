@@ -88,7 +88,7 @@ describe("action-plan/postprocess", () => {
 
     expect(out.filter((a) => a.horizon === "short")).toHaveLength(3);
     expect(text).toContain("fornecedores");
-    expect(text).toContain("ficha tecnica");
+    expect(text).toContain("ficha técnica");
     expect(text).toContain("reajuste");
     expect(out.some((a) => a.impactCents === 24_000_00)).toBe(true);
   });

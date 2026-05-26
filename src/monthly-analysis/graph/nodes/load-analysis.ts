@@ -12,7 +12,10 @@ export async function loadAnalysisNode(
 
   const analysis = await prisma.monthlyAnalysis.findUnique({
     where: { id: state.analysisId },
-    select: { id: true, tenantId: true, status: true },
+    select: {
+      id: true, tenantId: true, status: true,
+      tenant: { select: { industrySegment: true, taxRegime: true, productConfig: true } },
+    },
   });
 
   if (!analysis) {
@@ -49,10 +52,20 @@ export async function loadAnalysisNode(
     direction: entry.direction === "credit" ? "in" : "out",
   }));
 
+  const tenantData = analysis.tenant as { industrySegment?: string; taxRegime?: string; productConfig?: unknown } | undefined;
+  const config = (tenantData?.productConfig as Record<string, unknown>)?.monthlyAnalysis as
+    Record<string, string> | undefined;
+  const toneOfVoice = config?.toneOfVoice ?? "formal";
+
   logger.debug(
     { analysisId: analysis.id, status: analysis.status, entriesCount: rawEntries.length },
     "monthly-analysis.graph.load_analysis: analysis + entries carregados",
   );
 
-  return { rawEntries };
+  return {
+    rawEntries,
+    segment: tenantData?.industrySegment ?? "geral",
+    taxRegime: tenantData?.taxRegime ?? "simples",
+    toneOfVoice,
+  };
 }

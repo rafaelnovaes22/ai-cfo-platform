@@ -14,6 +14,9 @@ export interface ActionPlanningPromptInput {
   marginDiagnosis: MarginDiagnosis;
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
+  segment?: string;
+  taxRegime?: string;
+  toneOfVoice?: string;
 }
 
 // L0 — estático, cacheável
@@ -133,8 +136,16 @@ ${reasons}${limits}`;
 // L1 + L2 — por análise
 export function buildUserPrompt(input: ActionPlanningPromptInput): string {
   const referenceMonth = input.referenceMonth ?? "mês de referência";
+  const segment = input.segment ?? "geral";
+  const taxRegime = input.taxRegime ?? "simples";
+  const toneOfVoice = input.toneOfVoice ?? "formal";
 
-  return `${formatDreForPrompt(input.dre, referenceMonth)}
+  return `CONTEXTO DA EMPRESA
+- Segmento: ${segment}
+- Regime Tributário: ${taxRegime}
+- Tom de voz: ${toneOfVoice}
+
+${formatDreForPrompt(input.dre, referenceMonth)}
 
 ANOMALIAS DETECTADAS
 ${formatAnomalies(input.anomalies)}
