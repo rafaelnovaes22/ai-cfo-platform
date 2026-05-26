@@ -1,5 +1,6 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
+import { buildNarrativeSignals } from "@/dre-narrative/prompts.js";
 import type {
   Anomaly,
   CashflowRisk,
@@ -78,7 +79,55 @@ JARGÃO POR REGIME TRIBUTÁRIO (use exclusivamente os termos do regime do tenant
   "lucro operacional", "EBITDA".
 - taxRegime=lucroPresumido  → use "IRPJ", "CSLL", "geração de caixa operacional". NÃO use "DAS" e
   EVITE "EBITDA" sem contexto.
-- taxRegime=lucroReal       → "IRPJ", "CSLL", "EBITDA" liberado.`;
+- taxRegime=lucroReal       → "IRPJ", "CSLL", "EBITDA" liberado.
+
+TERMINOLOGIA POR SEGMENTO (adapte o vocabulário dos cards ao setor)
+- varejo:           Ao mencionar CMV, escreva "Custo dos Produtos Vendidos (o que foi pago aos fornecedores)". Margem Bruta = "o que sobrou após pagar os fornecedores".
+- industria-leve:   Use termos de manufatura: insumos, custo de produção. Prefira lucroOperacional; evite EBITDA.
+- servicos-b2b:     Foque em custo de mão-de-obra, utilização da equipe, faturamento por consultor.
+- saas:             Use termos de recorrência (MRR, ARR, churn, expansão de receita).
+- agencia:          Foque em capacidade instalada, horas entregues, renegociação de pacotes.
+
+TOM DE VOZ (adapte os 3 cards ao toneOfVoice informado — sem misturar tons)
+- toneOfVoice=formal:   linguagem profissional, frases completas, use "a empresa" ou "o negócio". Sem gírias.
+- toneOfVoice=informal: use "você", "olha", "vamos". Contrações naturais são bem-vindas ("tá pressionando",
+  "olha essa situação"). As regras de verbo de ação e alvo numérico são obrigatórias independentemente do tom.
+
+REGRA ANTI-BENCHMARK
+Nunca cite médias do setor, benchmarks externos ou tetos recomendados ("acima da média", "o ideal é 35%",
+"abaixo do padrão de mercado", etc.). Use apenas números presentes na DRE e nos sinais fornecidos.
+
+EXEMPLO COMPLETO (DRE → 3 cards corretos — use como referência de qualidade)
+
+DRE de referência — 2026-04
+  Receita Bruta:   R$ 100.000
+  Receita Líquida: R$ 95.000
+  Custos Diretos:  R$ 50.000 (Margem Bruta 47,37%)
+  Pessoal (CLT):   R$ 10.000
+  Financeiras:     R$ 2.000
+  Lucro Líquido:   R$ 14.250 (margem 15,00%)
+
+Saída correta:
+[
+  {
+    "type": "critical_gap",
+    "title": "Custos consomem metade da receita",
+    "body": "Os Custos Diretos de R$ 50.000 representam 52,6% da Receita Líquida, comprimindo o Lucro Bruto para 47,4%. Renegocie contratos com os 3 maiores fornecedores nos próximos 30 dias para buscar redução de 5 pontos percentuais.",
+    "evidenceRefs": ["custosDiretos", "margemBruta"]
+  },
+  {
+    "type": "attention",
+    "title": "Despesas financeiras a controlar",
+    "body": "R$ 2.000 em juros e tarifas representam custo financeiro recorrente. Renegocie linhas de crédito com o banco principal até o fim do mês para reduzir para abaixo de R$ 1.000.",
+    "evidenceRefs": ["despesasFinanceiras"]
+  },
+  {
+    "type": "healthy",
+    "title": "Margem líquida saudável de 15%",
+    "body": "O Lucro Líquido de R$ 14.250 representa margem de 15% sobre a receita líquida — resultado forte. Expanda o mix de produtos com maior margem nos próximos 2 meses para capitalizar este desempenho.",
+    "evidenceRefs": ["lucroLiquido", "margemLiquida"]
+  }
+]`;
 }
 
 function formatAnomalies(anomalies: Anomaly[]): string {
@@ -131,6 +180,9 @@ ${formatMarginDiagnosis(input.marginDiagnosis)}
 RISCO DE CAIXA
 ${formatCashflowRisk(input.cashflowRisk)}
 
+${buildNarrativeSignals(input.dre, segment, taxRegime)}
+
 Gere os 3 cards de narrativa seguindo exatamente o formato JSON especificado (array com 3 objetos).
-Lembre: evidenceRefs DEVE referenciar métricas da DRE acima, codes das anomalias, ou status do diagnóstico.`;
+Lembre: evidenceRefs DEVE referenciar métricas da DRE acima, codes das anomalias, ou status do diagnóstico.
+Use os SINAIS CALCULADOS acima para decidir qual o maior gargalo, qual ponto merece atenção e qual o destaque saudável.`;
 }

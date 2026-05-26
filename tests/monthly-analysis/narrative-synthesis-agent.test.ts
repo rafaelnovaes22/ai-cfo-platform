@@ -162,7 +162,19 @@ describe("buildSystemPrompt / buildUserPrompt", () => {
     expect(sys).toContain("PROIBIDOS");
   });
 
-  it("user prompt injeta DRE, anomalias, diagnóstico e cashflow", () => {
+  it("system prompt inclui exemplo completo, terminologia por segmento, tom de voz e anti-benchmark", () => {
+    const sys = buildSystemPrompt();
+    expect(sys).toContain("EXEMPLO COMPLETO");
+    expect(sys).toContain("critical_gap");
+    expect(sys).toContain("evidenceRefs");
+    expect(sys).toContain("TERMINOLOGIA POR SEGMENTO");
+    expect(sys).toContain("varejo");
+    expect(sys).toContain("TOM DE VOZ");
+    expect(sys).toContain("toneOfVoice=formal");
+    expect(sys).toContain("ANTI-BENCHMARK");
+  });
+
+  it("user prompt injeta DRE, anomalias, diagnóstico, cashflow e sinais calculados", () => {
     const prompt = buildUserPrompt({
       dre: makeDre(),
       anomalies,
@@ -181,6 +193,36 @@ describe("buildSystemPrompt / buildUserPrompt", () => {
     expect(prompt).toContain("grossMarginStatus=healthy");
     expect(prompt).toContain("operatingMarginStatus=attention");
     expect(prompt).toContain("status=healthy");
+    expect(prompt).toContain("SINAIS CALCULADOS");
+    expect(prompt).toContain("PRIORIDADES OBRIGATORIAS");
+  });
+
+  it("sinais dispararam prioridade de pessoal quando >= 40% da receita líquida", () => {
+    // despesasPessoal 2.500.000 + prolabore 1.500.000 = 4.000.000 / receitaLiquida 9.500.000 = 42,1%
+    const prompt = buildUserPrompt({
+      dre: makeDre({ prolabore: 1_500_000 }),
+      anomalies: [],
+      marginDiagnosis,
+      cashflowRisk,
+      segment: "servicos-b2b",
+      taxRegime: "simples",
+      toneOfVoice: "formal",
+    });
+    expect(prompt).toContain("pessoal + pro-labore >= 40%");
+  });
+
+  it("sinais não disparam prioridade de pessoal quando < 40% da receita líquida", () => {
+    // despesasPessoal 2.500.000 + prolabore 500.000 = 3.000.000 / receitaLiquida 9.500.000 = 31,6%
+    const prompt = buildUserPrompt({
+      dre: makeDre(),
+      anomalies: [],
+      marginDiagnosis,
+      cashflowRisk,
+      segment: "servicos-b2b",
+      taxRegime: "simples",
+      toneOfVoice: "formal",
+    });
+    expect(prompt).not.toContain("pessoal + pro-labore >= 40%");
   });
 });
 
