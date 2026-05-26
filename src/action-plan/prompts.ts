@@ -15,13 +15,27 @@ HORIZONTES
 
 MINIMO OBRIGATORIO: 3 acoes short + 1 medium + 1 long.
 
+NIVEL DE DETALHE DAS DESCRICOES (OBRIGATORIO)
+Cada description DEVE ter exatamente 2 frases operacionais:
+- Frase 1: verbo ativo concreto + objeto especifico + criterio numerico ou temporal.
+  Use verbos que descrevem uma acao fisica: Levante, Separe, Compare, Negocie, Mapeie,
+  Meca, Instale, Defina, Liste, Cote, Reajuste, Bloqueie, Cancele.
+  NUNCA use como verbo principal: analisar, verificar, avaliar, pensar, considerar.
+  BOM: "Levante os 5 maiores fornecedores por valor pago nos ultimos 3 meses e solicite
+        cotacao de 2 concorrentes para cada um."
+  RUIM: "Analise os fornecedores para identificar oportunidades de reducao de custo."
+- Frase 2: criterio de priorizacao, condicao de alerta ou o que verificar primeiro.
+  BOM: "Priorize os que representam mais de 15% do CMV — esses tem maior alavancagem de margem."
+  RUIM: "Isso vai ajudar a empresa a reduzir custos."
+- Toda description DEVE conter pelo menos 1 numero (quantidade, %, prazo, valor em R$).
+
 FORMATO DE SAIDA (JSON puro, sem markdown):
 {
   "actions": [
     {
       "horizon": "short",
       "title": "<titulo direto, max 10 palavras>",
-      "description": "<2-3 frases: o que fazer, como fazer, por que>",
+      "description": "<2 frases operacionais: frase 1 com verbo ativo + objeto + numero; frase 2 com criterio de priorizacao>",
       "effortLevel": "low|medium|high",
       "riskLevel": "low|medium|high",
       "impactCents": <estimativa do impacto financeiro mensal em centavos, inteiro positivo>,

@@ -57,6 +57,21 @@ REGRAS DE EVIDÊNCIA (OBRIGATÓRIO)
 - evidenceRefs NÃO PODE ser vazio. Não invente evidências — use apenas o que
   está no contexto fornecido.
 
+NÍVEL DE DETALHE DAS DESCRIÇÕES (OBRIGATÓRIO)
+Cada description DEVE ter exatamente 2 frases operacionais:
+- Frase 1: verbo ativo concreto + objeto específico + critério numérico ou temporal.
+  Use verbos que descrevem uma ação física: Levante, Separe, Compare, Negocie, Mapeie,
+  Meça, Instale, Defina, Liste, Cote, Reajuste, Bloqueie, Cancele.
+  NUNCA use como verbo principal: analisar, verificar, avaliar, pensar, considerar.
+  BOM: "Levante os 5 maiores fornecedores por valor pago nos últimos 3 meses e solicite
+        cotação de 2 concorrentes para cada um."
+  RUIM: "Analise os fornecedores para identificar oportunidades de redução de custo."
+- Frase 2: critério de priorização, condição de alerta ou o que verificar primeiro —
+  algo que ajude o CEO a decidir por onde começar dentro da ação.
+  BOM: "Priorize os que representam mais de 15% do CMV — esses têm maior alavancagem de margem."
+  RUIM: "Isso vai ajudar a empresa a reduzir custos."
+- Toda description DEVE conter pelo menos 1 número (quantidade, %, prazo, valor em R$).
+
 CRITÉRIO DE "FEITO" (OBRIGATÓRIO)
 - doneWhen deve ser objetivo, verificável e mensurável.
   Bom: "Novo contrato assinado com redução >= R$ 800/mês visível na fatura de junho/2026."
@@ -68,12 +83,12 @@ FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
     {
       "horizon": "short",
       "title": "<máx 10 palavras, direto>",
-      "description": "<2-3 frases: o que, como, por quê>",
+      "description": "<2 frases operacionais: frase 1 com verbo ativo + objeto + número; frase 2 com critério de priorização>",
       "effortLevel": "low|medium|high",
       "riskLevel": "low|medium|high",
       "impactCents": <inteiro positivo, impacto MENSAL em centavos>,
       "deadlineDays": <inteiro positivo>,
-      "doneWhen": "<critério mensurável>",
+      "doneWhen": "<critério mensurável com número ou prazo>",
       "evidenceRefs": ["<ref1>", "<ref2>"],
       "assumptions": ["<premissa opcional>"],
       "confidence": <0.0..1.0>
