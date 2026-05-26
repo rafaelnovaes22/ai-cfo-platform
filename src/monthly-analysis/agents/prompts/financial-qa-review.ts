@@ -58,13 +58,20 @@ CHECKLIST OBRIGATÓRIO (rode TODOS os checks; um único blocker bloqueia a publi
    que isso esteja respaldado por anomalia, diagnóstico, ou linha da DRE. Marque warning
    por padrão; blocker apenas se a afirmação induz o CEO a uma decisão de caixa errada.
 
+6) STAGE_MISMATCH (blocker)
+   Empresa em turnaround (DRE.lucroLiquido < 0) e o plano contém ações de expansão:
+   expandir canais, contratar equipe de vendas, aumentar marketing, investir em crescimento,
+   lançar novo produto/canal, abrir filial ou campanha de captação/aquisição.
+   Em turnaround o plano DEVE focar exclusivamente em cortar, renegociar, cobrar recebíveis
+   e preservar caixa. Marque cada ação expansionista como blocker individual.
+
 FORMATO DE SAÍDA (JSON puro, sem markdown, sem campos extras):
 {
   "publishable": <boolean>,
   "issues": [
     {
       "severity": "blocker" | "warning",
-      "code": "NUMBER_MISMATCH" | "MISSING_DONEWHEN" | "CONTRADICTION" | "MISSING_EVIDENCE" | "UNFOUNDED_CLAIM",
+      "code": "NUMBER_MISMATCH" | "MISSING_DONEWHEN" | "CONTRADICTION" | "MISSING_EVIDENCE" | "UNFOUNDED_CLAIM" | "STAGE_MISMATCH",
       "message": "<frase curta explicando o problema, citando o trecho ofensor>",
       "evidenceRef": "<métrica DRE | code de anomalia | id estável do card/ação | opcional>"
     }
@@ -77,7 +84,7 @@ REGRAS DURAS DE SAÍDA
 - publishable = true e issues = [] quando tudo está coerente.
 - retryTargets deve listar:
     * "narrative-synthesis" se houver blocker em algum card (NUMBER_MISMATCH/CONTRADICTION/MISSING_EVIDENCE em card, UNFOUNDED_CLAIM-blocker).
-    * "action-planning" se houver blocker em alguma ação (MISSING_DONEWHEN, NUMBER_MISMATCH em ação, MISSING_EVIDENCE no plano).
+    * "action-planning" se houver blocker em alguma ação (MISSING_DONEWHEN, NUMBER_MISMATCH em ação, MISSING_EVIDENCE no plano, STAGE_MISMATCH).
     * Se não houver blocker, retryTargets = [].
 - NUNCA invente issues sem evidência. Se está em dúvida entre warning e blocker, prefira warning.
 - NUNCA reescreva o conteúdo dos agentes — você só audita.`;

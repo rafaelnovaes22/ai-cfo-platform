@@ -81,6 +81,7 @@ const QA_CODES = {
   contradiction: "CONTRADICTION",
   missingEvidence: "MISSING_EVIDENCE",
   unfoundedClaim: "UNFOUNDED_CLAIM",
+  stageMismatch: "STAGE_MISMATCH",
 } as const;
 
 export function runDeterministicFinancialQaReview(
@@ -156,6 +157,14 @@ export function runDeterministicFinancialQaReview(
         severity: "blocker",
         code: QA_CODES.unfoundedClaim,
         message: `action#${idx + 1} trata economia tributaria ou troca de regime como certeza sem validacao do contador.`,
+        evidenceRef: `action#${idx + 1}`,
+      }, "action-planning");
+    }
+    if (isTurnaround(dre) && isExpansionAction(action)) {
+      addIssue({
+        severity: "blocker",
+        code: QA_CODES.stageMismatch,
+        message: `action#${idx + 1} recomenda expansão ("${action.title}") em cenário de turnaround (lucroLiquido < 0). Foque em cortar, renegociar, cobrar recebíveis e preservar caixa.`,
         evidenceRef: `action#${idx + 1}`,
       }, "action-planning");
     }
@@ -335,6 +344,23 @@ function hasMaterialUnclassifiedData(dre: NonNullable<MonthlyAnalysisState["dre"
 
 function mentionsDataQuality(text: string): boolean {
   return /naoclassificado|nao classificado|não classificado|confiabilidade|qualidade dos dados|classificacao|classificação/.test(text);
+}
+
+function isTurnaround(dre: NonNullable<MonthlyAnalysisState["dre"]>): boolean {
+  return dre.lucroLiquido < 0;
+}
+
+function isExpansionAction(action: ActionPlanItemDraft): boolean {
+  const text = `${action.title} ${action.description} ${action.doneWhen}`.toLowerCase();
+  return (
+    /\bexpandir\b/.test(text) ||
+    /\bcontratar\s+(?:equipe|time|vendedor|representante|funcionário|funcionarios)\b/.test(text) ||
+    /\baumentar\s+(?:equipe|time|marketing|verba)\b/.test(text) ||
+    /\binvestir\s+em\s+crescimento\b/.test(text) ||
+    /\blançar\s+(?:novo|nova|novos|novas)\s+(?:produto|canal|serviço|linha)\b/.test(text) ||
+    /\babrir\s+(?:filial|loja|nova\s+unidade)\b/.test(text) ||
+    /\bcampanha\s+de\s+(?:captação|aquisição|marketing)\b/.test(text)
+  );
 }
 
 function isTaxOverreach(action: ActionPlanItemDraft): boolean {
