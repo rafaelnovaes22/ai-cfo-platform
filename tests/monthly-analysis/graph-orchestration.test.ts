@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock Prisma — duas chamadas: monthlyAnalysis.findUnique + ledgerEntry.findMany
+// Mock Prisma — monthlyAnalysis.findUnique + monthlyAnalysis.findMany (histórico) + ledgerEntry.findMany
 const findUniqueAnalysisMock = vi.fn();
+const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
     monthlyAnalysis: {
       findUnique: (...args: unknown[]) => findUniqueAnalysisMock(...args),
+      findMany: (...args: unknown[]) => findManyAnalysesMock(...args),
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
@@ -31,8 +33,10 @@ const ANALYSIS = "analysis-test";
 
 beforeEach(() => {
   findUniqueAnalysisMock.mockReset();
+  findManyAnalysesMock.mockReset();
   findManyLedgerMock.mockReset();
   callLlmMock.mockReset();
+  findManyAnalysesMock.mockResolvedValue([]); // padrão: sem histórico
 });
 
 function setupHappyPath(): void {
@@ -40,6 +44,8 @@ function setupHappyPath(): void {
     id: ANALYSIS,
     tenantId: TENANT,
     status: "pending",
+    referenceMonth: "2026-04",
+    openingBalanceCents: null,
     tenant: { industrySegment: "servicos-b2b", taxRegime: "simples", productConfig: {} },
   });
 

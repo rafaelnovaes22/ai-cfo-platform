@@ -252,6 +252,9 @@ model MonthlyAnalysis {
   clientEditedNarrative  String?
   clientEditedActionPlan String?
 
+  // Saldo inicial de caixa — informado pelo cliente no momento do import
+  openingBalanceCents Int?        // centavos; null = não informado (runway não calculado)
+
   // Rastreabilidade de custo (C3) e telemetria (C6)
   costCents      Int?             // custo real de inferência em centavos
   langfuseTraceId String?         // ID do trace Langfuse para auditoria

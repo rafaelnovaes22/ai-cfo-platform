@@ -40,6 +40,10 @@ export const MonthlyAnalysisAnnotation = Annotation.Root({
   taxRegime: Annotation<string | undefined>(),
   toneOfVoice: Annotation<string | undefined>(),
 
+  openingBalance: Annotation<number | undefined>(),
+  previousDre: Annotation<DreLines | undefined>(),
+  historicalDre: Annotation<DreLines[] | undefined>(),
+
   rawEntries: Annotation<RawLedgerEntry[] | undefined>(),
 
   normalizedEntries: Annotation<NormalizedLedgerEntry[] | undefined>(),
