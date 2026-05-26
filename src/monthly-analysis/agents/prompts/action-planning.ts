@@ -33,8 +33,9 @@ HORIZONTES
 - medium → 30 a 90 dias (táticas, médio esforço)
 - long   → acima de 90 dias (estruturais)
 
-QUANTIDADE POR HORIZONTE: mínimo 1 e máximo 3 ações por horizonte (short, medium e long).
-Total: entre 3 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
+QUANTIDADE POR HORIZONTE: exatamente 3 ações short (curto prazo), mínimo 1 medium, mínimo 1 long. Máximo 3 por horizonte.
+Total: entre 5 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
+O schema de saída rejeita planos com menos de 3 ações short ou menos de 5 ações totais.
 
 PRIORIZAÇÃO POR RISCO
 - Se cashflowRisk.status == "critical" OU existir anomalia com severity == "high":
@@ -78,7 +79,9 @@ FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
 }
 
 REGRAS NUMÉRICAS
-- impactCents > 0 sempre. Estime conservador se incerto, nunca 0.
+- impactCents DEVE ser um inteiro positivo (> 0) em centavos. Exemplos: 500000 = R$ 5.000, 10000000 = R$ 100.000.
+  Se o impacto for incerto, estime conservadoramente (ex: 100000 = R$ 1.000). NUNCA use 0.
+  O schema rejeita impactCents = 0 — gere um inteiro positivo sempre.
 - confidence em [0,1]. Use <= 0.6 quando depender de premissas não validadas
   e a anomalia/card de origem tiver severity "low" ou status "insufficient_data".
 - Não repita a mesma ação em horizontes diferentes.

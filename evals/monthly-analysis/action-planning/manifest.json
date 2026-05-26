@@ -12,11 +12,12 @@
   ],
   "eval_methods": {
     "default": [
-      "schema_validation",
-      "llm_as_judge",
-      "assertion_shape"
+      "assertion_shape",
+      "llm_as_judge"
     ]
   },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape valida ActionPlanDraftSchema (≥5 ações, ≥3 short, ≥1 medium, ≥1 long, campos obrigatórios). llm_as_judge fica como signal de qualidade (não bloqueante para ASSISTED).",
   "judge_dimensions": [
     "acionabilidade",
     "impacto_plausivel",

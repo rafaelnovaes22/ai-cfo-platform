@@ -12,10 +12,12 @@
   ],
   "eval_methods": {
     "default": [
-      "schema_validation",
+      "assertion_shape",
       "llm_as_judge"
     ]
   },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape valida NarrativeCardDraftsSchema (exatamente 3 cards, um de cada tipo, campos obrigatórios). llm_as_judge fica como signal de qualidade narrativa (não bloqueante para ASSISTED).",
   "judge_dimensions": [
     "factualidade",
     "sintese_executiva",
