@@ -26,6 +26,8 @@ export interface MonthlyAnalysisState {
   taxRegime?: string;
   toneOfVoice?: string;
 
+  openingBalance?: number;
+  previousDre?: DreLines;
   rawEntries?: RawLedgerEntry[];
 
   normalizedEntries?: NormalizedLedgerEntry[];

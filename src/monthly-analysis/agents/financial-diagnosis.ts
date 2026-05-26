@@ -95,9 +95,10 @@ export function detectFinancialAnomalies(input: {
   dre?: DreLines;
   normalizedEntries?: NormalizedLedgerEntry[];
   segment?: string;
+  previousDre?: DreLines;
 }): Anomaly[] {
   const anomalies: Anomaly[] = [];
-  const { dre, normalizedEntries = [], segment } = input;
+  const { dre, normalizedEntries = [], segment, previousDre } = input;
   const thresholds = resolveThresholds(segment);
 
   if (!dre || dre.receitaLiquida <= 0) {
@@ -285,6 +286,74 @@ export function detectFinancialAnomalies(input: {
     }
   }
 
+  if (previousDre && previousDre.receitaLiquida > 0) {
+    const prevRevenue = previousDre.receitaLiquida;
+    const revenueChange = (revenue - prevRevenue) / prevRevenue;
+
+    if (revenueChange <= -0.20) {
+      anomalies.push(anomaly(
+        "revenue_decline_mom",
+        "Queda de receita relevante vs mês anterior",
+        `Receita líquida caiu ${Math.abs(revenueChange * 100).toFixed(1)}% em relação ao mês anterior (${money(prevRevenue)} → ${money(revenue)}).`,
+        "high",
+        `receita_liquida=${money(revenue)}; receita_anterior=${money(prevRevenue)}; variacao=${(revenueChange * 100).toFixed(1)}%`,
+        Math.abs(revenue - prevRevenue),
+      ));
+    } else if (revenueChange <= -0.10) {
+      anomalies.push(anomaly(
+        "revenue_decline_mom",
+        "Queda de receita vs mês anterior",
+        `Receita líquida caiu ${Math.abs(revenueChange * 100).toFixed(1)}% em relação ao mês anterior (${money(prevRevenue)} → ${money(revenue)}).`,
+        "medium",
+        `receita_liquida=${money(revenue)}; receita_anterior=${money(prevRevenue)}; variacao=${(revenueChange * 100).toFixed(1)}%`,
+        Math.abs(revenue - prevRevenue),
+      ));
+    }
+
+    const marginChangePp = dre.margemBruta - previousDre.margemBruta;
+    if (marginChangePp <= -10) {
+      anomalies.push(anomaly(
+        "margin_deterioration_mom",
+        "Queda acentuada de margem bruta vs mês anterior",
+        `Margem bruta caiu ${Math.abs(marginChangePp).toFixed(1)}pp em relação ao mês anterior (${pct(previousDre.margemBruta)} → ${pct(dre.margemBruta)}).`,
+        "high",
+        `margem_bruta=${pct(dre.margemBruta)}; margem_anterior=${pct(previousDre.margemBruta)}; queda=${Math.abs(marginChangePp).toFixed(1)}pp`,
+        Math.abs(dre.custosDiretos - previousDre.custosDiretos),
+      ));
+    } else if (marginChangePp <= -5) {
+      anomalies.push(anomaly(
+        "margin_deterioration_mom",
+        "Queda de margem bruta vs mês anterior",
+        `Margem bruta caiu ${Math.abs(marginChangePp).toFixed(1)}pp em relação ao mês anterior (${pct(previousDre.margemBruta)} → ${pct(dre.margemBruta)}).`,
+        "medium",
+        `margem_bruta=${pct(dre.margemBruta)}; margem_anterior=${pct(previousDre.margemBruta)}; queda=${Math.abs(marginChangePp).toFixed(1)}pp`,
+      ));
+    }
+
+    if (previousDre.totalDespesasOp > 0) {
+      const expenseChange = (dre.totalDespesasOp - previousDre.totalDespesasOp) / previousDre.totalDespesasOp;
+      if (expenseChange >= 0.40 && revenueChange < 0.05) {
+        anomalies.push(anomaly(
+          "expense_spike_mom",
+          "Salto expressivo de despesas operacionais vs mês anterior",
+          `Despesas operacionais cresceram ${(expenseChange * 100).toFixed(1)}% vs mês anterior (${money(previousDre.totalDespesasOp)} → ${money(dre.totalDespesasOp)}) sem crescimento equivalente de receita.`,
+          "high",
+          `totalDespesasOp=${money(dre.totalDespesasOp)}; despesas_anteriores=${money(previousDre.totalDespesasOp)}; variacao=${(expenseChange * 100).toFixed(1)}%`,
+          dre.totalDespesasOp - previousDre.totalDespesasOp,
+        ));
+      } else if (expenseChange >= 0.25 && revenueChange < 0.05) {
+        anomalies.push(anomaly(
+          "expense_spike_mom",
+          "Crescimento de despesas operacionais vs mês anterior",
+          `Despesas operacionais cresceram ${(expenseChange * 100).toFixed(1)}% vs mês anterior (${money(previousDre.totalDespesasOp)} → ${money(dre.totalDespesasOp)}) sem crescimento equivalente de receita.`,
+          "medium",
+          `totalDespesasOp=${money(dre.totalDespesasOp)}; despesas_anteriores=${money(previousDre.totalDespesasOp)}; variacao=${(expenseChange * 100).toFixed(1)}%`,
+          dre.totalDespesasOp - previousDre.totalDespesasOp,
+        ));
+      }
+    }
+  }
+
   return anomalies;
 }
 
@@ -341,7 +410,42 @@ export function diagnoseMargins(dre?: DreLines, segment?: string): MarginDiagnos
   return MarginDiagnosisSchema.parse({ grossMarginStatus, operatingMarginStatus, mainDrivers: drivers });
 }
 
-export function assessCashflowRisk(entries?: NormalizedLedgerEntry[]): CashflowRisk {
+function applyRunway(result: CashflowRisk, inflow: number, outflow: number, openingBalance?: number): CashflowRisk {
+  const monthlyBurn = outflow - inflow;
+
+  if (openingBalance === undefined) {
+    if (monthlyBurn > 0) {
+      return CashflowRiskSchema.parse({
+        ...result,
+        limitations: [...result.limitations, "Saldo inicial de caixa não informado — runway não calculado."],
+      });
+    }
+    return result;
+  }
+
+  if (monthlyBurn <= 0) return result;
+
+  const runwayMonths = openingBalance / monthlyBurn;
+  if (runwayMonths < 2) {
+    return CashflowRiskSchema.parse({
+      status: "critical",
+      reasons: [...result.reasons, `Runway estimado em ${runwayMonths.toFixed(1)} mês(es) com o ritmo atual de consumo.`],
+      limitations: result.limitations,
+    });
+  }
+  if (runwayMonths < 4) {
+    return CashflowRiskSchema.parse({
+      status: result.status === "healthy" ? "attention" : result.status,
+      reasons: [...result.reasons, `Runway de caixa estimado em ${runwayMonths.toFixed(1)} meses — reserva abaixo de 4 meses.`],
+      limitations: result.limitations,
+    });
+  }
+  return result;
+}
+
+export function assessCashflowRisk(entries?: NormalizedLedgerEntry[], options?: { openingBalance?: number }): CashflowRisk {
+  const openingBalance = options?.openingBalance;
+
   if (!entries || entries.length < MIN_CASHFLOW_ENTRIES) {
     return CashflowRiskSchema.parse({
       status: "insufficient_data",
@@ -375,41 +479,39 @@ export function assessCashflowRisk(entries?: NormalizedLedgerEntry[]): CashflowR
     .reduce((largest, entry) => Math.max(largest, Math.abs(entry.amountCents)), 0);
   const inflowConcentration = safeRatio(topInflow, inflow);
 
+  let baseResult: CashflowRisk;
+
   if (inflow <= 0) {
-    return CashflowRiskSchema.parse({
+    baseResult = CashflowRiskSchema.parse({
       status: "critical",
       reasons: ["Não há entradas registradas no período, mas existem saídas de caixa."],
       limitations: [],
     });
-  }
-
-  if (netCashflow < 0 && burnRatio >= 0.15) {
-    return CashflowRiskSchema.parse({
+  } else if (netCashflow < 0 && burnRatio >= 0.15) {
+    baseResult = CashflowRiskSchema.parse({
       status: "critical",
       reasons: [`Saídas superam entradas em ${(burnRatio * 100).toFixed(2)}% (${money(Math.abs(netCashflow))}).`],
       limitations: [],
     });
-  }
-
-  if (netCashflow < 0 || netMargin < 0.1 || inflowConcentration >= 0.7) {
+  } else if (netCashflow < 0 || netMargin < 0.1 || inflowConcentration >= 0.7) {
     const reasons = [
       netCashflow < 0
         ? `Fluxo de caixa líquido negativo em ${money(Math.abs(netCashflow))}.`
         : `Folga líquida baixa: ${(netMargin * 100).toFixed(2)}% das entradas.`,
     ];
-
     if (inflowConcentration >= 0.7) {
       reasons.push(`Entrada mais relevante concentra ${(inflowConcentration * 100).toFixed(2)}% das entradas.`);
     }
-
-    return CashflowRiskSchema.parse({ status: "attention", reasons, limitations: [] });
+    baseResult = CashflowRiskSchema.parse({ status: "attention", reasons, limitations: [] });
+  } else {
+    baseResult = CashflowRiskSchema.parse({
+      status: "healthy",
+      reasons: [`Entradas cobrem saídas com folga líquida de ${(netMargin * 100).toFixed(2)}%.`],
+      limitations: [],
+    });
   }
 
-  return CashflowRiskSchema.parse({
-    status: "healthy",
-    reasons: [`Entradas cobrem saídas com folga líquida de ${(netMargin * 100).toFixed(2)}%.`],
-    limitations: [],
-  });
+  return applyRunway(baseResult, inflow, outflow, openingBalance);
 }
 
 function appendTrace(state: MonthlyAnalysisState, agent: AgentName, input: unknown, output: unknown): MonthlyAnalysisState["traces"][number] {
@@ -430,7 +532,7 @@ function appendAgentError(state: MonthlyAnalysisState, agent: AgentName, error: 
 export function runAnomalyDetectionAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "anomaly-detection";
   try {
-    const input = { dre: state.dre, normalizedEntries: state.normalizedEntries, segment: state.segment };
+    const input = { dre: state.dre, normalizedEntries: state.normalizedEntries, segment: state.segment, previousDre: state.previousDre };
     const anomalies = detectFinancialAnomalies(input);
     return { ...state, anomalies, traces: [...state.traces, appendTrace(state, agent, input, anomalies)] };
   } catch (error) {
@@ -451,7 +553,7 @@ export function runMarginDiagnosisAgent(state: MonthlyAnalysisState): MonthlyAna
 export function runCashflowRiskAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "cashflow-risk";
   try {
-    const cashflowRisk = assessCashflowRisk(state.normalizedEntries);
+    const cashflowRisk = assessCashflowRisk(state.normalizedEntries, { openingBalance: state.openingBalance });
     return { ...state, cashflowRisk, traces: [...state.traces, appendTrace(state, agent, state.normalizedEntries, cashflowRisk)] };
   } catch (error) {
     return { ...state, errors: [...state.errors, appendAgentError(state, agent, error)] };
