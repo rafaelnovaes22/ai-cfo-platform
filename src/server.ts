@@ -47,12 +47,19 @@ await app.register(rateLimit, {
   }),
 });
 
-// CORS: lê FRONTEND_ORIGIN do .env. Em dev, default permite Vite (5173).
-// Aceita múltiplas origens separadas por vírgula (ex: dev local + Vercel preview).
-const frontendOrigin = process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
-const allowedOrigins = frontendOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+// CORS: lê FRONTEND_ORIGIN do .env (vírgula para múltiplas origens).
+// Em Railway sem FRONTEND_ORIGIN configurado, aceita qualquer *.up.railway.app.
+// Em dev, fallback para localhost:5173.
+function buildCorsOrigins(): (string | RegExp)[] {
+  const env = process.env.FRONTEND_ORIGIN;
+  if (env) return env.split(",").map((o) => o.trim()).filter(Boolean);
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    return ["http://localhost:5173", /^https:\/\/.*\.up\.railway\.app$/];
+  }
+  return ["http://localhost:5173"];
+}
 await app.register(cors, {
-  origin: allowedOrigins,
+  origin: buildCorsOrigins(),
   credentials: true,
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   exposedHeaders: ["x-request-id"],
