@@ -21,6 +21,28 @@ type MarginStatus = MarginDiagnosis["grossMarginStatus"];
 
 type Driver = MarginDiagnosis["mainDrivers"][number];
 
+// Thresholds de margem calibrados por segmento de mercado brasileiro.
+// Segmentos válidos espelham o enum industrySegment do schema Prisma:
+// agencia | industria-leve | servicos-b2b | saas | varejo | geral
+interface SegmentThresholds {
+  gross: { healthy: number; attention: number };
+  operating: { healthy: number; attention: number };
+  netLossThreshold: number; // ratio de prejuízo/receita que aciona "high" (vs 0.10 default)
+}
+
+const SEGMENT_THRESHOLDS: Record<string, SegmentThresholds> = {
+  varejo:           { gross: { healthy: 30, attention: 15 }, operating: { healthy: 8,  attention: 2  }, netLossThreshold: 0.05 },
+  "industria-leve": { gross: { healthy: 35, attention: 20 }, operating: { healthy: 10, attention: 3  }, netLossThreshold: 0.08 },
+  "servicos-b2b":   { gross: { healthy: 55, attention: 35 }, operating: { healthy: 15, attention: 5  }, netLossThreshold: 0.10 },
+  saas:             { gross: { healthy: 65, attention: 45 }, operating: { healthy: 20, attention: 8  }, netLossThreshold: 0.10 },
+  agencia:          { gross: { healthy: 50, attention: 30 }, operating: { healthy: 12, attention: 4  }, netLossThreshold: 0.08 },
+  geral:            { gross: { healthy: 50, attention: 30 }, operating: { healthy: 15, attention: 5  }, netLossThreshold: 0.10 },
+};
+
+function resolveThresholds(segment?: string): SegmentThresholds {
+  return SEGMENT_THRESHOLDS[segment ?? "geral"] ?? SEGMENT_THRESHOLDS["geral"]!;
+}
+
 function hashPayload(payload: unknown): string {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
 }
@@ -72,9 +94,11 @@ function anomaly(code: string, title: string, description: string, severity: Age
 export function detectFinancialAnomalies(input: {
   dre?: DreLines;
   normalizedEntries?: NormalizedLedgerEntry[];
+  segment?: string;
 }): Anomaly[] {
   const anomalies: Anomaly[] = [];
-  const { dre, normalizedEntries = [] } = input;
+  const { dre, normalizedEntries = [], segment } = input;
+  const thresholds = resolveThresholds(segment);
 
   if (!dre || dre.receitaLiquida <= 0) {
     return [
@@ -93,7 +117,7 @@ export function detectFinancialAnomalies(input: {
   const unclassifiedRatio = safeRatio(dre.naoClassificado, revenue);
   const financeExpenseRatio = safeRatio(dre.despesasFinanceiras, revenue);
 
-  if (dre.lucroLiquido < 0 && netLossRatio >= 0.1) {
+  if (dre.lucroLiquido < 0 && netLossRatio >= thresholds.netLossThreshold) {
     anomalies.push(anomaly(
       "net_loss_critical",
       "Prejuízo líquido relevante",
@@ -113,30 +137,30 @@ export function detectFinancialAnomalies(input: {
       `margem_operacional=${pct(dre.margemOperacional)}; ebit=${money(dre.ebit)}`,
       Math.abs(Math.min(dre.ebit, 0)),
     ));
-  } else if (dre.margemOperacional < 5) {
+  } else if (dre.margemOperacional < thresholds.operating.attention) {
     anomalies.push(anomaly(
       "thin_operating_margin",
       "Margem operacional estreita",
-      `A margem operacional de ${pct(dre.margemOperacional)} deixa pouca folga para impostos, juros e oscilações de receita.`,
+      `A margem operacional de ${pct(dre.margemOperacional)} está abaixo do mínimo esperado para este segmento (${thresholds.operating.attention}%), deixando pouca folga para impostos e oscilações.`,
       "medium",
       `margem_operacional=${pct(dre.margemOperacional)}`,
     ));
   }
 
-  if (dre.margemBruta < 20) {
+  if (dre.margemBruta < thresholds.gross.attention) {
     anomalies.push(anomaly(
       "gross_margin_critical",
       "Margem bruta crítica",
-      `Custos diretos consomem a maior parte da receita; margem bruta atual é ${pct(dre.margemBruta)}.`,
+      `Custos diretos consomem a maior parte da receita; margem bruta atual é ${pct(dre.margemBruta)}, abaixo do mínimo de ${thresholds.gross.attention}% esperado para este segmento.`,
       "high",
       `margem_bruta=${pct(dre.margemBruta)}; custos_diretos=${money(dre.custosDiretos)}`,
-      Math.max(0, dre.custosDiretos - Math.round(revenue * 0.8)),
+      Math.max(0, dre.custosDiretos - Math.round(revenue * (1 - thresholds.gross.attention / 100))),
     ));
-  } else if (dre.margemBruta < 35) {
+  } else if (dre.margemBruta < thresholds.gross.healthy) {
     anomalies.push(anomaly(
       "gross_margin_attention",
       "Margem bruta em atenção",
-      `A margem bruta de ${pct(dre.margemBruta)} sugere pressão de custos diretos ou precificação.`,
+      `A margem bruta de ${pct(dre.margemBruta)} está abaixo da referência saudável de ${thresholds.gross.healthy}% para este segmento, sugerindo pressão de custos ou precificação.`,
       "medium",
       `margem_bruta=${pct(dre.margemBruta)}`,
     ));
@@ -194,7 +218,7 @@ export function detectFinancialAnomalies(input: {
   return anomalies;
 }
 
-export function diagnoseMargins(dre?: DreLines): MarginDiagnosis {
+export function diagnoseMargins(dre?: DreLines, segment?: string): MarginDiagnosis {
   if (!dre || dre.receitaLiquida <= 0) {
     return MarginDiagnosisSchema.parse({
       grossMarginStatus: "critical",
@@ -208,12 +232,15 @@ export function diagnoseMargins(dre?: DreLines): MarginDiagnosis {
     });
   }
 
-  const grossMarginStatus = statusFromMargin(dre.margemBruta, { healthy: 50, attention: 30 });
-  const operatingMarginStatus = statusFromMargin(dre.margemOperacional, { healthy: 15, attention: 5 });
+  const thresholds = resolveThresholds(segment);
+  const grossMarginStatus = statusFromMargin(dre.margemBruta, thresholds.gross);
+  const operatingMarginStatus = statusFromMargin(dre.margemOperacional, thresholds.operating);
   const drivers: Driver[] = [];
 
   if (grossMarginStatus !== "healthy") {
-    const targetCostRatio = grossMarginStatus === "critical" ? 0.7 : 0.5;
+    // targetCostRatio: percentual máximo de custos diretos sobre receita líquida para o segmento
+    const targetGrossMargin = grossMarginStatus === "critical" ? thresholds.gross.attention : thresholds.gross.healthy;
+    const targetCostRatio = (100 - targetGrossMargin) / 100;
     drivers.push({
       driver: "Custos diretos pressionam a margem bruta",
       evidenceMetric: `margem_bruta=${pct(dre.margemBruta)}; custos_diretos=${money(dre.custosDiretos)}`,
@@ -333,7 +360,7 @@ function appendAgentError(state: MonthlyAnalysisState, agent: AgentName, error: 
 export function runAnomalyDetectionAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "anomaly-detection";
   try {
-    const input = { dre: state.dre, normalizedEntries: state.normalizedEntries };
+    const input = { dre: state.dre, normalizedEntries: state.normalizedEntries, segment: state.segment };
     const anomalies = detectFinancialAnomalies(input);
     return { ...state, anomalies, traces: [...state.traces, appendTrace(state, agent, input, anomalies)] };
   } catch (error) {
@@ -344,7 +371,7 @@ export function runAnomalyDetectionAgent(state: MonthlyAnalysisState): MonthlyAn
 export function runMarginDiagnosisAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "margin-diagnosis";
   try {
-    const marginDiagnosis = diagnoseMargins(state.dre);
+    const marginDiagnosis = diagnoseMargins(state.dre, state.segment);
     return { ...state, marginDiagnosis, traces: [...state.traces, appendTrace(state, agent, state.dre, marginDiagnosis)] };
   } catch (error) {
     return { ...state, errors: [...state.errors, appendAgentError(state, agent, error)] };

@@ -5,5 +5,5 @@ import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 export async function marginDiagnosisNode(
   state: MonthlyAnalysisState,
 ): Promise<Partial<MonthlyAnalysisState>> {
-  return { marginDiagnosis: diagnoseMargins(state.dre) };
+  return { marginDiagnosis: diagnoseMargins(state.dre, state.segment) };
 }

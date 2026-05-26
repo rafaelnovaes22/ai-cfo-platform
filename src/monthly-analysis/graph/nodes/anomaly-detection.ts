@@ -9,6 +9,7 @@ export async function anomalyDetectionNode(
   const anomalies = detectFinancialAnomalies({
     dre: state.dre,
     normalizedEntries: state.normalizedEntries,
+    segment: state.segment,
   });
   return { anomalies };
 }
