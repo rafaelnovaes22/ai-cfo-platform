@@ -43,7 +43,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
         ...defaultErrorResponses,
       },
     },
-    preHandler: [requireAuth, requireMode("assisted", "autonomous")],
+    preHandler: [requireAuth, requireMode("shadow", "assisted", "autonomous")],
     handler: async (req, reply) => {
       const db = getPrisma();
       const analysis = await db.monthlyAnalysis.findFirst({

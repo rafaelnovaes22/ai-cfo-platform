@@ -44,7 +44,7 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
         ...defaultErrorResponses,
       },
     },
-    preHandler: [requireAuth, requireMode("assisted", "autonomous")],
+    preHandler: [requireAuth, requireMode("shadow", "assisted", "autonomous")],
     handler: async (req, reply) => {
       const db = getPrisma();
       const requestId = randomUUID();
