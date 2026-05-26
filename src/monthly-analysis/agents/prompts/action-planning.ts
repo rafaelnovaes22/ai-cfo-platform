@@ -40,6 +40,13 @@ QUANTIDADE POR HORIZONTE: exatamente 3 ações short (curto prazo), mínimo 1 me
 Total: entre 5 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
 O schema de saída rejeita planos com menos de 3 ações short ou menos de 5 ações totais.
 
+ORDENAÇÃO DAS AÇÕES SHORT (OBRIGATÓRIO)
+As 3 ações short DEVEM aparecer ordenadas em ordem decrescente de ROI estimado:
+  ROI = impactCents ÷ effortScore  (effortLevel: low=1, medium=2, high=3)
+  A ação com maior ROI aparece PRIMEIRO — o CEO vê a alavanca mais forte antes.
+  Desempate: riskLevel crescente (low < medium < high).
+  Exemplo: impactCents=50000 + effortLevel=low → ROI=50000 vem antes de impactCents=40000 + effortLevel=low → ROI=40000.
+
 PRIORIZAÇÃO POR RISCO
 - Se cashflowRisk.status == "critical" OU existir anomalia com severity == "high":
   favoreça FORTEMENTE o horizonte SHORT (preserve caixa, reduza saída imediata,

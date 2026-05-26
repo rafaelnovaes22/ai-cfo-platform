@@ -98,8 +98,10 @@ Nunca cite médias do setor, benchmarks externos ou tetos recomendados ("acima d
 "abaixo do padrão de mercado", etc.). Use apenas números presentes na DRE e nos sinais fornecidos.
 
 EXEMPLO COMPLETO (DRE → 3 cards corretos — use como referência de qualidade)
+Nota: este exemplo usa thresholds do segmento "geral". Para outros segmentos os limiares mudam
+— use sempre os SINAIS CALCULADOS no user prompt como referência, não os valores do exemplo.
 
-DRE de referência — 2026-04
+DRE de referência — 2026-04 | Segmento: geral
   Receita Bruta:   R$ 100.000
   Receita Líquida: R$ 95.000
   Custos Diretos:  R$ 50.000 (Margem Bruta 47,37%)
@@ -162,7 +164,7 @@ export function buildUserPrompt(input: NarrativeSynthesisAgentInput): string {
   const referenceMonth = input.referenceMonth ?? "(mês não informado)";
   const segment = input.segment ?? "(não informado)";
   const taxRegime = input.taxRegime ?? "simples";
-  const toneOfVoice = input.toneOfVoice ?? "claro, direto, sem jargão";
+  const toneOfVoice = input.toneOfVoice ?? "formal";
 
   return `CONTEXTO DA EMPRESA
 - Segmento: ${segment}

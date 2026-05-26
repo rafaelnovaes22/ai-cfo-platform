@@ -351,7 +351,8 @@ function isTurnaround(dre: NonNullable<MonthlyAnalysisState["dre"]>): boolean {
 }
 
 function isExpansionAction(action: ActionPlanItemDraft): boolean {
-  const text = `${action.title} ${action.description} ${action.doneWhen}`.toLowerCase();
+  // Verifica apenas title + description — doneWhen é critério de conclusão, não de intenção
+  const text = `${action.title} ${action.description}`.toLowerCase();
   return (
     /\bexpandir\b/.test(text) ||
     /\bcontratar\s+(?:equipe|time|vendedor|representante|funcionário|funcionarios)\b/.test(text) ||

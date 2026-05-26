@@ -21,16 +21,16 @@ type MarginStatus = MarginDiagnosis["grossMarginStatus"];
 
 type Driver = MarginDiagnosis["mainDrivers"][number];
 
-// Thresholds de margem calibrados por segmento de mercado brasileiro.
-// Segmentos válidos espelham o enum industrySegment do schema Prisma:
-// agencia | industria-leve | servicos-b2b | saas | varejo | geral
+// Espelha o enum industrySegment do schema Prisma (C8: nenhuma chave fora deste union é válida).
+export type IndustrySegment = "varejo" | "industria-leve" | "servicos-b2b" | "saas" | "agencia" | "geral";
+
 interface SegmentThresholds {
   gross: { healthy: number; attention: number };
   operating: { healthy: number; attention: number };
-  netLossThreshold: number; // ratio de prejuízo/receita que aciona "high" (vs 0.10 default)
+  netLossThreshold: number; // ratio prejuízo/receita que aciona severidade "high"
 }
 
-const SEGMENT_THRESHOLDS: Record<string, SegmentThresholds> = {
+const SEGMENT_THRESHOLDS: Record<IndustrySegment, SegmentThresholds> = {
   varejo:           { gross: { healthy: 30, attention: 15 }, operating: { healthy: 8,  attention: 2  }, netLossThreshold: 0.05 },
   "industria-leve": { gross: { healthy: 35, attention: 20 }, operating: { healthy: 10, attention: 3  }, netLossThreshold: 0.08 },
   "servicos-b2b":   { gross: { healthy: 55, attention: 35 }, operating: { healthy: 15, attention: 5  }, netLossThreshold: 0.10 },
@@ -40,7 +40,7 @@ const SEGMENT_THRESHOLDS: Record<string, SegmentThresholds> = {
 };
 
 function resolveThresholds(segment?: string): SegmentThresholds {
-  return SEGMENT_THRESHOLDS[segment ?? "geral"] ?? SEGMENT_THRESHOLDS["geral"]!;
+  return SEGMENT_THRESHOLDS[segment as IndustrySegment] ?? SEGMENT_THRESHOLDS.geral;
 }
 
 function hashPayload(payload: unknown): string {
@@ -166,6 +166,27 @@ export function detectFinancialAnomalies(input: {
     ));
   }
 
+  const peopleCostRatio = safeRatio(dre.despesasPessoal + dre.prolabore, revenue);
+  if (peopleCostRatio >= 0.5) {
+    anomalies.push(anomaly(
+      "people_cost_high",
+      "Custo de pessoal crítico",
+      `Pessoal + pró-labore somam ${money(dre.despesasPessoal + dre.prolabore)}, equivalente a ${(peopleCostRatio * 100).toFixed(2)}% da receita líquida — alto demais para sustentar margens.`,
+      "high",
+      `despesasPessoal=${money(dre.despesasPessoal)}; prolabore=${money(dre.prolabore)}; receita_liquida=${money(revenue)}`,
+      dre.despesasPessoal + dre.prolabore,
+    ));
+  } else if (peopleCostRatio >= 0.4) {
+    anomalies.push(anomaly(
+      "people_cost_high",
+      "Custo de pessoal elevado",
+      `Pessoal + pró-labore somam ${money(dre.despesasPessoal + dre.prolabore)}, representando ${(peopleCostRatio * 100).toFixed(2)}% da receita líquida.`,
+      "medium",
+      `despesasPessoal=${money(dre.despesasPessoal)}; prolabore=${money(dre.prolabore)}; receita_liquida=${money(revenue)}`,
+      dre.despesasPessoal + dre.prolabore,
+    ));
+  }
+
   if (unclassifiedRatio >= 0.15) {
     anomalies.push(anomaly(
       "unclassified_volume_high",
@@ -197,6 +218,29 @@ export function detectFinancialAnomalies(input: {
     ));
   }
 
+  const leverageRatio = safeRatio(dre.despesasFinanceiras, dre.ebitda);
+  if (dre.ebitda > 0) {
+    if (leverageRatio >= 0.6) {
+      anomalies.push(anomaly(
+        "leverage_ebitda_high",
+        "Alavancagem financeira crítica",
+        `Despesas financeiras de ${money(dre.despesasFinanceiras)} consomem ${(leverageRatio * 100).toFixed(2)}% do EBITDA (${money(dre.ebitda)}), indicando pressão de dívida acima do sustentável.`,
+        "high",
+        `despesas_financeiras=${money(dre.despesasFinanceiras)}; ebitda=${money(dre.ebitda)}`,
+        dre.despesasFinanceiras,
+      ));
+    } else if (leverageRatio >= 0.3) {
+      anomalies.push(anomaly(
+        "leverage_ebitda_high",
+        "Alavancagem financeira elevada",
+        `Despesas financeiras de ${money(dre.despesasFinanceiras)} consomem ${(leverageRatio * 100).toFixed(2)}% do EBITDA (${money(dre.ebitda)}).`,
+        "medium",
+        `despesas_financeiras=${money(dre.despesasFinanceiras)}; ebitda=${money(dre.ebitda)}`,
+        dre.despesasFinanceiras,
+      ));
+    }
+  }
+
   const largestOutflow = normalizedEntries
     .filter((entry) => entry.direction === "out")
     .reduce<NormalizedLedgerEntry | undefined>((largest, entry) => {
@@ -213,6 +257,32 @@ export function detectFinancialAnomalies(input: {
       `maior_saida=${money(Math.abs(largestOutflow.amountCents))}; receita_liquida=${money(revenue)}`,
       Math.abs(largestOutflow.amountCents),
     ));
+  }
+
+  const outflowEntries = normalizedEntries.filter((e) => e.direction === "out");
+  const totalOutflow = outflowEntries.reduce((sum, e) => sum + Math.abs(e.amountCents), 0);
+  if (outflowEntries.length > 0 && totalOutflow > revenue * 0.05) {
+    const byDescription = new Map<string, number>();
+    for (const e of outflowEntries) {
+      byDescription.set(e.normalizedDescription, (byDescription.get(e.normalizedDescription) ?? 0) + Math.abs(e.amountCents));
+    }
+    const topEntry = [...byDescription.entries()].reduce<[string, number] | undefined>(
+      (biggest, current) => (!biggest || current[1] > biggest[1] ? current : biggest),
+      undefined,
+    );
+    if (topEntry) {
+      const concentrationRatio = safeRatio(topEntry[1], totalOutflow);
+      if (concentrationRatio >= 0.4) {
+        anomalies.push(anomaly(
+          "outflow_concentration_high",
+          "Saída concentrada em fornecedor único",
+          `"${topEntry[0]}" representa ${(concentrationRatio * 100).toFixed(2)}% das saídas do período (${money(topEntry[1])} de ${money(totalOutflow)} em saídas).`,
+          "medium",
+          `fornecedor=${topEntry[0]}; concentracao=${(concentrationRatio * 100).toFixed(2)}%; total_saidas=${money(totalOutflow)}`,
+          topEntry[1],
+        ));
+      }
+    }
   }
 
   return anomalies;
