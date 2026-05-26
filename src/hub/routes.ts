@@ -13,6 +13,16 @@ const DreSnapshotSchema = z.object({
   margemEbitda:  z.number(),
 });
 
+const TrendPointSchema = z.object({
+  referenceMonth:   z.string(),
+  receitaLiquida:   z.number(),
+  lucroLiquido:     z.number(),
+  ebitda:           z.number(),
+  margemBruta:      z.number(),
+  margemOperacional: z.number(),
+  margemLiquida:    z.number(),
+});
+
 const AnalysisSummarySchema = z.object({
   id:               z.string(),
   referenceMonth:   z.string(),
@@ -125,6 +135,44 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
           actionPlan,
         },
       });
+    },
+  });
+
+  // Série temporal — últimos 12 meses fechados com métricas DRE para gráficos
+  f.get("/analyses/trend", {
+    schema: {
+      response: { 200: z.object({ trend: z.array(TrendPointSchema) }) },
+    },
+    preHandler: [requireAuth, requireScope("hub:read")],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const records = await db.monthlyAnalysis.findMany({
+        where: {
+          tenantId: req.auth!.tenantId,
+          status: { in: ["ready", "delivered", "approved"] },
+        },
+        orderBy: { referenceMonth: "desc" },
+        take: 12,
+        select: { referenceMonth: true, dreJson: true },
+      });
+
+      const trend = records
+        .filter((r) => r.dreJson != null)
+        .reverse()
+        .map((r) => {
+          const d = r.dreJson as DreLines;
+          return {
+            referenceMonth:    r.referenceMonth,
+            receitaLiquida:    d.receitaLiquida,
+            lucroLiquido:      d.lucroLiquido,
+            ebitda:            d.ebitda,
+            margemBruta:       d.margemBruta,
+            margemOperacional: d.margemOperacional,
+            margemLiquida:     d.margemLiquida,
+          };
+        });
+
+      return reply.send({ trend });
     },
   });
 

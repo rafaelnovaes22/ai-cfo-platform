@@ -1,6 +1,16 @@
 import { apiFetch, apiUpload } from "./client.js";
 import type { paths } from "./types.js";
 
+export interface TrendPoint {
+  referenceMonth: string;
+  receitaLiquida: number;
+  lucroLiquido: number;
+  ebitda: number;
+  margemBruta: number;
+  margemOperacional: number;
+  margemLiquida: number;
+}
+
 type Json<T> = T extends { content: { "application/json": infer R } } ? R : never;
 
 type Req200<P extends keyof paths, M extends keyof paths[P]> =
@@ -194,6 +204,8 @@ export const hub = {
 
 export const analyses = {
   list: () => apiFetch<AnalysesResponse>("/analyses"),
+
+  trend: () => apiFetch<{ trend: TrendPoint[] }>("/analyses/trend"),
 
   approve: (analysisId: string) =>
     apiFetch<Req200<"/analysis/{analysisId}/approve", "post">>(
