@@ -132,7 +132,7 @@ model Subscription {
   tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   plan                  SubscriptionPlan   @default(trial)
-  mode                  SubscriptionMode   @default(shadow)
+  mode                  SubscriptionMode   @default(assisted)
   status                SubscriptionStatus @default(active)
 
   // Stripe (billing — Onda 0)

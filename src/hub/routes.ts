@@ -76,16 +76,12 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
 
       const subInfo = subscription
         ? { plan: subscription.plan, mode: subscription.mode, status: subscription.status }
-        : { plan: "trial", mode: "shadow", status: "active" };
+        : { plan: "trial", mode: "assisted", status: "active" };
 
       if (!latestAnalysis) return reply.send({ subscription: subInfo, latestAnalysis: null });
 
-      // C4 (defesa em profundidade) — em SHADOW o cliente NÃO recebe dre/cards/actionPlan.
-      // Front continua bloqueando CTAs; backend redacta independente.
-      const isShadow = latestAnalysis.mode === "shadow";
-
       const dreRaw = latestAnalysis.dreJson as DreLines | null;
-      const dre = (!isShadow && dreRaw)
+      const dre = dreRaw
         ? {
             receitaBruta:  dreRaw.receitaBruta,
             lucroLiquido:  dreRaw.lucroLiquido,
@@ -95,9 +91,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
           }
         : null;
 
-      const cards = isShadow
-        ? { critical_gap: 0, attention: 0, healthy: 0 }
-        : {
+      const cards = {
             critical_gap: latestAnalysis.narrativeCards.filter((c) => c.cardType === "critical_gap").length,
             attention:    latestAnalysis.narrativeCards.filter((c) => c.cardType === "attention").length,
             healthy:      latestAnalysis.narrativeCards.filter((c) => c.cardType === "healthy").length,
@@ -107,7 +101,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
       const sumH = (h: string) =>
         items.filter((i) => i.horizon === h).reduce((acc, i) => acc + i.impactCents, 0);
 
-      const actionPlan = (!isShadow && items.length > 0)
+      const actionPlan = (items.length > 0)
         ? {
             total:             items.length,
             shortImpactCents:  sumH("short"),
