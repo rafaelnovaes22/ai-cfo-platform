@@ -148,6 +148,20 @@ export function detectFinancialAnomalies(input: {
     ));
   }
 
+  if (dre.ebit >= 0 && dre.margemBruta > 0 && dre.totalDespesasOp > 0) {
+    const breakEvenRevenue = (dre.totalDespesasOp / dre.margemBruta) * 100;
+    const safetyMargin = safeRatio(revenue - breakEvenRevenue, revenue);
+    if (safetyMargin < 0.10) {
+      anomalies.push(anomaly(
+        "near_breakeven",
+        "Operação próxima ao break-even",
+        `Break-even operacional estimado em ${money(Math.round(breakEvenRevenue))}; folga atual de ${(safetyMargin * 100).toFixed(1)}% (${money(Math.round(revenue - breakEvenRevenue))}) — qualquer recuo de receita coloca a operação no vermelho.`,
+        "medium",
+        `break_even=${money(Math.round(breakEvenRevenue))}; receita_liquida=${money(revenue)}; folga=${(safetyMargin * 100).toFixed(1)}%`,
+      ));
+    }
+  }
+
   if (dre.margemBruta < thresholds.gross.attention) {
     anomalies.push(anomaly(
       "gross_margin_critical",
@@ -185,6 +199,26 @@ export function detectFinancialAnomalies(input: {
       "medium",
       `despesasPessoal=${money(dre.despesasPessoal)}; prolabore=${money(dre.prolabore)}; receita_liquida=${money(revenue)}`,
       dre.despesasPessoal + dre.prolabore,
+    ));
+  }
+
+  if (dre.prolabore > 0 && dre.lucroLiquido < 0) {
+    anomalies.push(anomaly(
+      "prolabore_exceeds_profit",
+      "Pró-labore com empresa no prejuízo",
+      `A empresa fechou com prejuízo de ${money(Math.abs(dre.lucroLiquido))} enquanto o sócio retirou pró-labore de ${money(dre.prolabore)}.`,
+      "high",
+      `prolabore=${money(dre.prolabore)}; lucro_liquido=${money(dre.lucroLiquido)}`,
+      dre.prolabore,
+    ));
+  } else if (dre.prolabore > dre.lucroLiquido && dre.lucroLiquido > 0) {
+    anomalies.push(anomaly(
+      "prolabore_exceeds_profit",
+      "Pró-labore supera lucro líquido",
+      `O pró-labore de ${money(dre.prolabore)} supera o lucro líquido de ${money(dre.lucroLiquido)} — o sócio retira mais do que a empresa gera.`,
+      "medium",
+      `prolabore=${money(dre.prolabore)}; lucro_liquido=${money(dre.lucroLiquido)}`,
+      dre.prolabore - dre.lucroLiquido,
     ));
   }
 
@@ -281,6 +315,41 @@ export function detectFinancialAnomalies(input: {
           "medium",
           `fornecedor=${topEntry[0]}; concentracao=${(concentrationRatio * 100).toFixed(2)}%; total_saidas=${money(totalOutflow)}`,
           topEntry[1],
+        ));
+      }
+    }
+  }
+
+  const clientEntries = normalizedEntries.filter((e) => e.direction === "in");
+  const totalClientInflow = clientEntries.reduce((sum, e) => sum + Math.abs(e.amountCents), 0);
+  if (clientEntries.length > 0 && totalClientInflow > revenue * 0.05) {
+    const byClient = new Map<string, number>();
+    for (const e of clientEntries) {
+      byClient.set(e.normalizedDescription, (byClient.get(e.normalizedDescription) ?? 0) + Math.abs(e.amountCents));
+    }
+    const topClient = [...byClient.entries()].reduce<[string, number] | undefined>(
+      (biggest, current) => (!biggest || current[1] > biggest[1] ? current : biggest),
+      undefined,
+    );
+    if (topClient) {
+      const clientConcentration = safeRatio(topClient[1], totalClientInflow);
+      if (clientConcentration >= 0.5) {
+        anomalies.push(anomaly(
+          "inflow_concentration_high",
+          "Receita concentrada em cliente único",
+          `"${topClient[0]}" representa ${(clientConcentration * 100).toFixed(2)}% das entradas do período (${money(topClient[1])} de ${money(totalClientInflow)}). Saída desse cliente comprometeria a operação.`,
+          "high",
+          `cliente=${topClient[0]}; concentracao=${(clientConcentration * 100).toFixed(2)}%; total_entradas=${money(totalClientInflow)}`,
+          topClient[1],
+        ));
+      } else if (clientConcentration >= 0.35) {
+        anomalies.push(anomaly(
+          "inflow_concentration_high",
+          "Receita parcialmente concentrada em cliente único",
+          `"${topClient[0]}" representa ${(clientConcentration * 100).toFixed(2)}% das entradas do período (${money(topClient[1])} de ${money(totalClientInflow)}).`,
+          "medium",
+          `cliente=${topClient[0]}; concentracao=${(clientConcentration * 100).toFixed(2)}%; total_entradas=${money(totalClientInflow)}`,
+          topClient[1],
         ));
       }
     }

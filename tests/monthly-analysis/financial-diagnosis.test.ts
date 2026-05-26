@@ -189,11 +189,12 @@ describe("monthly-analysis financial diagnosis agents", () => {
     it("preenche saídas e traces sem custo de LLM", () => {
       const state = createInitialMonthlyAnalysisState({ analysisId: "analysis-1", tenantId: "tenant-1" });
       const withDre = { ...state, dre: dre(), normalizedEntries: [
-        entry("r1", "2026-05-01", "in", 500_000),
-        entry("r2", "2026-05-02", "in", 500_000),
-        entry("c1", "2026-05-03", "out", 150_000),
-        entry("c2", "2026-05-04", "out", 150_000),
-        entry("c3", "2026-05-05", "out", 150_000),
+        entry("r1", "2026-05-01", "in", 320_000),
+        entry("r2", "2026-05-02", "in", 340_000),
+        entry("r3", "2026-05-03", "in", 340_000),
+        entry("c1", "2026-05-04", "out", 150_000),
+        entry("c2", "2026-05-05", "out", 150_000),
+        entry("c3", "2026-05-06", "out", 150_000),
       ] };
 
       const diagnosed = runCashflowRiskAgent(runMarginDiagnosisAgent(runAnomalyDetectionAgent(withDre)));
@@ -419,6 +420,95 @@ describe("MoM comparison — comparação mensal", () => {
     const anomalies = detectFinancialAnomalies({ dre: dre() });
     const momCodes = ["revenue_decline_mom", "margin_deterioration_mom", "expense_spike_mom"];
     expect(anomalies.some((a) => momCodes.includes(a.code))).toBe(false);
+  });
+});
+
+describe("prolabore_exceeds_profit — pró-labore vs lucro", () => {
+  it("high quando empresa tem prejuízo e sócio retira pró-labore", () => {
+    const anomalies = detectFinancialAnomalies({ dre: dre({ lucroLiquido: -30_000, margemLiquida: -3, prolabore: 50_000 }) });
+    expect(anomalies.some((a) => a.code === "prolabore_exceeds_profit" && a.severity === "high")).toBe(true);
+  });
+
+  it("medium quando pró-labore supera lucro líquido positivo", () => {
+    const anomalies = detectFinancialAnomalies({ dre: dre({ prolabore: 250_000, lucroLiquido: 200_000, margemLiquida: 20 }) });
+    expect(anomalies.some((a) => a.code === "prolabore_exceeds_profit" && a.severity === "medium")).toBe(true);
+  });
+
+  it("não dispara quando prolabore <= lucroLiquido", () => {
+    // base: prolabore=50k, lucroLiquido=200k
+    const anomalies = detectFinancialAnomalies({ dre: dre() });
+    expect(anomalies.some((a) => a.code === "prolabore_exceeds_profit")).toBe(false);
+  });
+
+  it("não dispara quando prolabore = 0", () => {
+    const anomalies = detectFinancialAnomalies({ dre: dre({ prolabore: 0, lucroLiquido: -10_000 }) });
+    expect(anomalies.some((a) => a.code === "prolabore_exceeds_profit")).toBe(false);
+  });
+});
+
+describe("near_breakeven — distância ao break-even operacional", () => {
+  it("medium quando folga < 10% (ebit positivo)", () => {
+    // totalDespesasOp=560k, margemBruta=60 → breakEven=933k, folga=6.7%
+    const anomalies = detectFinancialAnomalies({ dre: dre({ totalDespesasOp: 560_000, ebit: 40_000, margemOperacional: 4, ebitda: 40_000, margemEbitda: 4 }) });
+    expect(anomalies.some((a) => a.code === "near_breakeven" && a.severity === "medium")).toBe(true);
+  });
+
+  it("não dispara quando folga >= 10%", () => {
+    // base: totalDespesasOp=320k, margemBruta=60 → breakEven=533k, folga=46.7%
+    const anomalies = detectFinancialAnomalies({ dre: dre() });
+    expect(anomalies.some((a) => a.code === "near_breakeven")).toBe(false);
+  });
+
+  it("não dispara quando ebit < 0 (coberto por negative_operating_margin)", () => {
+    const anomalies = detectFinancialAnomalies({ dre: dre({ ebit: -50_000, margemOperacional: -5 }) });
+    expect(anomalies.some((a) => a.code === "near_breakeven")).toBe(false);
+  });
+});
+
+describe("inflow_concentration_high — concentração de receita", () => {
+  it("high quando cliente único >= 50% das entradas", () => {
+    // ACME=600k de 1_000k → 60%
+    const anomalies = detectFinancialAnomalies({
+      dre: dre({ receitaLiquida: 500_000 }),
+      normalizedEntries: [
+        entry("ACME", "2026-05-01", "in", 300_000),
+        entry("ACME", "2026-05-02", "in", 300_000),
+        entry("BETA", "2026-05-03", "in", 200_000),
+        entry("GAMA", "2026-05-04", "in", 200_000),
+        entry("c1",   "2026-05-05", "out", 50_000),
+      ],
+    });
+    expect(anomalies.some((a) => a.code === "inflow_concentration_high" && a.severity === "high")).toBe(true);
+  });
+
+  it("medium quando cliente único 35-50% das entradas", () => {
+    // ACME=400k de 1_000k → 40%
+    const anomalies = detectFinancialAnomalies({
+      dre: dre({ receitaLiquida: 500_000 }),
+      normalizedEntries: [
+        entry("ACME", "2026-05-01", "in", 400_000),
+        entry("BETA", "2026-05-02", "in", 300_000),
+        entry("GAMA", "2026-05-03", "in", 300_000),
+        entry("c1",   "2026-05-04", "out", 50_000),
+        entry("c2",   "2026-05-05", "out", 50_000),
+      ],
+    });
+    expect(anomalies.some((a) => a.code === "inflow_concentration_high" && a.severity === "medium")).toBe(true);
+  });
+
+  it("não dispara quando distribuição < 35%", () => {
+    // 3 clientes iguais → 33% cada
+    const anomalies = detectFinancialAnomalies({
+      dre: dre({ receitaLiquida: 500_000 }),
+      normalizedEntries: [
+        entry("A", "2026-05-01", "in", 333_000),
+        entry("B", "2026-05-02", "in", 333_000),
+        entry("C", "2026-05-03", "in", 334_000),
+        entry("c1", "2026-05-04", "out", 50_000),
+        entry("c2", "2026-05-05", "out", 50_000),
+      ],
+    });
+    expect(anomalies.some((a) => a.code === "inflow_concentration_high")).toBe(false);
   });
 });
 
