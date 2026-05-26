@@ -1,0 +1,13 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npm run build"
+
+[deploy]
+startCommand = "npx serve -s dist"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Variáveis obrigatórias em prod (configurar no dashboard Railway):
+# VITE_API_URL — URL pública do backend (ex: https://api.aicfo.com.br)
