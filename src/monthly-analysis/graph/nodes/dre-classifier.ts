@@ -15,7 +15,7 @@ export async function dreClassifierNode(
     amountCents: entry.amountCents,
     direction: entry.direction,
   }));
-  const classifications = await runDreClassificationAgent(inputs, { tenantId: state.tenantId });
+  const classifications = await runDreClassificationAgent(inputs, { tenantId: state.tenantId, segment: state.segment });
   const finalClassifications =
     state.clarityResults && state.clarityResults.length > 0
       ? applyClarityCaps(classifications, state.clarityResults)

@@ -86,6 +86,9 @@ export interface EntryForClassification {
   direction: string;
 }
 
-export function buildUserPrompt(entries: EntryForClassification[]): string {
-  return `Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
+export function buildUserPrompt(entries: EntryForClassification[], segment?: string): string {
+  const segmentLine = segment
+    ? `Segmento da empresa: ${segment}. Use o vocabulário típico do setor ao classificar (ex: mensalidades → receita_bruta para SaaS; CMV → custos_diretos para varejo).\n\n`
+    : "";
+  return `${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
 }

@@ -160,6 +160,27 @@ describe("monthly-analysis classification agents", () => {
     expect(request.userPrompt).toContain("NF 123 CLIENTE ABC LTDA");
   });
 
+  it("inclui segmento no userPrompt quando passado nas options", async () => {
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([{ entryId: "e1", category: "receita_bruta", confidence: 0.95 }]),
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 10,
+      outputTokens: 10,
+      costCents: 1,
+      traceId: null,
+    });
+
+    await runDreClassificationAgent(
+      [{ entryId: "e1", date: "2026-05-01", description: "MENSALIDADE CLIENTE ABC", amountCents: 50000, direction: "credit" }],
+      { tenantId: "tenant-1", segment: "saas" },
+    );
+
+    const request = callLlmMock.mock.calls[0]?.[0] as { userPrompt: string };
+    expect(request.userPrompt).toContain("saas");
+    expect(request.userPrompt).toContain("Segmento da empresa");
+  });
+
   it("does not call the LLM for empty batches", async () => {
     await expect(runClarityJudgeAgent([], { tenantId: "tenant-1" })).resolves.toEqual([]);
     await expect(runDreClassificationAgent([], { tenantId: "tenant-1" })).resolves.toEqual([]);

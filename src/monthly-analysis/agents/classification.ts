@@ -21,6 +21,7 @@ import {
 export interface MonthlyAgentRunOptions {
   tenantId: string;
   traceId?: string;
+  segment?: string;
 }
 
 export type DreClassificationAgentInput = EntryForClassification;
@@ -84,7 +85,7 @@ export async function runDreClassificationAgent(
   const response = await callLlm({
     task: "dre-classification",
     systemPrompt: buildDreSystemPrompt(),
-    userPrompt: buildDreUserPrompt(entries),
+    userPrompt: buildDreUserPrompt(entries, options.segment),
     tenantId: options.tenantId,
     traceId: options.traceId,
     jsonMode: true,
