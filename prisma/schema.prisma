@@ -245,6 +245,7 @@ model MonthlyAnalysis {
 
   // Conteúdo gerado (JSONB — estrutura evolui sem migrations)
   dreJson        Json?            // DRE classificado estruturado
+  anomaliesJson  Json?            // anomalias detectadas (Anomaly[])
   narrativeJson  Json?            // resumo dos 3 cards
   actionPlanJson Json?            // resumo do plano 3-horizontes
 

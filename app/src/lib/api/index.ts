@@ -11,6 +11,15 @@ export interface TrendPoint {
   margemLiquida: number;
 }
 
+export interface AnomalyTimelinePoint {
+  referenceMonth: string;
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+  codes: string[];
+}
+
 type Json<T> = T extends { content: { "application/json": infer R } } ? R : never;
 
 type Req200<P extends keyof paths, M extends keyof paths[P]> =
@@ -206,6 +215,8 @@ export const analyses = {
   list: () => apiFetch<AnalysesResponse>("/analyses"),
 
   trend: () => apiFetch<{ trend: TrendPoint[] }>("/analyses/trend"),
+
+  anomalyTimeline: () => apiFetch<{ timeline: AnomalyTimelinePoint[] }>("/analyses/anomaly-timeline"),
 
   approve: (analysisId: string) =>
     apiFetch<Req200<"/analysis/{analysisId}/approve", "post">>(

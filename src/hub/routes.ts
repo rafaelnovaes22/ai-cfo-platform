@@ -23,6 +23,15 @@ const TrendPointSchema = z.object({
   margemLiquida:    z.number(),
 });
 
+const AnomalyTimelinePointSchema = z.object({
+  referenceMonth: z.string(),
+  total:          z.number(),
+  high:           z.number(),
+  medium:         z.number(),
+  low:            z.number(),
+  codes:          z.array(z.string()),
+});
+
 const AnalysisSummarySchema = z.object({
   id:               z.string(),
   referenceMonth:   z.string(),
@@ -173,6 +182,45 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
         });
 
       return reply.send({ trend });
+    },
+  });
+
+  // Timeline de anomalias — últimos 12 meses com contagem e códigos por severidade
+  f.get("/analyses/anomaly-timeline", {
+    schema: {
+      response: { 200: z.object({ timeline: z.array(AnomalyTimelinePointSchema) }) },
+    },
+    preHandler: [requireAuth, requireScope("hub:read")],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const records = await db.monthlyAnalysis.findMany({
+        where: {
+          tenantId: req.auth!.tenantId,
+          status: { in: ["ready", "delivered", "approved"] },
+        },
+        orderBy: { referenceMonth: "desc" },
+        take: 12,
+        select: { referenceMonth: true, anomaliesJson: true },
+      });
+
+      type RawAnomaly = { code: string; severity: string };
+
+      const timeline = records
+        .filter((r) => r.anomaliesJson != null)
+        .reverse()
+        .map((r) => {
+          const anomalies = r.anomaliesJson as RawAnomaly[];
+          return {
+            referenceMonth: r.referenceMonth,
+            total:          anomalies.length,
+            high:           anomalies.filter((a) => a.severity === "high").length,
+            medium:         anomalies.filter((a) => a.severity === "medium").length,
+            low:            anomalies.filter((a) => a.severity === "low").length,
+            codes:          [...new Set(anomalies.map((a) => a.code))],
+          };
+        });
+
+      return reply.send({ timeline });
     },
   });
 
