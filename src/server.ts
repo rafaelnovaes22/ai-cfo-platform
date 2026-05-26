@@ -5,6 +5,7 @@ import {
   jsonSchemaTransform,
 } from "fastify-type-provider-zod";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { logger } from "@/observability/logger.js";
@@ -32,6 +33,19 @@ const app = Fastify({
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
+
+// Rate limiting global: protege contra abuso e ataques de força bruta.
+// Rotas de auth têm limite próprio mais restrito (ver auth/routes.ts).
+await app.register(rateLimit, {
+  max: Number(process.env.RATE_LIMIT_MAX ?? 100),
+  timeWindow: "1 minute",
+  keyGenerator: (req) => req.ip,
+  skipOnError: true,
+  errorResponseBuilder: (_req, context) => ({
+    statusCode: 429,
+    message: `Limite de requisições atingido. Tente novamente em ${Math.ceil(context.ttl / 1000)}s.`,
+  }),
+});
 
 // CORS: lê FRONTEND_ORIGIN do .env. Em dev, default permite Vite (5173).
 // Aceita múltiplas origens separadas por vírgula (ex: dev local + Vercel preview).

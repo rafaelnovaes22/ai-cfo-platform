@@ -33,7 +33,7 @@ export function startWorkers(): void {
     },
     {
       connection: getWorkerRedis(),
-      concurrency: 3,
+      concurrency: Number(process.env.WORKER_CONCURRENCY_CLASSIFICATION ?? 3),
     },
   );
 
@@ -51,7 +51,7 @@ export function startWorkers(): void {
       logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Gerando narrativa DRE");
       await generateDreNarrative(job.data.analysisId, job.data.tenantId);
     },
-    { connection: getWorkerRedis(), concurrency: 2 },
+    { connection: getWorkerRedis(), concurrency: Number(process.env.WORKER_CONCURRENCY_NARRATIVE ?? 2) },
   );
 
   dreNarrativeWorker.on("completed", (job) =>
@@ -67,7 +67,7 @@ export function startWorkers(): void {
       logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Gerando plano de ação");
       await generateActionPlan(job.data.analysisId, job.data.tenantId, job.data.dre);
     },
-    { connection: getWorkerRedis(), concurrency: 2 },
+    { connection: getWorkerRedis(), concurrency: Number(process.env.WORKER_CONCURRENCY_ACTION ?? 2) },
   );
 
   actionPlanWorker.on("completed", (job) =>
