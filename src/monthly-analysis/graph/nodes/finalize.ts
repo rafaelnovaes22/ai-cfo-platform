@@ -17,7 +17,7 @@ function resolveEvidence(
 ): NarrativeEvidence[] {
   return refs.map((ref) => {
     if (dre && ref in dre) {
-      const value = (dre as unknown as Record<string, number>)[ref];
+      const value = (dre as unknown as Record<string, number>)[ref] ?? 0;
       return { metric: ref, value, unit: PERCENTAGE_DRE_KEYS.has(ref) ? "percent" : "brl_cents" };
     }
     if (ref.startsWith("marginDiagnosis.") || ref.startsWith("cashflowRisk.")) {

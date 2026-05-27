@@ -4,6 +4,7 @@ import { classifyAnalysis } from "@/classification/classifier.js";
 import { generateDreNarrative } from "@/dre-narrative/narrator.js";
 import { generateActionPlan } from "@/action-plan/generator.js";
 import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
+import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { ClassificationJob, DreNarrativeJob, ActionPlanJob, MonthlyAnalysisGraphJob } from "@/queue/index.js";
 
@@ -100,9 +101,22 @@ export function startWorkers(): void {
   graphWorker.on("completed", (job) =>
     logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "LangGraph monthly-analysis: concluído"),
   );
-  graphWorker.on("failed", (job, err) =>
-    logger.error({ jobId: job?.id, err }, "LangGraph monthly-analysis: falhou"),
-  );
+  graphWorker.on("failed", async (job, err) => {
+    logger.error({ jobId: job?.id, analysisId: job?.data.analysisId, err }, "LangGraph monthly-analysis: falhou");
+    // Quando BullMQ esgota todas as tentativas, atualiza o status no banco para
+    // evitar que a análise fique presa em "generating" indefinidamente.
+    if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+      try {
+        await getPrisma().monthlyAnalysis.update({
+          where: { id: job.data.analysisId },
+          data: { status: "pending" },
+        });
+        logger.warn({ jobId: job.id, analysisId: job.data.analysisId }, "LangGraph: análise revertida para pending após esgotar tentativas — re-ingest necessário");
+      } catch (updateErr) {
+        logger.error({ jobId: job.id, updateErr }, "Falha ao atualizar status para failed");
+      }
+    }
+  });
 
   logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph]");
 }
