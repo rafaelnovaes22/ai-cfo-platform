@@ -170,7 +170,7 @@ export async function runExactMatchCategory(opts: RunOptions): Promise<RunSummar
   });
 }
 
-// Quando há override de modelo (eval comparativo), bypass callLlm e Langfuse.
+// Quando há override de modelo (eval comparativo), bypass callLlm e tracing.
 // Caso contrário usa o router de produção via callLlm (com trace).
 async function dispatchLlm(
   override: { provider: LlmProvider; model: string } | null,

@@ -154,7 +154,7 @@ Tempo total esperado: < 7 min do cadastro à primeira análise visível
 Toda chamada LLM em `src/skus/monthly-analysis/nodes/**` instrumentada via wrapper:
 
 ```ts
-import { trace } from "@/observability/langfuse";
+import { createTrace } from "@/observability/tracing";
 
 const span = trace.start({
   name: "narrative-card-generator",

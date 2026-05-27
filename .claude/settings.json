@@ -128,7 +128,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash hooks/post-tool-use/langfuse-trace-check.sh",
+            "command": "bash hooks/post-tool-use/tracing-check.sh",
             "timeout": 5000
           },
           {

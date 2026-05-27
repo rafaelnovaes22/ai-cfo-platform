@@ -97,7 +97,7 @@ Exemplos mal formados (rejeitar):
 | O que funcionou e foi confirmado em SHADOW+ | `§ confirmed_patterns` |
 | Stack, limites de memória, versões de runtime | `§ tech_constraints` |
 | Custos reais de tokens, volume de eval | `§ economics_real` |
-| Campos úteis de telemetria, Langfuse hints | `§ telemetry_hints` |
+| Campos úteis de telemetria, LangSmith hints | `§ telemetry_hints` |
 | Categorias de PII presentes (não dados reais) | `§ pii_categories` |
 
 ### Passo 5: Produzir proposta de patch

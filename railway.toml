@@ -14,7 +14,7 @@ restartPolicyMaxRetries = 3
 # REDIS_URL     — Redis URL (railway.internal ou externo)
 # JWT_SECRET    — string aleatória forte (openssl rand -hex 32)
 # GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION / GOOGLE_APPLICATION_CREDENTIALS_JSON
-# LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_HOST
+# LANGSMITH_API_KEY / LANGSMITH_PROJECT / LANGCHAIN_TRACING_V2 — tracing C6 (Forge v0.22.0+)
 # STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
 # FRONTEND_ORIGIN — URL do frontend em prod (ex: https://app.aicfo.com.br)
 # PUBLIC_API_URL  — URL pública do backend (ex: https://api.aicfo.com.br)

@@ -12,7 +12,7 @@
 | `adr-approval-gate` | PreToolUse | Edit/Write | Bloqueia edição de ADRs assinadas |
 | `secret-scan` | PreToolUse | Edit/Write | Detecta vazamento de API keys e connection strings |
 | `any-type-guard` | PreToolUse | Edit/Write | Bloqueia `any` em `src/skus/**` e `src/agents/**` |
-| `langfuse-trace-check` | PostToolUse | Edit/Write | Avisa quando chamadas LLM não têm trace Langfuse (C6) |
+| `tracing-check` | PostToolUse | Edit/Write | Avisa quando chamadas LLM não têm instrumentação de trace (C6 — LangSmith canonical) |
 | `unit-economics-recalc` | PostToolUse | Edit/Write | Avisa quando prompts mudam e recalc C3 é necessário |
 | `manifest-sync` | PostToolUse | Edit/Write | Avisa quando artefatos Forge mudam sem update de manifest |
 | `5-gates-summary` | Stop | Fim de sessão | Gera relatório dos 5 gates Forge da branch atual |
@@ -30,7 +30,7 @@ hooks/
     secret-scan.sh             # bloqueia (exit 2)
     any-type-guard.sh          # bloqueia (exit 2)
   post-tool-use/
-    langfuse-trace-check.sh    # avisa (exit 1)
+    tracing-check.sh           # avisa (exit 1)
     unit-economics-recalc.sh   # avisa (exit 1)
     manifest-sync.sh           # informa (exit 0)
   stop/

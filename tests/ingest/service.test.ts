@@ -11,7 +11,7 @@ vi.mock("@/ingest/parsers/excel.js", () => ({ parseExcel: vi.fn() }));
 vi.mock("@/ingest/parsers/text.js", () => ({ parseText: vi.fn() }));
 vi.mock("@/ingest/parsers/pdf-dre.js", () => ({ parsePdfDre: vi.fn() }));
 vi.mock("@/ingest/parsers/manual.js", () => ({ parseManual: vi.fn() }));
-vi.mock("@/observability/langfuse.js", () => ({ createTrace: vi.fn() }));
+vi.mock("@/observability/tracing.js", () => ({ createTrace: vi.fn() }));
 vi.mock("@/observability/logger.js", () => ({ logger: { error: vi.fn(), info: vi.fn() } }));
 
 function entry(overrides: Partial<RawLedger> = {}): RawLedger {

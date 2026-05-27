@@ -20,12 +20,11 @@ jobs:
     env:
       # Dummies necessários só para o Prisma client gerar sem reclamar de env.
       DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
-      # Dummies para Stripe/Langfuse/Anthropic — código não chama em build/teste.
+      # Dummies para Stripe/LangSmith — código não chama em build/teste.
       STRIPE_SECRET_KEY: "sk_test_dummy"
       STRIPE_WEBHOOK_SECRET: "whsec_dummy"
-      ANTHROPIC_API_KEY: "dummy"
-      LANGFUSE_PUBLIC_KEY: ""
-      LANGFUSE_SECRET_KEY: ""
+      LANGSMITH_API_KEY: ""
+      LANGSMITH_PROJECT: "aicfo-ci"
 
     steps:
       - uses: actions/checkout@v4

@@ -123,7 +123,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
         anomaliesJson: anomalies as unknown as object,
         narrativeJson: cards as unknown as object,
         costCents:     (analysis.costCents ?? 0) + llmResponse.costCents,
-        langfuseTraceId: llmResponse.traceId,
+        traceId: llmResponse.traceId,
       },
     });
   });

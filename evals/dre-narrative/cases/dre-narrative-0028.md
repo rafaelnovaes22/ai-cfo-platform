@@ -24,7 +24,7 @@ across_5_runs:
   no_run_may_omit_a_card_type: true
 persistence_check:
   deleteMany_then_createMany_in_single_transaction: true   # spec §3
-  langfuseTraceId_must_change_between_runs: true           # cada run = trace novo
+  traceId_must_change_between_runs: true                   # cada run = trace novo
 judge_criteria:
   clareza: "Cards bem escritos para PME varejo saudável (case-0001); linguagem profissional e direta"
   acionabilidade: "critical_gap e attention têm ação com verbo ativo (Defina/Renegocie/Reduza) + alvo numérico + prazo; healthy usa verbo de oportunidade (Expanda/Aumente/Teste)"

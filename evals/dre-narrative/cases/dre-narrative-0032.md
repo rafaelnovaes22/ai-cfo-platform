@@ -21,7 +21,7 @@ robustness_requirements:
   retry_count_max: 1                   # 1 retry no Gemini antes do fallback
   fallback_model: "claude-sonnet-4-6"
   final_response_must_parse_as_pure_json: true
-  langfuseTraceId_must_record_retry_and_fallback: true
+  traceId_must_record_retry_and_fallback: true
   costCents_must_accumulate_all_attempts: true
 judge_criteria:
   clareza: "Saída final tem qualidade equivalente, independente de qual modelo respondeu"

@@ -1,6 +1,9 @@
 import { randomUUID } from "crypto";
 import { RunTree } from "langsmith";
 
+// Provider-agnostic tracing layer (C6 + C7). Implementação atual via LangSmith,
+// mas a interface não vaza o provider — toda mudança de tracer mora aqui.
+
 const noopChild = { end: async (_opts?: unknown): Promise<void> => {} };
 
 function makeNoopTrace(id: string) {
@@ -97,5 +100,6 @@ export function createTrace(opts: TraceOptions) {
   };
 }
 
-// Kept for backward compat (server.ts shutdown hook).
-export async function flushLangfuse(): Promise<void> {}
+// Flush hook chamado no shutdown do server. Reservado para casos futuros em que
+// o provider precise de drain explícito (LangSmith atualmente é fire-and-forget).
+export async function flushTraces(): Promise<void> {}

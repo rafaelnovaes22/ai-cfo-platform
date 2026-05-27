@@ -171,7 +171,7 @@ export async function runLlmAsJudge(opts: RunOptions): Promise<RunSummary> {
   });
 }
 
-// Quando há override de modelo (benchmark), bypass router/callLlm e Langfuse.
+// Quando há override de modelo (benchmark), bypass router/callLlm e tracing.
 // Caso contrário, usa router de produção (com fallback + trace).
 async function dispatchGenerator(
   override: { provider: LlmProvider; model: string } | undefined,
@@ -339,7 +339,7 @@ async function executeDreNarrated(
   const parsed = parseDreNarratedCase(file);
 
   // 2. Roda LLM gerador. Sem override = router de produção (Gemini 2.5 Flash) com
-  //    fallback + trace Langfuse. Com override = adapter direto (benchmark mode,
+  //    fallback + trace LangSmith. Com override = adapter direto (benchmark mode,
   //    sem fallback nem trace — esperado pra comparativo de candidato).
   const generatorReq: LlmRequest = {
     task: "dre-narrative",
