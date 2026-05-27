@@ -7,6 +7,7 @@ import {
 import { formatBRL } from "../data/analytics.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import DemoRibbon from "@/components/DemoRibbon.tsx";
+import IncomeOutcomeChart from "@/components/IncomeOutcomeChart.tsx";
 
 type CashFlowItem = {
   amount: number;
@@ -213,33 +214,38 @@ export default function CashFlow() {
           />
         </div>
       </div>
-      <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-4">
-        <DataCard
-          icon={CircleDollarSign}
-          title="Saldo Inicial (01/01/2026)"
-          amount={data[activeTrimester[0]].initialBalance}
-        />
-        <DataCard
-          icon={ArrowBigDown}
-          title={`Entradas (${getTrimesterData(
-            activeTrimester,
-            (month: MonthKey) => data[month].entries.length
-          )})`}
-          amount={getTrimesterData(activeTrimester, getTotalEntries)}
-        />
-        <DataCard
-          icon={ArrowBigUp}
-          title={`Saídas (${getTrimesterData(
-            activeTrimester,
-            (month: MonthKey) => data[month].exits.length
-          )})`}
-          amount={getTrimesterData(activeTrimester, getTotalExits) * -1}
-        />
-        <DataCard
-          icon={Wallet}
-          title="Saldo acumulado (30/01/2026)"
-          amount={getTotalBalance(activeTrimester)}
-        />
+      <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="col-span-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <DataCard
+            icon={CircleDollarSign}
+            title="Saldo Inicial (01/01/2026)"
+            amount={data[activeTrimester[0]].initialBalance}
+          />
+          <DataCard
+            icon={Wallet}
+            title="Saldo acumulado (30/01/2026)"
+            amount={getTotalBalance(activeTrimester)}
+          />
+          <DataCard
+            icon={ArrowBigDown}
+            title={`Entradas (${getTrimesterData(
+              activeTrimester,
+              (month: MonthKey) => data[month].entries.length
+            )})`}
+            amount={getTrimesterData(activeTrimester, getTotalEntries)}
+          />
+          <DataCard
+            icon={ArrowBigUp}
+            title={`Saídas (${getTrimesterData(
+              activeTrimester,
+              (month: MonthKey) => data[month].exits.length
+            )})`}
+            amount={getTrimesterData(activeTrimester, getTotalExits) * -1}
+          />
+        </div>
+        <div className="col-span-1 border dark:border-[#15152f] rounded-xl p-6 flex flex-col md:flex-row md:items-center gap-4">
+          <IncomeOutcomeChart />
+        </div>
       </div>
       <section className="animate-fade-up delay-2 dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg overflow-x-auto">
         <table className="w-full text-[13px]">
