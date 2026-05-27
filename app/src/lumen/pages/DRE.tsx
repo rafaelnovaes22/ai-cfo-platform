@@ -9,7 +9,6 @@ import {
 import { Link } from "react-router-dom";
 import { useTransactions } from "../data/useTransactions";
 import { useAnalyses } from "../data/useAnalyses.ts";
-import { AnalysisPicker } from "../components/AnalysisPicker.tsx";
 import {
   buildDRE,
   buildInsights,
@@ -91,10 +90,10 @@ function Row({
     view === "value"
       ? formatBRL(line.value)
       : view === "pct"
-      ? formatPct(line.share)
-      : line.vsLast !== undefined
-      ? formatPct(line.vsLast / 100, true)
-      : "—";
+        ? formatPct(line.share)
+        : line.vsLast !== undefined
+          ? formatPct(line.vsLast / 100, true)
+          : "—";
 
   return (
     <>
@@ -236,7 +235,6 @@ export default function DRE() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <AnalysisPicker />
           <select
             value={currentKey ?? ""}
             onChange={(e) => setSelected(e.target.value)}

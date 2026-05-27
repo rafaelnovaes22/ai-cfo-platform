@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { formatBRL } from "../data/categories.ts";
-import { useTransactions, BACKEND_CATEGORIES, type ReviewStatus } from "../data/useTransactions.ts";
-import { AnalysisPicker } from "../components/AnalysisPicker.tsx";
+import {
+  useTransactions,
+  BACKEND_CATEGORIES,
+  type ReviewStatus,
+} from "../data/useTransactions.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import { toast } from "@/components/ui/sonner";
 
@@ -19,7 +22,8 @@ export default function Transactions() {
   );
 
   const filtered = transactions.filter((t) => {
-    if (q && !t.description.toLowerCase().includes(q.toLowerCase())) return false;
+    if (q && !t.description.toLowerCase().includes(q.toLowerCase()))
+      return false;
     if (type === "in" && t.type !== "income") return false;
     if (type === "out" && t.type !== "expense") return false;
     if (category !== "all" && t.category !== category) return false;
@@ -36,7 +40,11 @@ export default function Transactions() {
   );
   const balance = totals.in - totals.out;
 
-  const reset = () => { setQ(""); setType("all"); setCategory("all"); };
+  const reset = () => {
+    setQ("");
+    setType("all");
+    setCategory("all");
+  };
 
   const handleCorrect = async (entryId: string, newCategory: string) => {
     try {
@@ -59,14 +67,15 @@ export default function Transactions() {
           <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">
             Lançamentos{activeAnalysis ? ` · ${activeAnalysis.name}` : ""}
           </div>
-          <h1 className="text-2xl leading-[1.05] tracking-tight">Movimentações</h1>
+          <h1 className="text-2xl leading-[1.05] tracking-tight">
+            Movimentações
+          </h1>
           <p className="opacity-60 mt-2 text-[14px]">
             {loading
               ? "Carregando…"
               : `${transactions.length} ${transactions.length === 1 ? "registro" : "registros"} no total.`}
           </p>
         </div>
-        <AnalysisPicker />
       </header>
 
       <div className="animate-fade-up delay-1 flex flex-wrap gap-2 items-center">
@@ -105,8 +114,16 @@ export default function Transactions() {
       </div>
 
       <section className="animate-fade-up delay-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SummaryCard label="Total de receitas" value={totals.in} tone="positive" />
-        <SummaryCard label="Total de despesas" value={totals.out} tone="negative" />
+        <SummaryCard
+          label="Total de receitas"
+          value={totals.in}
+          tone="positive"
+        />
+        <SummaryCard
+          label="Total de despesas"
+          value={totals.out}
+          tone="negative"
+        />
         <SummaryCard label="Saldo do período" value={balance} tone="neutral" />
       </section>
 
@@ -114,11 +131,21 @@ export default function Transactions() {
         <table className="w-full text-[13px]">
           <thead className="bg-gray-200 dark:bg-[#15152f] border-b dark:border-[#171132]">
             <tr className="text-left">
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px]">Data</th>
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal">Descrição</th>
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[220px]">Categoria</th>
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[140px] text-right">Valor</th>
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px] text-right">Status</th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px]">
+                Data
+              </th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal">
+                Descrição
+              </th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[220px]">
+                Categoria
+              </th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[140px] text-right">
+                Valor
+              </th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px] text-right">
+                Status
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -131,7 +158,9 @@ export default function Transactions() {
                     : "dark:bg-[#15152f]/40"
                 }`}
               >
-                <td className="px-5 py-3.5 text-[12px] opacity-60">{formatDate(t.date)}</td>
+                <td className="px-5 py-3.5 text-[12px] opacity-60">
+                  {formatDate(t.date)}
+                </td>
                 <td className="px-5 py-3.5">{t.description}</td>
                 <td className="px-5 py-3.5">
                   <select
@@ -140,7 +169,9 @@ export default function Transactions() {
                     className="dark:bg-[#15152f] border dark:border-[#171132] rounded px-2 py-1 text-[11.5px] w-full focus:outline-none focus:border-[#96ff7e]"
                   >
                     {BACKEND_CATEGORIES.map((c) => (
-                      <option key={c.key} value={c.key}>{c.label}</option>
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
                     ))}
                   </select>
                 </td>
@@ -153,13 +184,19 @@ export default function Transactions() {
                   {formatBRL(Number(t.amount))}
                 </td>
                 <td className="px-5 py-3.5 text-right">
-                  <StatusBadge status={t.reviewStatus} confidence={t.confidence} />
+                  <StatusBadge
+                    status={t.reviewStatus}
+                    confidence={t.confidence}
+                  />
                 </td>
               </tr>
             ))}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center opacity-60 text-[13px]">
+                <td
+                  colSpan={5}
+                  className="px-5 py-12 text-center opacity-60 text-[13px]"
+                >
                   {transactions.length === 0
                     ? "Sem lançamentos. Importe dados para começar."
                     : "Nenhum lançamento com esses filtros."}
@@ -189,23 +226,49 @@ function Select({
       className="dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[12.5px] focus:outline-none focus:border-white/60"
     >
       {options.map((o) => (
-        <option key={o.v} value={o.v}>{o.l}</option>
+        <option key={o.v} value={o.v}>
+          {o.l}
+        </option>
       ))}
     </select>
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "positive" | "negative" | "neutral" }) {
-  const colors = { positive: "text-[#29c89b]", negative: "text-[#ff9191]", neutral: "" }[tone];
+function SummaryCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "positive" | "negative" | "neutral";
+}) {
+  const colors = {
+    positive: "text-[#29c89b]",
+    negative: "text-[#ff9191]",
+    neutral: "",
+  }[tone];
   return (
     <div className="dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg p-5">
-      <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">{label}</div>
-      <div className={`text-[28px] leading-none tracking-tight tabular ${colors}`}>{formatBRL(value)}</div>
+      <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">
+        {label}
+      </div>
+      <div
+        className={`text-[28px] leading-none tracking-tight tabular ${colors}`}
+      >
+        {formatBRL(value)}
+      </div>
     </div>
   );
 }
 
-function StatusBadge({ status, confidence }: { status: ReviewStatus; confidence: number | null }) {
+function StatusBadge({
+  status,
+  confidence,
+}: {
+  status: ReviewStatus;
+  confidence: number | null;
+}) {
   if (status === "needs_review") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">

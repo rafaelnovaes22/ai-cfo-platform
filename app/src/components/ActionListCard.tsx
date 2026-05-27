@@ -1,4 +1,3 @@
-import { AnalysisPicker } from "@/lumen/components/AnalysisPicker";
 import { useActionItems, type ActionItem } from "@/lumen/data/useActionItems";
 import { ArrowRight, Inbox, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -102,9 +101,6 @@ export default function ActionListCard({ current, transactions }) {
     return (
       <div className="space-y-6">
         <div className="font-semibold mb-4">Plano de Ação</div>
-        <div className="flex gap-2 mb-4">
-          <AnalysisPicker />
-        </div>
         <div className="text-center py-8">
           <Inbox
             className="h-8 w-8 mx-auto dark:text-[#96ff7e] mb-3"
