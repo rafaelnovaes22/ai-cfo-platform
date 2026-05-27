@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { routes } from "./Topbar.tsx";
 import { NavLink } from "react-router-dom";
 import { api } from "@/lib/api/index.js";
+import { AnalysisPicker } from "../components/AnalysisPicker.tsx";
 
 const map: Record<string, string> = {
   "/": "Hub de análise",
@@ -94,6 +95,7 @@ export function Sidebar() {
       </div>
 
       <div className="md:hidden flex items-center gap-3">
+        <AnalysisPicker />
         <button
           onClick={() => setMenuOpen(!menuOpen)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:opacity-90 transition-colors"
@@ -158,6 +160,7 @@ export function Sidebar() {
           ))}
         </div>
         <div className="flex items-start md:items-center gap-3 mt-auto md:mt-0 p-4 md:p-0">
+          <AnalysisPicker />
           <button
             onClick={handleExport}
             disabled={!canExport || exporting}
@@ -177,7 +180,7 @@ export function Sidebar() {
           </button>
           <div
             onClick={handleThemeToggle}
-            className="relative w-28 md:w-40 flex overflow-hidden cursor-pointer items-center mx-2 gap-4 px-3 py-2 rounded-full border border-[#3D24A0] dark:border-[#245fff]"
+            className="relative w-18 flex overflow-hidden cursor-pointer items-center mx-2 gap-4 px-3 py-2 rounded-full border border-[#3D24A0] dark:border-[#245fff]"
           >
             <Sun className="relative z-10 w-4 h-4 min-w-4 min-h-4 pointer-events-none text-white dark:text-inherit" />
             <Moon className="relative z-10 w-4 h-4 min-w-4 min-h-4 pointer-events-none" />
@@ -211,7 +214,7 @@ export function Sidebar() {
           </div>
           <button
             onClick={() => signOut()}
-            className={`group flex items-center w-full gap-2.5 px-3 py-2 rounded-md text-[12.5px] transition-colors`}
+            className={`group flex items-center gap-2.5 px-3 py-2 rounded-md text-[12.5px] transition-colors`}
           >
             <LogOut className="h-[14px] w-[14px] shrink-0" strokeWidth={1.5} />
             <span>Sair</span>
