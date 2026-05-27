@@ -1,7 +1,7 @@
 # Aicfo — Guia para Claude Code
 
 > CFO-IA / Plataforma de gestão financeira inteligente para PMEs. Produto self-serve do guarda-chuva **Acme SaaS²**.
-> Operado pelo framework **Acme Forge v0.15.0** ([`docs/forge/README.md`](docs/forge/README.md)).
+> Operado pelo framework **Acme Forge v0.22.1** ([`docs/forge/README.md`](docs/forge/README.md)).
 >
 > **Prompt de orquestração**: [`MASTER_PROMPT.md`](MASTER_PROMPT.md) — lifecycle, Constitution e stack.
 > **Onboarding não-técnico**: [`HELLO.md`](HELLO.md) | **Dev novo**: [`QUICKSTART_DEV.md`](QUICKSTART_DEV.md) | **Erros comuns**: [`COMMON_ERRORS.md`](COMMON_ERRORS.md)
@@ -19,7 +19,7 @@ Os 8 princípios listados ali são **não-negociáveis** e orientam toda decisã
 3. **C3** — Custo ≤ 25% do preço
 4. **C4** — SHADOW antes de cobrar
 5. **C5** — Three-tier context (L0/L1/L2)
-6. **C6** — Telemetry-by-default (Langfuse obrigatório)
+6. **C6** — Telemetry-by-default (LangSmith canônico para tracing LLM; WireLog para eventos de negócio)
 7. **C7** — Portability over lock-in
 8. **C8** — Anti-customização heroica
 
@@ -84,8 +84,9 @@ Promoção entre modos exige eval suite passing + N execuções no modo atual + 
 - **Runtime**: Node.js ≥20, TypeScript 5.7 estrito, ESM
 - **Web**: Fastify 5
 - **Orquestração de agentes**: `@langchain/langgraph` 1.2
-- **LLM primário**: `@anthropic-ai/sdk` 0.39 (Claude Sonnet 4.6 / Opus 4.7 conforme tarefa)
-- **Observability**: `langfuse` 3.38 (obrigatório — C6)
+- **LLM primário**: Google Vertex AI (Gemini) via `@google/genai` 2.6 — ADR-009 (`southamerica-east1`, LGPD-compliant)
+- **LLM fallback**: OpenAI `gpt-4.1-mini` via `openai` 6.37 — ADR-010 (pós-DPA)
+- **Observability**: `langsmith` 0.7.1 (tracing LLM canônico — C6); WireLog para eventos de negócio (opcional, ver Forge v0.22.0+)
 - **DB**: PostgreSQL 16 via Prisma 6
 - **Filas**: BullMQ 5 + ioredis 5
 - **Validação**: Zod 3
@@ -167,7 +168,7 @@ src/
 ├── billing/                # billing (Onda 0)
 ├── ingest/                 # parsers planilha/PDF/CSV/manual
 ├── llm/                    # camada de abstração de modelos (C7) — único lugar com import @anthropic-ai/sdk
-├── observability/          # wrapper Langfuse (C6)
+├── observability/          # wrapper LangSmith (C6)
 └── persistence/            # Prisma client + repositories
 docs/
 ├── adr/                    # Architecture Decision Records
@@ -204,21 +205,24 @@ imagens_front/              # Referência visual (3 mockups feitos pelo dev fron
 
 ### Telemetria (C6)
 
-Toda chamada LLM em `src/agents/**` ou `src/skus/**/nodes/**` deve estar instrumentada com Langfuse:
+Toda chamada LLM em `src/agents/**` ou `src/skus/**/nodes/**` deve estar instrumentada com LangSmith:
 
 ```ts
-import { trace } from "@/observability/langfuse";
+import { traceable } from "langsmith/traceable";
 
-const span = trace.start({
-  name: "outcome-classifier",
-  input: { tenantId, payload },
-  metadata: { sku: "monthly-analysis", outcomeType: "classification" },
-});
-const response = await llm.call(...);
-span.end({ output: response, costBrl: calculateCost(response.usage) });
+const classifyOutcome = traceable(
+  async (input: { tenantId: string; payload: unknown }) => {
+    const response = await llm.call(...);
+    return response;
+  },
+  {
+    name: "outcome-classifier",
+    metadata: { sku: "monthly-analysis", outcomeType: "classification" },
+  },
+);
 ```
 
-Sem trace, **não conta como outcome auditável**.
+Sem trace, **não conta como outcome auditável**. WireLog (Forge v0.22.0+) é opcional para eventos de negócio/outcomes — não substitui LangSmith.
 
 ### Three-tier context (C5)
 
@@ -249,7 +253,7 @@ Este projeto é auditado mensalmente por DeepAgent externo que valida os 8 princ
 
 Para que o reviewer funcione:
 - Toda mudança no Forge atualiza `docs/forge/manifest.json` (hook `manifest-sync`)
-- Toda LLM call tem trace Langfuse (C6)
+- Toda LLM call tem trace LangSmith (C6)
 - Toda promoção de modo (SHADOW → ASSISTED → AUTONOMOUS) é registrada via `/acme:promote`
 
 ---

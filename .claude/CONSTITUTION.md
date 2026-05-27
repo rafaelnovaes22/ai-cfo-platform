@@ -112,7 +112,7 @@ Combinado a `project_type`, cada projeto declara em `docs/forge/project.json` um
 | `hybrid` | `project_type: hybrid` | soma ponderada por módulo | soma ponderada por módulo | ≤ 25% agregado |
 
 **Como o reviewer audita**:
-- `ai_enabled=true` → cada artefato em produção tem `unit-economics.md` correspondente; razão real medida via tracing 30d (Langfuse/equivalente).
+- `ai_enabled=true` → cada artefato em produção tem `unit-economics.md` correspondente; razão real medida via tracing 30d (LangSmith/equivalente).
 - `ai_enabled=false` → cada módulo CANONICAL tem `delivery-economics.md` correspondente; valores de infra/suporte/manutenção atualizados nos últimos 90 dias; razão ≤ limite.
 
 **Exceções**:
@@ -217,7 +217,7 @@ Cada módulo segue a tabela do seu tipo. Conjunto deve ser auditável.
 
 | `ai_enabled` | Provedor obrigatório | Que eventos rastrear |
 |---|---|---|
-| `true` | Provedor de tracing LLM (`langfuse` / `helicone` / `phoenix` / custom) | Toda chamada LLM em produção (input/output/cost/latency) |
+| `true` | Provedor de tracing LLM (`langsmith` / `langfuse` / `helicone` / `phoenix` / custom) | Toda chamada LLM em produção (input/output/cost/latency) |
 | `false` | `audit_log_provider` + `structured_logging_provider` | Toda mutação crítica de estado (criar/atualizar/deletar dado de negócio), todo login, toda integração externa, todo erro 5xx |
 | `hybrid` (módulo a módulo) | União dos dois conforme `ai_enabled` do módulo | — |
 
@@ -227,7 +227,7 @@ Cada módulo segue a tabela do seu tipo. Conjunto deve ser auditável.
 - Rastreabilidade de quem/quando/o-que: `user_id` ou `actor_id`, timestamp ISO, payload sanitizado.
 
 **Como o reviewer audita**:
-- `ai_enabled=true` → lint regex em código de produção exige instrumentação (ex: `langfuse.observe()` ou wrapper) próxima a cada chamada LLM; hook compara contagens outcomes ↔ traces (desvio > 1% = FAIL).
+- `ai_enabled=true` → lint regex em código de produção exige instrumentação (ex: `traceable()` do LangSmith ou wrapper equivalente) próxima a cada chamada LLM; hook compara contagens outcomes ↔ traces (desvio > 1% = FAIL).
 - `ai_enabled=false` → lint regex exige chamada a `auditLog.write(...)` próxima a mutações críticas; reviewer compara mutações no DB com entradas no audit log (desvio > 1% = FAIL).
 
 **Provedores compatíveis**: o Forge **não opina** sobre o provedor — opina sobre a obrigação de rastreamento.
