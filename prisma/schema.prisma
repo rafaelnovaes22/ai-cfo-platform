@@ -258,7 +258,7 @@ model MonthlyAnalysis {
 
   // Rastreabilidade de custo (C3) e telemetria (C6)
   costCents      Int?             // custo real de inferência em centavos
-  langfuseTraceId String?         // ID do trace Langfuse para auditoria
+  traceId        String?          // ID do trace do provider canônico (LangSmith) para auditoria
 
   ledgerEntries  LedgerEntry[]
   narrativeCards NarrativeCard[]

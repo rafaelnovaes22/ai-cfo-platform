@@ -4,7 +4,7 @@ import { callAnthropic } from "@/llm/adapters/anthropic.js";
 import { callOpenAI } from "@/llm/adapters/openai.js";
 import { callGroq } from "@/llm/adapters/groq.js";
 import { callLocal } from "@/llm/adapters/local.js";
-import { createTrace } from "@/observability/langfuse.js";
+import { createTrace } from "@/observability/tracing.js";
 import { logger } from "@/observability/logger.js";
 import type { LlmRequest, LlmResponse } from "@/llm/types.js";
 

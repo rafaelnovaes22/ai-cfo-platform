@@ -5,7 +5,7 @@ import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
-import { createTrace } from "@/observability/langfuse.js";
+import { createTrace } from "@/observability/tracing.js";
 import { logger } from "@/observability/logger.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 
@@ -130,7 +130,7 @@ export async function ingest(params: {
           clientEditedNarrative: null,
           clientEditedActionPlan: null,
           costCents: 0,
-          langfuseTraceId: null,
+          traceId: null,
         },
       });
       return { analysis: existing, minEntries: threshold };

@@ -31,11 +31,11 @@ npx prisma migrate resolve --applied "nome_da_migration_baseline"
 
 ---
 
-## Langfuse / Telemetria
+## LangSmith / Telemetria
 
-### `LangfuseNotConfiguredError` ou trace não aparece no Langfuse
-**Causa**: `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` ou `LANGFUSE_HOST` ausentes/incorretos no `.env`.
-**Solução**: Verificar variáveis e reiniciar o servidor. Toda chamada LLM deve ir pelo wrapper em `src/observability/`.
+### Trace não aparece no LangSmith
+**Causa**: `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` ou `LANGCHAIN_TRACING_V2` ausentes/incorretos no `.env`.
+**Solução**: Verificar variáveis e reiniciar o servidor. Toda chamada LLM deve ir pelo wrapper em `src/observability/tracing.ts`. Sem `LANGSMITH_API_KEY`, o wrapper retorna um noop trace silenciosamente — ótimo para testes locais, ruim em produção sem alerta.
 
 ---
 
@@ -61,9 +61,9 @@ npx prisma migrate resolve --applied "nome_da_migration_baseline"
 
 ## Testes
 
-### Testes falham com `LANGFUSE_KEY not set`
-**Causa**: Testes tentam inicializar o tracer Langfuse sem as variáveis de ambiente.
-**Solução**: Criar `.env.test` com valores mock, ou mockar o módulo `src/observability/` nos testes unitários.
+### Testes falham com `LANGSMITH_API_KEY not set` ou similar
+**Causa**: Testes tentam inicializar o tracer LangSmith sem as variáveis de ambiente.
+**Solução**: O wrapper já degrada para noop quando a chave não está setada — testes normalmente não precisam de mock. Se ainda assim falhar, mockar `@/observability/tracing.js` (não mais `@/observability/langfuse.js` — renomeado em 2026-05-27).
 
 ---
 

@@ -22,7 +22,7 @@ import { hubRoutes } from "@/hub/routes.js";
 import { exportRoutes } from "@/export/routes.js";
 import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
-import { flushLangfuse } from "@/observability/langfuse.js";
+import { flushTraces } from "@/observability/tracing.js";
 
 const port = Number(process.env.PORT ?? 3000);
 
@@ -133,7 +133,7 @@ const shutdown = async (): Promise<void> => {
   logger.info("Encerrando servidor...");
   await app.close();
   await disconnectPrisma();
-  await flushLangfuse();
+  await flushTraces();
 };
 
 process.once("SIGTERM", shutdown);

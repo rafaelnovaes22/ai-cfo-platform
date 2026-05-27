@@ -30,7 +30,7 @@ project:
   tenant_field: "tenantId"
 
 stack:
-  backend: "Node 20 + TypeScript 5.7 ESM + Fastify 5 + LangGraph 1.2 + Anthropic SDK + Langfuse 3.38 + Prisma 6 + BullMQ 5"
+  backend: "Node 20 + TypeScript 5.7 ESM + Fastify 5 + LangGraph 1.2 + Google Vertex AI (@google/genai) + OpenAI (fallback) + LangSmith 0.7 + Prisma 6 + BullMQ 5"
   frontend: "REPO SEPARADO — frontend_agent reposicionado como Contract Agent: gera OpenAPI 3.1 + Zod schemas + handoff doc em docs/contracts/{module}.* e docs/frontend-handoff/{module}.md. NÃO gera código React."
   database: "PostgreSQL 16 via Prisma 6"
   tests: "Vitest 1.x"

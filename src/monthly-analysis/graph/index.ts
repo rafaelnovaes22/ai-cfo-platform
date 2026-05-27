@@ -84,7 +84,7 @@ export const MonthlyAnalysisAnnotation = Annotation.Root({
 //     → narrative_synthesis → action_planning → qa_review → qa_gate
 //     → finalize | retry narrative/action once → qa_review → finalize/needsReview
 //
-// Wave 3.C.2 adicionará: instrumentação Langfuse explícita por nó.
+// Wave 3.C.2 adicionará: instrumentação LangSmith explícita por nó.
 export function buildMonthlyAnalysisGraph() {
   const graph = new StateGraph(MonthlyAnalysisAnnotation)
     .addNode("load_analysis", loadAnalysisNode)

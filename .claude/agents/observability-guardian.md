@@ -44,7 +44,7 @@ boundaries:
    ```
    - 0 matches → PASS
    - ≥1 match → FAIL com paths/linhas
-3. **Audita coverage de produção** (via tracing provider — Langfuse/Helicone/etc):
+3. **Audita coverage de produção** (via tracing provider — LangSmith canonical, Langfuse/Helicone/etc como alternativas):
    - `traces_count / runs_count >= 0.99` em janela de auditoria
    - Investiga clusters (>X runs sem trace numa mesma subscription)
 4. **Valida campos obrigatórios** em traces:

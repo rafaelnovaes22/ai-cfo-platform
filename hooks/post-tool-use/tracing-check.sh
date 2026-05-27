@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Hook: langfuse-trace-check
-# Warns when LLM calls in src/agents/** lack Langfuse trace instrumentation (C6).
+# Hook: tracing-check
+# Warns when LLM calls in src/agents/** lack tracing instrumentation (C6).
+# Provider canônico atual: LangSmith (Forge v0.22.0+). A lista de padrões
+# também detecta variantes legadas (langfuse, observe()) para compatibilidade.
 # Skipped automatically when project.ai_enabled=false (platform/automation projects).
 
 _get_ai_enabled() {
@@ -39,12 +41,12 @@ if [[ "$FILE_PATH" =~ src/(agents|skus)/.+\.(ts|js)$ ]]; then
   HAS_LLM=$(echo "$CONTENT" | grep -cE '\.invoke\(|\.chat\(|openai\.|anthropic\.|\.generate\(|llm\.' 2>/dev/null || echo "0")
 
   if [ "$HAS_LLM" -gt "0" ]; then
-    # Check for trace instrumentation
-    HAS_TRACE=$(echo "$CONTENT" | grep -cE 'observe\(|langfuse\.|\.trace\(|traceId|span\.' 2>/dev/null || echo "0")
+    # Check for trace instrumentation (LangSmith traceable, generic createTrace, span.start, etc.)
+    HAS_TRACE=$(echo "$CONTENT" | grep -cE 'traceable\(|createTrace\(|\.trace\(|traceId|span\.|observe\(' 2>/dev/null || echo "0")
 
     if [ "$HAS_TRACE" -eq "0" ]; then
-      echo "WARN [langfuse-trace-check]: '$FILE_PATH' contém chamadas LLM sem trace Langfuse (viola C6)." >&2
-      echo "Adicione observe() ou langfuse.trace() para 100% de cobertura de traces (C6)." >&2
+      echo "WARN [tracing-check]: '$FILE_PATH' contém chamadas LLM sem instrumentação de trace (viola C6)." >&2
+      echo "Adicione createTrace() ou traceable() do LangSmith para 100% de cobertura (C6)." >&2
       exit 1
     fi
   fi
