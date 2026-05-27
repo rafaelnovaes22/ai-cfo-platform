@@ -28,6 +28,7 @@ import AccountsCard from "@/components/AccountsCard.tsx";
 import PaymentsCard from "@/components/PaymentsCard.tsx";
 import KPIsCard from "@/components/KPIsCard.tsx";
 import DemoRibbon from "@/components/DemoRibbon.tsx";
+import MonthlyViewChart from "@/components/MonthlyViewChart.tsx";
 
 const inputMethods = [
   { id: "paste", icon: ClipboardPaste, label: "Colar planilha" },
@@ -43,7 +44,7 @@ export default function Dashboard() {
   const months = listMonthKeys(transactions);
   const currentKey = months[0];
 
-  console.log("trend/anomaly", trend, anomaly);
+  // console.log("trend/anomaly", trend, anomaly);
 
   const current = currentKey ? summarizeMonth(transactions, currentKey) : null;
   const composition = currentKey
@@ -54,8 +55,6 @@ export default function Dashboard() {
   const userName = "você";
 
   useActionItems();
-
-  const [generating] = useState(false);
 
   function handleGenerate() {
     toast.error("O plano é gerado automaticamente após importar os dados.");
@@ -89,6 +88,12 @@ export default function Dashboard() {
       <div className="flex flex-wrap -mx-4 md:mx-0 gap-4">
         {analyses.length === 0 && !loading && (
           <EmptyState userName={userName} />
+        )}
+
+        {current && trend?.length > 1 && (
+          <div className="w-full">
+            <MonthlyViewChart chartData={trend} />
+          </div>
         )}
 
         {current && composition && (
