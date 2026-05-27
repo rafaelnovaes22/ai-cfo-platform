@@ -52,7 +52,7 @@ export const data = {
 
 export default function IncomeOutcomeChart() {
   return (
-    <article className="relative h-full grid grid-cols-12 pb-12">
+    <article className="relative w-full h-full grid grid-cols-12 pb-12">
       <div className="col-span-12 -mx-6">
         <div className="font-semibold mb-8 ml-6">
           Receita X Despesa (Últimos 12 meses)
