@@ -6,12 +6,12 @@ import {
   PointElement,
   LineElement,
   Legend,
+  Filler,
   Tooltip,
   LineController,
   BarController,
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
-import DashboardCard from "./DashboardCard";
 import { formatBRL } from "@/lumen/data/analytics";
 
 ChartJS.register(
@@ -23,7 +23,8 @@ ChartJS.register(
   Legend,
   Tooltip,
   LineController,
-  BarController
+  BarController,
+  Filler
 );
 
 const labels = [
@@ -46,21 +47,38 @@ const dataset = [
   20000,
 ];
 
-export const data = {
-  labels,
-  datasets: [
-    {
-      type: "line" as const,
-      label: "Margem",
-      borderColor: "rgb(99, 213, 255)",
-      borderWidth: 2,
-      tension: 0.4,
-      fill: false,
-      pointRadius: 0,
-      pointHoverRadius: 0,
-      data: dataset,
-    },
-  ],
+export const data = (amount: number) => {
+  const color = amount > 5000 ? "#29c89b" : "#ff9191";
+  return {
+    labels,
+    datasets: [
+      {
+        label: "Margem",
+        borderColor: color,
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        // backgroundColor: `${color}3e`,
+        backgroundColor: (context) => {
+          const { ctx, chartArea } = context.chart;
+          if (!chartArea) return; // Wait until chart is initialized
+
+          const gradient = ctx.createLinearGradient(
+            0,
+            chartArea.bottom,
+            0,
+            chartArea.top
+          );
+          gradient.addColorStop(0, `${color}00`); // Transparent at bottom
+          gradient.addColorStop(1, `${color}44`); // Semi-opaque at top
+          return gradient;
+        },
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        data: dataset,
+      },
+    ],
+  };
 };
 
 const options = {
@@ -95,6 +113,9 @@ const options = {
     legend: {
       display: false, // Hides the top dataset labels
     },
+    filler: {
+      propagate: true, // Optional: helps with filled stacked charts
+    },
   },
 };
 
@@ -115,15 +136,19 @@ export default function MonthlyViewChart() {
         <div className="-left-[calc((100%*10)+(8px*10))]"></div>
         <div className="-left-[calc((100%*11)+(8px*11))]"></div>
         <div className="w-full overflow-auto">
-          <div className="grid grid-cols-12 relative h-44 gap-2 min-w-[1400px] w-full">
+          <div className="grid grid-cols-12 relative h-48 gap-2 min-w-[1400px] w-full">
             {labels.map((label, index) => (
               <div className="col-span-1 rounded-3xl py-6 overflow-hidden bg-white dark:bg-[#0b0918] border border-[#e5e5e5] shadow-card dark:shadow-none dark:border-[#171132] animate-fade-up delay-1">
                 <div
-                  className={`min-w-[1400px] md:min-w-[100vw] h-24 px-0 md:px-20 -ml-2 md:ml-[-88px] absolute inset-0 top-12 -left-[calc((100%*${index})+(8px*${index}))]`}
+                  className={`min-w-[1400px] md:min-w-[100vw] h-18 px-0 md:px-20 -ml-2 md:ml-[-88px] absolute inset-0 top-12 -left-[calc((100%*${index})+(8px*${index}))]`}
                 >
-                  <Chart type="line" data={data} options={options} />
+                  <Chart
+                    type="line"
+                    data={data(dataset[index])}
+                    options={options}
+                  />
                 </div>
-                <div className="flex h-32 flex-col text-sm items-center justify-between gap-2">
+                <div className="flex h-36 flex-col text-sm items-center justify-between gap-2">
                   <div className="font-semibold">
                     {formatBRL(dataset[index])}
                   </div>

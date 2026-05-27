@@ -77,3 +77,23 @@ export function getActionPlanQueue(): Queue {
 export async function enqueueActionPlan(job: ActionPlanJob): Promise<void> {
   await getActionPlanQueue().add("plan", job, JOB_OPTIONS);
 }
+
+// ── Monthly Analysis Graph (LangGraph) ────────────────────────────────────
+// Usado quando productConfig.monthlyAnalysis.orchestrator = "langgraph"
+// ou MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR=langgraph.
+// Substitui a cadeia classification → dre-narrative → action-plan com pipeline unificado.
+
+let _monthlyAnalysisGraphQueue: Queue | null = null;
+
+export interface MonthlyAnalysisGraphJob { analysisId: string; tenantId: string; traceId?: string }
+
+export function getMonthlyAnalysisGraphQueue(): Queue {
+  if (!_monthlyAnalysisGraphQueue) {
+    _monthlyAnalysisGraphQueue = new Queue("monthly-analysis-graph", { connection: getRedis() });
+  }
+  return _monthlyAnalysisGraphQueue;
+}
+
+export async function enqueueMonthlyAnalysisGraph(job: MonthlyAnalysisGraphJob): Promise<void> {
+  await getMonthlyAnalysisGraphQueue().add("run-graph", job, JOB_OPTIONS);
+}
