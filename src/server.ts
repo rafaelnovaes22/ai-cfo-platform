@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import {
   serializerCompiler,
@@ -9,6 +10,7 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { logger } from "@/observability/logger.js";
+import { problemDetail } from "@/http/problem-detail.js";
 import rawBody from "fastify-raw-body";
 import { authRoutes } from "@/auth/routes.js";
 import { workspaceRoutes } from "@/workspace/routes.js";
@@ -97,16 +99,29 @@ await app.register(rawBody, { global: false, encoding: false, runFirst: true });
 
 app.decorateRequest("auth", null);
 
-// Erros de negócio (4xx) passam a mensagem; 5xx são opacos.
-// `err` é declarado como FastifyError pelo Fastify; tratamos como `unknown` por segurança.
-app.setErrorHandler(async (err: unknown, _req, reply) => {
+// Erros de negócio (4xx) e 5xx serializados como ProblemDetail para garantir
+// compatibilidade com defaultErrorResponses (ProblemDetailSchema) em todas as rotas.
+// Sem isso, reply.send({ message }) falha a serialização Zod → FST_ERR_FAILED_ERROR_SERIALIZATION.
+app.setErrorHandler(async (err: unknown, req, reply) => {
   const isErrorLike = (e: unknown): e is { statusCode?: number; message?: string } =>
     typeof e === "object" && e !== null;
   if (isErrorLike(err) && typeof err.statusCode === "number" && err.statusCode < 500) {
-    return reply.status(err.statusCode).send({ message: err.message ?? "Erro" });
+    return reply.status(err.statusCode).send(problemDetail({
+      type: "https://api.aicfo.com.br/errors/request-error",
+      title: err.message ?? "Erro",
+      status: err.statusCode,
+      instance: req.url,
+      requestId: randomUUID(),
+    }));
   }
   logger.error({ err }, "Erro interno");
-  return reply.status(500).send({ message: "Erro interno do servidor" });
+  return reply.status(500).send(problemDetail({
+    type: "https://api.aicfo.com.br/errors/internal-server-error",
+    title: "Erro interno do servidor",
+    status: 500,
+    instance: req.url,
+    requestId: randomUUID(),
+  }));
 });
 
 app.get("/health", async () => ({
