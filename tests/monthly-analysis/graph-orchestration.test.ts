@@ -1,19 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock Prisma — monthlyAnalysis.findUnique + monthlyAnalysis.findMany (histórico) + ledgerEntry.findMany
+// Mock Prisma — monthlyAnalysis.findUnique + monthlyAnalysis.findMany (histórico)
+//               + ledgerEntry.findMany + ledgerEntry.updateMany (flywheel)
+//               + $transaction (finalizeNode)
 const findUniqueAnalysisMock = vi.fn();
 const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
+const ledgerUpdateManyMock = vi.fn().mockResolvedValue({ count: 0 });
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
     monthlyAnalysis: {
       findUnique: (...args: unknown[]) => findUniqueAnalysisMock(...args),
       findMany: (...args: unknown[]) => findManyAnalysesMock(...args),
+      update: vi.fn().mockResolvedValue({}),
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
+      updateMany: (...args: unknown[]) => ledgerUpdateManyMock(...args),
     },
+    narrativeCard: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    actionPlanItem: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      return fn({
+        monthlyAnalysis: { update: vi.fn().mockResolvedValue({}) },
+        narrativeCard: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        actionPlanItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      });
+    }),
   }),
 }));
 
