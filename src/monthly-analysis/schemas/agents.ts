@@ -111,10 +111,20 @@ export const CashflowRiskSchema = z.object({
 });
 export type CashflowRisk = z.infer<typeof CashflowRiskSchema>;
 
+// Evidência estruturada para o modelo NarrativeCard no banco.
+// unit: "brl_cents" | "percent" | "status" | "code"
+export const NarrativeEvidenceSchema = z.object({
+  metric: z.string().min(2),
+  value: z.number(),
+  unit: z.string().min(2),
+});
+export type NarrativeEvidence = z.infer<typeof NarrativeEvidenceSchema>;
+
 export const NarrativeCardDraftSchema = z.object({
   type: z.enum(["critical_gap", "attention", "healthy"]),
   title: z.string().min(3),
   body: z.string().min(10),
+  // Refs resolvidas em finalizeNode → NarrativeEvidence[] antes de persistir.
   evidenceRefs: z.array(z.string().min(2)).min(1),
 });
 export type NarrativeCardDraft = z.infer<typeof NarrativeCardDraftSchema>;

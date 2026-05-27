@@ -1,6 +1,36 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
+import type { DreLines } from "@/dre-narrative/aggregator.js";
+import type { Anomaly, NarrativeEvidence } from "@/monthly-analysis/schemas/agents.js";
+
+const PERCENTAGE_DRE_KEYS = new Set([
+  "margemBruta", "margemEbitda", "margemOperacional", "margemLiquida",
+]);
+
+// Resolve evidenceRefs (nomes de métricas DRE / codes de anomalia / status)
+// para o formato estruturado esperado pelo modelo NarrativeCard no banco.
+function resolveEvidence(
+  refs: string[],
+  dre: DreLines | undefined,
+  anomalies: Anomaly[] | undefined,
+): NarrativeEvidence[] {
+  return refs.map((ref) => {
+    if (dre && ref in dre) {
+      const value = (dre as unknown as Record<string, number>)[ref];
+      return { metric: ref, value, unit: PERCENTAGE_DRE_KEYS.has(ref) ? "percent" : "brl_cents" };
+    }
+    if (ref.startsWith("marginDiagnosis.") || ref.startsWith("cashflowRisk.")) {
+      return { metric: ref, value: 0, unit: "status" };
+    }
+    const anomaly = anomalies?.find((a) => a.code === ref);
+    return {
+      metric: ref,
+      value: anomaly?.impactCents ?? 0,
+      unit: "code",
+    };
+  });
+}
 
 // Persiste o resultado completo do pipeline LangGraph no banco e atualiza status.
 // Equivale ao que narrator.ts + action-plan/generator.ts fazem no pipeline BullMQ.
@@ -33,7 +63,7 @@ export async function finalizeNode(
             cardType: card.type,
             title: card.title,
             body: card.body,
-            evidence: [] as unknown as object,
+            evidence: resolveEvidence(card.evidenceRefs, dre, anomalies) as unknown as object,
           })),
         });
       }
