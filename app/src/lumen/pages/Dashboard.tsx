@@ -39,9 +39,11 @@ const inputMethods = [
 export default function Dashboard() {
   const { transactions, loading } = useTransactions();
   const { user } = useAuth();
-  const { analyses, activeId, activeAnalysis } = useAnalyses();
+  const { analyses, trend, anomaly, activeId, activeAnalysis } = useAnalyses();
   const months = listMonthKeys(transactions);
   const currentKey = months[0];
+
+  console.log("trend/anomaly", trend, anomaly);
 
   const current = currentKey ? summarizeMonth(transactions, currentKey) : null;
   const composition = currentKey
@@ -104,11 +106,7 @@ export default function Dashboard() {
         )}
 
         <DashboardCard className="md:min-w-[490px] grow-[2]">
-          <ActionListCard
-            handleGenerate={handleGenerate}
-            generating={generating}
-            transactions={transactions}
-          />
+          <ActionListCard current={current} transactions={transactions} />
         </DashboardCard>
 
         <DashboardCard className="md:min-w-[320px] grow-[1]">
