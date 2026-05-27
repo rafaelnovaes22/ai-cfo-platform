@@ -50,14 +50,20 @@ export const data = {
   ],
 };
 
+const options = {
+  responsive: true,
+};
+
 export default function IncomeOutcomeChart() {
   return (
-    <article className="relative w-full h-full grid grid-cols-12 pb-12">
+    <article className="relative w-full max-h-[320px] grid grid-cols-12 pb-12">
       <div className="col-span-12 -mx-6">
         <div className="font-semibold mb-8 ml-6">
           Receita X Despesa (Últimos 12 meses)
         </div>
-        <Chart type="bar" data={data} />
+        <div className="w-full h-full max-h-[280px]">
+          <Chart type="bar" height={100} data={data} options={options} />
+        </div>
       </div>
     </article>
   );
