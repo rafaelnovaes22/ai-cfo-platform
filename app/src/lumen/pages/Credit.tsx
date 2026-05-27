@@ -1,4 +1,8 @@
+import DashboardCard from "@/components/DashboardCard.tsx";
 import { useAnalyses } from "../data/useAnalyses.ts";
+import LoanPreApprovedCard from "@/components/LoanPreApprovedCard.tsx";
+import DebitsCard from "@/components/DebitsCard.tsx";
+import LoanTable from "@/components/LoanTable.tsx";
 
 export default function Credit() {
   const { activeAnalysis } = useAnalyses();
@@ -18,6 +22,17 @@ export default function Credit() {
           </h1>
         </div>
       </header>
+      <div className="flex flex-wrap -mx-4 md:mx-0 gap-4">
+        <DashboardCard className="md:min-w-[490px] grow-[2]">
+          <LoanPreApprovedCard />
+        </DashboardCard>
+        <DashboardCard className="md:min-w-[490px] grow-[2]">
+          <DebitsCard />
+        </DashboardCard>
+        <DashboardCard className="min-w-full">
+          <LoanTable />
+        </DashboardCard>
+      </div>
     </div>
   );
 }
