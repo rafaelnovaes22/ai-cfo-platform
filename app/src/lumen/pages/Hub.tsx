@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, ClipboardPaste, FileText, Sheet, PencilLine, Inbox, Loader2 } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowRight, ClipboardPaste, FileText, Sheet, PencilLine, Inbox } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import { api, type HubResponse } from "@/lib/api/index.js";
 import { formatBRL } from "../data/analytics";
+import { PipelineProgress } from "../components/PipelineProgress.tsx";
 
 const inputMethods = [
   { id: "paste", icon: ClipboardPaste, label: "Colar planilha" },
@@ -28,11 +29,17 @@ const MODE_LABEL: Record<string, string> = {
   AUTONOMOUS: "Autônomo",
 };
 
+const GENERATING_STATUSES = new Set(["generating", "queued", "processing"]);
+
 export default function Hub() {
   const { user } = useAuth();
-  const { analyses, activeId, setActiveId, loading } = useAnalyses();
+  const { analyses, activeId, activeAnalysis, setActiveId, loading } = useAnalyses();
+  const location = useLocation();
+  const entryCount = (location.state as { entryCount?: number } | null)?.entryCount;
   const [hub, setHub] = useState<HubResponse | null>(null);
   const [hubLoading, setHubLoading] = useState(true);
+
+  const isGenerating = activeAnalysis != null && GENERATING_STATUSES.has(activeAnalysis.status);
 
   useEffect(() => {
     if (!user) return;
@@ -138,15 +145,9 @@ export default function Hub() {
         </section>
       )}
 
-      {!hubLoading && latest && !latest.dre && (
-        <section className="animate-fade-up delay-1 bg-card border border-border rounded-lg p-8 flex items-center gap-4">
-          <Loader2 className="h-5 w-5 animate-spin text-[#96ff7e] shrink-0" />
-          <div>
-            <div className="text-[15px] font-medium">Análise em processamento</div>
-            <p className="text-[13px] text-[#96ff7e] mt-0.5">
-              O DRE e o plano de ação estão sendo gerados. Recarregue em alguns instantes.
-            </p>
-          </div>
+      {isGenerating && (
+        <section className="animate-fade-up delay-1">
+          <PipelineProgress entryCount={entryCount} />
         </section>
       )}
 

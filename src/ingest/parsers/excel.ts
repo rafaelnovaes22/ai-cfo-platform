@@ -34,33 +34,41 @@ export function parseExcel(buffer: Buffer): ParseResult {
     rows.length = MAX_XLSX_ROWS;
   }
 
-  // Primeira linha não-vazia como cabeçalho
-  const headerRowIdx = rows.findIndex((r) => r.some((c) => String(c).trim().length > 0));
-  if (headerRowIdx === -1) return { entries: [], orphanCount: 0 };
+  // Alguns extratos trazem titulo/metadados antes do cabecalho real.
+  const firstNonEmptyRowIdx = rows.findIndex((r) => r.some((c) => String(c).trim().length > 0));
+  if (firstNonEmptyRowIdx === -1) return { entries: [], orphanCount: 0 };
 
-  const headerRow = rows[headerRowIdx];
-  if (!headerRow) return { entries: [], orphanCount: 0 };
+  let headerRowIdx = -1;
+  let detected: ReturnType<typeof detectColumns> | null = null;
 
-  const headers = headerRow.map(String);
-  const { dateIdx, descIdx, amountIdx, dirIdx } = detectColumns(headers);
-
-  if (dateIdx === -1 || descIdx === -1 || amountIdx === -1) {
-    // Tentar parsing posicional (date, desc, amount nas 3 primeiras colunas)
-    return parsePositional(rows.slice(headerRowIdx + 1));
+  for (let i = firstNonEmptyRowIdx; i < rows.length; i++) {
+    const current = rows[i];
+    if (!current) continue;
+    const columns = detectColumns(current.map(String));
+    const rowHasSplitAmounts = columns.creditIdx !== null && columns.debitIdx !== null;
+    if (columns.dateIdx !== -1 && columns.descIdx !== -1 && (columns.amountIdx !== -1 || rowHasSplitAmounts)) {
+      headerRowIdx = i;
+      detected = columns;
+      break;
+    }
   }
+
+  if (!detected) {
+    // Tentar parsing posicional (date, desc, amount nas 3 primeiras colunas)
+    return parsePositional(rows.slice(firstNonEmptyRowIdx + 1));
+  }
+
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = detected;
 
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
   for (const row of rows.slice(headerRowIdx + 1)) {
     const cells = row;
-    const cellDate   = cells[dateIdx];
-    const cellDesc   = cells[descIdx];
-    const cellAmount = cells[amountIdx];
-    const cellDir    = dirIdx !== null ? cells[dirIdx] : null;
+    const cellDate = cells[dateIdx];
+    const cellDesc = cells[descIdx];
 
     const rawDescStr = String(cellDesc ?? "").trim();
-    const rawDirStr  = cellDir == null ? null : String(cellDir);
 
     // Date pode vir como Date (cellDates: true) ou string.
     let date: string | null;
@@ -72,9 +80,33 @@ export function parseExcel(buffer: Buffer): ParseResult {
       date = rawDateStr ? normalizeDate(rawDateStr) : null;
     }
 
-    const rawCents = typeof cellAmount === "number"
-      ? normalizeAmountCents(cellAmount)
-      : normalizeAmountCents(String(cellAmount ?? ""));
+    let rawCents: number | null;
+    let rawDirStr: string | null;
+
+    if (amountIdx >= 0) {
+      const cellAmount = cells[amountIdx];
+      rawCents = typeof cellAmount === "number"
+        ? normalizeAmountCents(cellAmount)
+        : normalizeAmountCents(String(cellAmount ?? ""));
+      rawDirStr = dirIdx !== null ? String(cells[dirIdx] ?? "") : null;
+    } else {
+      // Colunas separadas de crédito/débito
+      const cellCredit = cells[creditIdx!];
+      const cellDebit  = cells[debitIdx!];
+      const creditCents = typeof cellCredit === "number"
+        ? normalizeAmountCents(cellCredit)
+        : normalizeAmountCents(String(cellCredit ?? ""));
+      const debitCents = typeof cellDebit === "number"
+        ? normalizeAmountCents(cellDebit)
+        : normalizeAmountCents(String(cellDebit ?? ""));
+      if (creditCents !== null && creditCents !== 0) {
+        rawCents = creditCents;
+        rawDirStr = "credit";
+      } else {
+        rawCents = debitCents;
+        rawDirStr = "debit";
+      }
+    }
 
     if (!date || rawCents === null || !rawDescStr) { orphanCount++; continue; }
 

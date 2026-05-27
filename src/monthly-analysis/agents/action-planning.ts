@@ -21,6 +21,26 @@ export interface ActionPlanningAgentInput {
   marginDiagnosis: MarginDiagnosis;
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
+  segment?: string;
+  taxRegime?: string;
+  toneOfVoice?: string;
+}
+
+const EFFORT_SCORE: Record<"low" | "medium" | "high", number> = { low: 1, medium: 2, high: 3 };
+const RISK_SCORE: Record<"low" | "medium" | "high", number> = { low: 1, medium: 2, high: 3 };
+
+export function sortShortsByRoi(plan: ActionPlanDraft): ActionPlanDraft {
+  const shorts = plan.actions.filter((a) => a.horizon === "short");
+  const rest = plan.actions.filter((a) => a.horizon !== "short");
+
+  const sorted = [...shorts].sort((a, b) => {
+    const roiA = a.impactCents / (EFFORT_SCORE[a.effortLevel] ?? 2);
+    const roiB = b.impactCents / (EFFORT_SCORE[b.effortLevel] ?? 2);
+    if (roiB !== roiA) return roiB - roiA;
+    return (RISK_SCORE[a.riskLevel] ?? 2) - (RISK_SCORE[b.riskLevel] ?? 2);
+  });
+
+  return { ...plan, actions: [...sorted, ...rest] };
 }
 
 export async function runActionPlanningAgent(
@@ -36,5 +56,5 @@ export async function runActionPlanningAgent(
     jsonMode: true,
   });
 
-  return parseAgentJson(response.content, ActionPlanDraftSchema);
+  return sortShortsByRoi(parseAgentJson(response.content, ActionPlanDraftSchema));
 }

@@ -21,6 +21,7 @@ deducoes: 400000
 receitaLiquida: 7600000
 cmv: 3000000
 lucroBruto: 4600000
+margemBruta: 60.53
 despesasPessoal: 4000000
 despesasAdministrativas: 500000
 despesasOcupacao: 480000

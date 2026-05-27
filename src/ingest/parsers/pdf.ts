@@ -1,18 +1,18 @@
 // Parser de PDF contábil — extrai texto e aplica heurísticas para detectar linhas de lançamento
-// pdf-parse é CJS; import com createRequire para compatibilidade ESM
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 import { normalizeDate, normalizeAmountCents, normalizeDirection } from "@/ingest/normalize.js";
+import { extractPdfText } from "@/ingest/parsers/pdf-text.js";
+import { logger } from "@/observability/logger.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
-// Regex para detectar linha com data + valor (padrão BR)
-const LINE_WITH_DATE   = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
+// Regex para detectar linha de lançamento. A data precisa abrir a linha;
+// DRE consolidado tem datas em cabeçalhos ("Período de competência") e deve cair no parser DRE.
+const LINE_WITH_DATE   = /^\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
 const AMOUNT_IN_LINE   = /([\d.,]+(?:[,.]\d{2})?)(?:\s*(C|D|CR|DB|crédito|débito|entrada|saída))?/i;
 
 export async function parsePdf(buffer: Buffer): Promise<ParseResult> {
-  const data = await pdfParse(buffer);
-  const lines = data.text.split(/\r?\n/).filter((l) => l.trim().length > 3);
+  const text = await extractPdfText(buffer);
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 3);
+  logger.info({ totalLines: lines.length, textPreview: text.slice(0, 300) }, "parsePdf: texto extraído do PDF");
 
   const entries: RawLedger[] = [];
   let orphanCount = 0;

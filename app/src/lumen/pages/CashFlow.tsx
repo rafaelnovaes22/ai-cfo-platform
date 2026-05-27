@@ -8,7 +8,22 @@ import { formatBRL } from "../data/analytics.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import DemoRibbon from "@/components/DemoRibbon.tsx";
 
-const data = {
+type CashFlowItem = {
+  amount: number;
+  category: string;
+};
+
+type MonthKey = "01" | "02" | "03";
+
+type CashFlowMonth = {
+  initialBalance: number;
+  entries: CashFlowItem[];
+  exits: CashFlowItem[];
+};
+
+type CashFlowData = Record<MonthKey, CashFlowMonth>;
+
+const data: CashFlowData = {
   "01": {
     initialBalance: 10000,
     entries: [
@@ -74,32 +89,32 @@ const data = {
 export default function CashFlow() {
   const { activeAnalysis } = useAnalyses();
 
-  const getTotalEntries = (month: string) => {
+  const getTotalEntries = (month: MonthKey) => {
     return data[month].entries.reduce(
       (total, entry) => total + entry.amount,
       0
     );
   };
 
-  const getTotalExits = (month: string) => {
+  const getTotalExits = (month: MonthKey) => {
     return data[month].exits.reduce((total, exit) => total + exit.amount, 0);
   };
 
   const getTrimesterData = (
-    months: string[],
-    func: (month: string) => number
+    months: MonthKey[],
+    func: (month: MonthKey) => number
   ) => {
     return months.reduce((total, month) => total + func(month), 0);
   };
 
-  const getTotalBalance = (months: string[]) => {
+  const getTotalBalance = (months: MonthKey[]) => {
     const totalEntries = getTrimesterData(months, getTotalEntries);
     const totalExits = getTrimesterData(months, getTotalExits);
     const initialBalance = data[months[0]].initialBalance;
     return initialBalance + totalEntries - totalExits;
   };
 
-  const getCategoryTotal = (category: string, months: string[]) => {
+  const getCategoryTotal = (category: string, months: MonthKey[]) => {
     return months.reduce((total, month) => {
       const entriesTotal = data[month].entries
         .filter((e) => e.category === category)
@@ -111,13 +126,13 @@ export default function CashFlow() {
     }, 0);
   };
 
-  const getTotalByType = (type: "entries" | "exits", months: string[]) => {
+  const getTotalByType = (type: "entries" | "exits", months: MonthKey[]) => {
     return months.reduce((total, month) => {
       return total + data[month][type].reduce((sum, e) => sum + e.amount, 0);
     }, 0);
   };
 
-  const activeTrimester = ["01", "02", "03"];
+  const activeTrimester: MonthKey[] = ["01", "02", "03"];
   const entriesCategories = Array.from(
     new Set(
       activeTrimester.flatMap((month) =>
@@ -208,7 +223,7 @@ export default function CashFlow() {
           icon={ArrowBigDown}
           title={`Entradas (${getTrimesterData(
             activeTrimester,
-            (month: string) => data[month].entries.length
+            (month: MonthKey) => data[month].entries.length
           )})`}
           amount={getTrimesterData(activeTrimester, getTotalEntries)}
         />
@@ -216,7 +231,7 @@ export default function CashFlow() {
           icon={ArrowBigUp}
           title={`Saídas (${getTrimesterData(
             activeTrimester,
-            (month: string) => data[month].exits.length
+            (month: MonthKey) => data[month].exits.length
           )})`}
           amount={getTrimesterData(activeTrimester, getTotalExits) * -1}
         />
@@ -370,10 +385,10 @@ function Row({
   list,
 }: {
   category: string;
-  activeTrimester: string[];
-  getCategoryTotal: (category: string, months: string[]) => number;
-  data: any;
-  list: string;
+  activeTrimester: MonthKey[];
+  getCategoryTotal: (category: string, months: MonthKey[]) => number;
+  data: CashFlowData;
+  list: "entries" | "exits";
 }) {
   return (
     <tr className="border-b dark:border-[#171132]/60 last:border-b-0 hover:bg-[#15152f]/10 dark:bg-[#15152f]/40 transition-colors">

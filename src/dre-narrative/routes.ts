@@ -89,9 +89,6 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
         select: { id: true, mode: true },
       });
       if (!analysis) return reply.status(404).send(notFound(req, "Análise não encontrada"));
-      if (analysis.mode === "shadow") {
-        return reply.status(404).send(notFound(req, "Análise não encontrada"));
-      }
 
       const cards = await db.narrativeCard.findMany({
         where: { analysisId: req.params.analysisId },

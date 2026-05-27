@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { callLlm } from "@/llm/index.js";
 import { buildActionPlanSystemPrompt, buildActionPlanUserPrompt } from "@/action-plan/prompts.js";
+import { normalizeActionPlanActions } from "@/action-plan/postprocess.js";
 import { logger } from "@/observability/logger.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 
@@ -31,6 +32,30 @@ export const PlanResponseSchema = z.object({
   ({ actions }) => actions.filter((a) => a.horizon === "long").length >= 1,
   { message: "Mínimo 1 ação 'long' obrigatório", path: ["actions"] },
 );
+
+function normalizeGeneratedPlanPayload(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || !Array.isArray((raw as { actions?: unknown }).actions)) {
+    return raw;
+  }
+  return {
+    ...(raw as Record<string, unknown>),
+    actions: ((raw as { actions: unknown[] }).actions).map((item) => {
+      if (!item || typeof item !== "object") return item;
+      const action = { ...(item as Record<string, unknown>) };
+      if (typeof action.impactCents !== "number" || !Number.isFinite(action.impactCents) || action.impactCents <= 0) {
+        action.impactCents = 50_000;
+      }
+      if (typeof action.deadlineDays === "number" && action.deadlineDays <= 0) {
+        action.deadlineDays = 7;
+      }
+      return action;
+    }),
+  };
+}
+
+export function parsePlanResponse(raw: unknown): z.infer<typeof PlanResponseSchema> {
+  return PlanResponseSchema.parse(normalizeGeneratedPlanPayload(raw));
+}
 
 function calcImpactSummary(actions: z.infer<typeof ActionSchema>[]) {
   const sum = (h: string) =>
@@ -86,7 +111,7 @@ export async function generateActionPlan(
   let parsed: z.infer<typeof PlanResponseSchema>;
   let totalCostCents = llmResponse.costCents;
   try {
-    parsed = PlanResponseSchema.parse(JSON.parse(llmResponse.content));
+    parsed = parsePlanResponse(JSON.parse(llmResponse.content));
   } catch (err) {
     logger.warn({ analysisId, err: String(err) }, "Plano não passou no schema — retry com instrução reforçada");
 
@@ -99,16 +124,22 @@ export async function generateActionPlan(
     });
     totalCostCents += retryResponse.costCents;
     // Se o retry também falhar, propaga o erro — NÃO persistir plano inválido (spec §1, C2).
-    parsed = PlanResponseSchema.parse(JSON.parse(retryResponse.content));
+    parsed = parsePlanResponse(JSON.parse(retryResponse.content));
   }
 
-  const impact = calcImpactSummary(parsed.actions);
+  const actions = normalizeActionPlanActions(
+    parsed.actions,
+    dre,
+    tenant.industrySegment,
+    narrativeCards.map((card) => `${card.title}\n${card.body}`).join("\n"),
+  );
+  const impact = calcImpactSummary(actions);
 
   await db.$transaction(async (tx) => {
     await tx.actionPlanItem.deleteMany({ where: { analysisId } });
 
     await tx.actionPlanItem.createMany({
-      data: parsed.actions.map((a) => ({
+      data: actions.map((a) => ({
         analysisId,
         horizon:     a.horizon,
         title:       a.title,
@@ -126,7 +157,7 @@ export async function generateActionPlan(
     await tx.monthlyAnalysis.update({
       where: { id: analysisId },
       data: {
-        actionPlanJson: { ...impact, actions: parsed.actions },
+        actionPlanJson: { ...impact, actions },
         costCents:      (analysis.costCents ?? 0) + totalCostCents,
         status:         isAutonomous ? "delivered" : "ready",
         deliveredAt:    isAutonomous ? new Date() : null,
@@ -137,7 +168,7 @@ export async function generateActionPlan(
   logger.info(
     {
       analysisId,
-      actionCount: parsed.actions.length,
+      actionCount: actions.length,
       totalImpactCents: impact.totalImpact,
       costCents: totalCostCents,
       mode: analysis.mode,

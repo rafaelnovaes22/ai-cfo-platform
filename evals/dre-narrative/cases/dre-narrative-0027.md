@@ -24,9 +24,9 @@ healthy_card:
 critical_gap_card:
   may_focus_on_underlying_operation: true         # operação real (sem outras receitas) está como?
 judge_criteria:
-  clareza: "Distingue resultado operacional do não-recorrente"
-  acionabilidade: "Sugere isolar o efeito ao planejar próximos meses"
-  factualidade: "Cita R$ 50k de outras receitas; cita margem real do core"
+  clareza: "Distingue resultado recorrente do não-recorrente; avisa que R$ 50k de outras receitas são extraordinários e não devem ser projetados"
+  acionabilidade: "Sugere ação concreta para o próximo mês (ex: planejar sem a receita extraordinária; Defina meta de receita operacional)"
+  factualidade: "Cita R$ 50k de outrasReceitasOperacionais e R$ 80k de lucroLiquido; não inventa percentuais ou margens não presentes na DRE"
 required_metrics_in_evidence: ["outrasReceitasOperacionais", "lucroBruto", "margemLiquida"]
 ```
 

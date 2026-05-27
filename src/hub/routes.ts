@@ -13,6 +13,25 @@ const DreSnapshotSchema = z.object({
   margemEbitda:  z.number(),
 });
 
+const TrendPointSchema = z.object({
+  referenceMonth:   z.string(),
+  receitaLiquida:   z.number(),
+  lucroLiquido:     z.number(),
+  ebitda:           z.number(),
+  margemBruta:      z.number(),
+  margemOperacional: z.number(),
+  margemLiquida:    z.number(),
+});
+
+const AnomalyTimelinePointSchema = z.object({
+  referenceMonth: z.string(),
+  total:          z.number(),
+  high:           z.number(),
+  medium:         z.number(),
+  low:            z.number(),
+  codes:          z.array(z.string()),
+});
+
 const AnalysisSummarySchema = z.object({
   id:               z.string(),
   referenceMonth:   z.string(),
@@ -76,16 +95,12 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
 
       const subInfo = subscription
         ? { plan: subscription.plan, mode: subscription.mode, status: subscription.status }
-        : { plan: "trial", mode: "shadow", status: "active" };
+        : { plan: "trial", mode: "assisted", status: "active" };
 
       if (!latestAnalysis) return reply.send({ subscription: subInfo, latestAnalysis: null });
 
-      // C4 (defesa em profundidade) — em SHADOW o cliente NÃO recebe dre/cards/actionPlan.
-      // Front continua bloqueando CTAs; backend redacta independente.
-      const isShadow = latestAnalysis.mode === "shadow";
-
       const dreRaw = latestAnalysis.dreJson as DreLines | null;
-      const dre = (!isShadow && dreRaw)
+      const dre = dreRaw
         ? {
             receitaBruta:  dreRaw.receitaBruta,
             lucroLiquido:  dreRaw.lucroLiquido,
@@ -95,9 +110,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
           }
         : null;
 
-      const cards = isShadow
-        ? { critical_gap: 0, attention: 0, healthy: 0 }
-        : {
+      const cards = {
             critical_gap: latestAnalysis.narrativeCards.filter((c) => c.cardType === "critical_gap").length,
             attention:    latestAnalysis.narrativeCards.filter((c) => c.cardType === "attention").length,
             healthy:      latestAnalysis.narrativeCards.filter((c) => c.cardType === "healthy").length,
@@ -107,7 +120,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
       const sumH = (h: string) =>
         items.filter((i) => i.horizon === h).reduce((acc, i) => acc + i.impactCents, 0);
 
-      const actionPlan = (!isShadow && items.length > 0)
+      const actionPlan = (items.length > 0)
         ? {
             total:             items.length,
             shortImpactCents:  sumH("short"),
@@ -131,6 +144,83 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
           actionPlan,
         },
       });
+    },
+  });
+
+  // Série temporal — últimos 12 meses fechados com métricas DRE para gráficos
+  f.get("/analyses/trend", {
+    schema: {
+      response: { 200: z.object({ trend: z.array(TrendPointSchema) }) },
+    },
+    preHandler: [requireAuth, requireScope("hub:read")],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const records = await db.monthlyAnalysis.findMany({
+        where: {
+          tenantId: req.auth!.tenantId,
+          status: { in: ["ready", "delivered", "approved"] },
+        },
+        orderBy: { referenceMonth: "desc" },
+        take: 12,
+        select: { referenceMonth: true, dreJson: true },
+      });
+
+      const trend = records
+        .filter((r) => r.dreJson != null)
+        .reverse()
+        .map((r) => {
+          const d = r.dreJson as DreLines;
+          return {
+            referenceMonth:    r.referenceMonth,
+            receitaLiquida:    d.receitaLiquida,
+            lucroLiquido:      d.lucroLiquido,
+            ebitda:            d.ebitda,
+            margemBruta:       d.margemBruta,
+            margemOperacional: d.margemOperacional,
+            margemLiquida:     d.margemLiquida,
+          };
+        });
+
+      return reply.send({ trend });
+    },
+  });
+
+  // Timeline de anomalias — últimos 12 meses com contagem e códigos por severidade
+  f.get("/analyses/anomaly-timeline", {
+    schema: {
+      response: { 200: z.object({ timeline: z.array(AnomalyTimelinePointSchema) }) },
+    },
+    preHandler: [requireAuth, requireScope("hub:read")],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const records = await db.monthlyAnalysis.findMany({
+        where: {
+          tenantId: req.auth!.tenantId,
+          status: { in: ["ready", "delivered", "approved"] },
+        },
+        orderBy: { referenceMonth: "desc" },
+        take: 12,
+        select: { referenceMonth: true, anomaliesJson: true },
+      });
+
+      type RawAnomaly = { code: string; severity: string };
+
+      const timeline = records
+        .filter((r) => r.anomaliesJson != null)
+        .reverse()
+        .map((r) => {
+          const anomalies = r.anomaliesJson as RawAnomaly[];
+          return {
+            referenceMonth: r.referenceMonth,
+            total:          anomalies.length,
+            high:           anomalies.filter((a) => a.severity === "high").length,
+            medium:         anomalies.filter((a) => a.severity === "medium").length,
+            low:            anomalies.filter((a) => a.severity === "low").length,
+            codes:          [...new Set(anomalies.map((a) => a.code))],
+          };
+        });
+
+      return reply.send({ timeline });
     },
   });
 

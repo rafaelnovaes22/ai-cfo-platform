@@ -1,8 +1,7 @@
 import { randomUUID } from "crypto";
 import { RunTree } from "langsmith";
 
-// No-op child returned when LangSmith is not configured
-const noopChild = { end: (_opts?: unknown) => {} };
+const noopChild = { end: async (_opts?: unknown): Promise<void> => {} };
 
 function makeNoopTrace(id: string) {
   return {
@@ -10,6 +9,7 @@ function makeNoopTrace(id: string) {
     generation: (_opts?: unknown) => noopChild,
     span: (_opts?: unknown) => noopChild,
     update: async (_opts?: unknown) => {},
+    end: async () => {},
   };
 }
 
@@ -46,11 +46,38 @@ export function createTrace(opts: TraceOptions) {
       inputs: (childOpts.input as Record<string, unknown>) ?? {},
     });
     void child.postRun();
+
     return {
-      end: (endOpts: ChildOpts) => {
+      end: async (endOpts: ChildOpts): Promise<void> => {
         const outputs =
           endOpts.output != null ? { output: endOpts.output } : (endOpts as Record<string, unknown>);
-        void child.end(outputs).then(() => child.patchRun());
+
+        const usage = endOpts.usage as { input?: number; output?: number } | undefined;
+
+        await child.end(outputs);
+
+        if (usage?.input != null || usage?.output != null) {
+          const inputTokens = usage.input ?? 0;
+          const outputTokens = usage.output ?? 0;
+          // LangSmith lê tokens de extra.metadata.usage_metadata (input_tokens/output_tokens)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existing = (child as any).extra as Record<string, unknown> ?? {};
+          const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (child as any).extra = {
+            ...existing,
+            metadata: {
+              ...existingMeta,
+              usage_metadata: {
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                total_tokens: inputTokens + outputTokens,
+              },
+            },
+          };
+        }
+
+        await child.patchRun();
       },
     };
   }
@@ -63,8 +90,12 @@ export function createTrace(opts: TraceOptions) {
       run.metadata = { ...(run.metadata as Record<string, unknown>), ...(updateOpts.metadata ?? {}) };
       await run.patchRun();
     },
+    end: async (outputs?: Record<string, unknown>) => {
+      await run.end(outputs ?? {});
+      await run.patchRun();
+    },
   };
 }
 
-// Kept for backward compat (server.ts shutdown hook); LangSmith posts are fire-and-forget.
+// Kept for backward compat (server.ts shutdown hook).
 export async function flushLangfuse(): Promise<void> {}

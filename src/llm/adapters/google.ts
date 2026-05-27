@@ -1,94 +1,100 @@
-import { VertexAI } from "@google-cloud/vertexai";
-
-// GoogleAuthOptions vem de google-auth-library (transitivo); usamos a forma mínima inline.
-interface InlineGoogleAuthOptions {
-  credentials: { client_email: string; private_key: string };
-}
+import { GoogleGenAI } from "@google/genai";
+import { writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import type { LlmRequest, LlmResponse, RouteConfig } from "@/llm/types.js";
 import { calculateCostCents } from "@/llm/cost.js";
 
-// Adapter Vertex AI (LGPD — dados em região southamerica-east1).
-// Substitui Google AI Studio (@google/generative-ai) em 2026-05-20 (ADR-009).
-//
-// Auth flexível:
-//   - DEV/local: GOOGLE_APPLICATION_CREDENTIALS aponta para SA JSON em disco (ADC padrão)
-//   - PROD/Railway: GOOGLE_APPLICATION_CREDENTIALS_JSON contém o JSON inline,
-//     evitando precisar gravar arquivo em runtime.
-let _client: VertexAI | null = null;
+// Vertex AI — dados processados em southamerica-east1 (LGPD).
+// Auth: GOOGLE_APPLICATION_CREDENTIALS_JSON (Railway) ou ADC (local).
+let _client: GoogleGenAI | null = null;
 
-function buildAuthOptions(): InlineGoogleAuthOptions | undefined {
+function setupCredentials(): void {
   const inlineJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  if (!inlineJson) return undefined;
+  if (!inlineJson || process.env.GOOGLE_APPLICATION_CREDENTIALS) return;
 
-  let parsed: { client_email?: string; private_key?: string };
-  try {
-    parsed = JSON.parse(inlineJson);
-  } catch (err) {
-    throw new Error(
-      `GOOGLE_APPLICATION_CREDENTIALS_JSON não é JSON válido: ${(err as Error).message}`,
-    );
-  }
-
-  if (!parsed.client_email || !parsed.private_key) {
-    throw new Error(
-      "GOOGLE_APPLICATION_CREDENTIALS_JSON deve conter client_email e private_key (service account JSON)",
-    );
-  }
-
-  return {
-    credentials: { client_email: parsed.client_email, private_key: parsed.private_key },
-  };
+  const tmpFile = join(tmpdir(), "gcp-sa.json");
+  writeFileSync(tmpFile, inlineJson, "utf8");
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpFile;
 }
 
-function getClient(): VertexAI {
+function getClient(): GoogleGenAI {
   if (!_client) {
     const project = process.env.GOOGLE_CLOUD_PROJECT;
-    if (!project) throw new Error("GOOGLE_CLOUD_PROJECT não configurado");
+    const apiKey = process.env.GOOGLE_API_KEY;
 
-    const location = process.env.GOOGLE_CLOUD_LOCATION ?? "southamerica-east1";
-    const googleAuthOptions = buildAuthOptions();
-
-    _client = new VertexAI({
-      project,
-      location,
-      ...(googleAuthOptions ? { googleAuthOptions } : {}),
-    });
+    if (project) {
+      // PROD: Vertex AI (southamerica-east1) — dados não saem do Brasil, sem treino.
+      setupCredentials();
+      const location = process.env.GOOGLE_CLOUD_LOCATION ?? "southamerica-east1";
+      _client = new GoogleGenAI({ vertexai: true, project, location });
+    } else if (apiKey) {
+      // DEV local: Google AI Studio via API key (só para testes/evals).
+      _client = new GoogleGenAI({ apiKey });
+    } else {
+      throw new Error("Configure GOOGLE_CLOUD_PROJECT (prod) ou GOOGLE_API_KEY (dev)");
+    }
   }
   return _client;
 }
 
+const RETRYABLE_CODES = new Set([429, 500, 503]);
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
+function isRetryable(err: unknown): boolean {
+  if (err && typeof err === "object" && "status" in err) {
+    return RETRYABLE_CODES.has((err as { status: number }).status);
+  }
+  const msg = String(err);
+  return msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("RESOURCE_EXHAUSTED");
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
   const client = getClient();
+  let lastErr: unknown;
 
-  const model = client.getGenerativeModel({
-    model: config.model,
-    systemInstruction: { role: "system", parts: [{ text: req.systemPrompt }] },
-    generationConfig: {
-      responseMimeType: req.jsonMode ? "application/json" : "text/plain",
-      ...(config.thinkingBudget
-        ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
-        : {}),
-    },
-  });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(BASE_DELAY_MS * 2 ** (attempt - 1));
+    }
 
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: req.userPrompt }] }],
-  });
+    try {
+      const response = await client.models.generateContent({
+        model: config.model,
+        contents: req.userPrompt,
+        config: {
+          systemInstruction: req.systemPrompt,
+          responseMimeType: req.jsonMode ? "application/json" : "text/plain",
+          ...(config.thinkingBudget
+            ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
+            : {}),
+        },
+      });
 
-  const candidate = result.response.candidates?.[0];
-  const content = candidate?.content?.parts?.[0]?.text ?? "";
-  const usage = result.response.usageMetadata;
+      const content = response.text ?? "";
+      const usage = response.usageMetadata;
+      const inputTokens = usage?.promptTokenCount ?? 0;
+      const outputTokens = usage?.candidatesTokenCount ?? 0;
 
-  const inputTokens = usage?.promptTokenCount ?? 0;
-  const outputTokens = usage?.candidatesTokenCount ?? 0;
+      return {
+        content,
+        provider: "google",
+        model: config.model,
+        inputTokens,
+        outputTokens,
+        costCents: calculateCostCents(config.model, inputTokens, outputTokens),
+        traceId: null,
+      };
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === MAX_RETRIES) break;
+    }
+  }
 
-  return {
-    content,
-    provider: "google",
-    model: config.model,
-    inputTokens,
-    outputTokens,
-    costCents: calculateCostCents(config.model, inputTokens, outputTokens),
-    traceId: null,
-  };
+  throw lastErr;
 }

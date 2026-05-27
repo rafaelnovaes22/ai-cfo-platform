@@ -15,6 +15,7 @@ import type {
   QaReview,
 } from "@/monthly-analysis/schemas/agents.js";
 
+
 // Estado canônico do grafo LangGraph do SKU monthly-analysis.
 // Aditivo ao pipeline BullMQ atual — coexistência até promoção SHADOW→default.
 export type QaGateDecision = "narrative_synthesis" | "action_planning" | "finalize";
@@ -22,7 +23,14 @@ export type QaGateDecision = "narrative_synthesis" | "action_planning" | "finali
 export interface MonthlyAnalysisState {
   analysisId: string;
   tenantId: string;
+  segment?: string;
+  taxRegime?: string;
+  toneOfVoice?: string;
 
+  openingBalance?: number;
+  previousDre?: DreLines;
+  // últimos 12 meses fechados, ordenados do mais antigo ao mais recente (sem o mês atual)
+  historicalDre?: DreLines[];
   rawEntries?: RawLedgerEntry[];
 
   normalizedEntries?: NormalizedLedgerEntry[];

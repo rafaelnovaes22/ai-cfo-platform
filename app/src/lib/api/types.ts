@@ -1139,7 +1139,9 @@ export interface paths {
                                 amountCents: number;
                                 direction: string;
                                 predictedCategory: string | null;
+                                confirmedCategory: string | null;
                                 classificationConfidence: number | null;
+                                correctionSource: string | null;
                             }[];
                             meta: {
                                 cursor: string | null;

@@ -12,28 +12,53 @@ export function parseText(raw: string): ParseResult {
   const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return { entries: [], orphanCount: 0 };
 
-  // lines[0] é garantido != undefined pelo length-check acima, mas TS exige guard.
-  const headerLine = lines[0] ?? "";
-  const headers = splitRow(headerLine);
-  const { dateIdx, descIdx, amountIdx, dirIdx } = detectColumns(headers);
+  // Escaneia até 30 linhas para encontrar o cabeçalho real.
+  // Extratos bancários (ex: Itaú) têm metadados antes dos dados.
+  let headerLineIdx = 0;
+  let cols = detectColumns(splitRow(lines[0] ?? ""));
+  for (let i = 0; i < Math.min(lines.length - 1, 30); i++) {
+    const c = detectColumns(splitRow(lines[i] ?? ""));
+    if (c.dateIdx >= 0 && c.descIdx >= 0) {
+      headerLineIdx = i;
+      cols = c;
+      break;
+    }
+  }
 
-  const dataLines = lines.slice(1);
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = cols;
+
+  const dataLines = lines.slice(headerLineIdx + 1);
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
   for (const line of dataLines) {
     const cells = splitRow(line);
 
-    const rawDate   = dateIdx >= 0   ? (cells[dateIdx] ?? "")   : (cells[0] ?? "");
-    const rawDesc   = descIdx >= 0   ? (cells[descIdx] ?? "")   : (cells[1] ?? "");
-    const rawAmount = amountIdx >= 0 ? (cells[amountIdx] ?? "") : (cells[2] ?? "");
-    const rawDir    = dirIdx !== null ? (cells[dirIdx] ?? null)  : null;
+    const rawDate = dateIdx >= 0 ? (cells[dateIdx] ?? "") : (cells[0] ?? "");
+    const rawDesc = descIdx >= 0 ? (cells[descIdx] ?? "") : (cells[1] ?? "");
 
     if (!rawDate.trim() && !rawDesc.trim()) continue;
 
-    const date = normalizeDate(rawDate);
-    const rawCents = normalizeAmountCents(rawAmount);
+    let rawCents: number | null;
+    let rawDir: string | null = dirIdx !== null ? (cells[dirIdx] ?? null) : null;
 
+    if (amountIdx >= 0) {
+      rawCents = normalizeAmountCents(cells[amountIdx] ?? "");
+    } else if (creditIdx !== null && debitIdx !== null) {
+      const creditVal = normalizeAmountCents(cells[creditIdx] ?? "");
+      const debitVal  = normalizeAmountCents(cells[debitIdx]  ?? "");
+      if (creditVal !== null && creditVal !== 0) {
+        rawCents = creditVal;
+        rawDir = "credit";
+      } else {
+        rawCents = debitVal;
+        rawDir = "debit";
+      }
+    } else {
+      rawCents = normalizeAmountCents(cells[2] ?? "");
+    }
+
+    const date = normalizeDate(rawDate);
     if (!date || rawCents === null || !rawDesc.trim()) { orphanCount++; continue; }
 
     entries.push({

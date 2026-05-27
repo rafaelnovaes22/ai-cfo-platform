@@ -48,7 +48,7 @@ export async function register(data: {
       });
 
       await tx.subscription.create({
-        data: { tenantId: tenant.id, plan: "trial", mode: "shadow", status: "active" },
+        data: { tenantId: tenant.id, plan: "trial", mode: "assisted", status: "active" },
       });
 
       return { tenant, user };

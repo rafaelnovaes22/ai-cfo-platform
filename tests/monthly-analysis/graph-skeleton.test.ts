@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const findUniqueMock = vi.fn();
+const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
     monthlyAnalysis: {
       findUnique: (...args: unknown[]) => findUniqueMock(...args),
+      findMany: (...args: unknown[]) => findManyAnalysesMock(...args),
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
@@ -27,8 +29,11 @@ import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
 describe("monthly-analysis graph skeleton (data-empty paths)", () => {
   beforeEach(() => {
     findUniqueMock.mockReset();
+    findManyAnalysesMock.mockReset();
     findManyLedgerMock.mockReset();
     callLlmMock.mockReset();
+    // padrão: sem histórico
+    findManyAnalysesMock.mockResolvedValue([]);
   });
 
   it("compila e fecha o grafo sem dados — todos os nós degradam graciosamente", async () => {
@@ -36,6 +41,9 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
       id: "test-id",
       tenantId: "test-tenant",
       status: "pending",
+      referenceMonth: "2026-05",
+      openingBalanceCents: null,
+      tenant: { industrySegment: "servicos-b2b", taxRegime: "simples", productConfig: {} },
     });
     findManyLedgerMock.mockResolvedValueOnce([]);
 
@@ -56,6 +64,9 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
     expect(result.classifiedEntries).toEqual([]);
     expect(result.narrativeCards).toEqual([]);
     expect(result.actionPlan).toBeUndefined();
+    expect(result.historicalDre).toEqual([]);
+    expect(result.previousDre).toBeUndefined();
+    expect(result.openingBalance).toBeUndefined();
     expect(Array.isArray(result.costs)).toBe(true);
     expect(Array.isArray(result.traces)).toBe(true);
     expect(Array.isArray(result.errors)).toBe(true);
@@ -85,6 +96,8 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
       id: "test-id",
       tenantId: "outro-tenant",
       status: "pending",
+      referenceMonth: "2026-05",
+      openingBalanceCents: null,
     });
 
     const graph = buildMonthlyAnalysisGraph();

@@ -1,16 +1,33 @@
 import { getPrisma } from "@/persistence/prisma.js";
-import { enqueueClassification } from "@/queue/index.js";
+import { Prisma } from "@prisma/client";
+import { enqueueClassification, enqueueDreNarrative } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
-import { parsePdf } from "@/ingest/parsers/pdf.js";
+import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { createTrace } from "@/observability/langfuse.js";
+import { logger } from "@/observability/logger.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 
 // Default — pode ser sobrescrito por tenant em productConfig.monthlyAnalysis.minEntries (C8).
-const DEFAULT_MIN_INGEST_ENTRIES = 50;
+const DEFAULT_MIN_INGEST_ENTRIES = 10;
 
 export type IngestSource = "excel" | "csv" | "text" | "pdf" | "manual";
+
+export function shouldSkipClassification(entries: RawLedger[]): boolean {
+  return entries.length > 0 && entries.every((entry) => entry.confirmedCategory != null);
+}
+
+export function filterEntriesByReferenceMonth(
+  entries: RawLedger[],
+  referenceMonth: string,
+): { entries: RawLedger[]; ignoredCount: number } {
+  const filtered = entries.filter((entry) => entry.date.startsWith(`${referenceMonth}-`));
+  return {
+    entries: filtered,
+    ignoredCount: entries.length - filtered.length,
+  };
+}
 
 export async function ingest(params: {
   tenantId: string;
@@ -40,13 +57,40 @@ export async function ingest(params: {
   } catch (err) {
     parseSpan.end({ level: "ERROR", output: { error: String(err) } });
     await trace.update({ metadata: { outcome: "failed", reason: "parse_error" } });
+    await trace.end({ outcome: "failed" });
+    logger.error({ err, source, referenceMonth, tenantId }, "Ingest parse error");
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
-  const { entries, orphanCount } = parseResult;
+  const effectiveReferenceMonth = parseResult.referenceMonth ?? referenceMonth;
+  const { entries, ignoredCount: outOfReferenceMonthCount } = filterEntriesByReferenceMonth(
+    parseResult.entries,
+    effectiveReferenceMonth,
+  );
+  const { orphanCount } = parseResult;
+  logger.info(
+    {
+      source,
+      requestedReferenceMonth: referenceMonth,
+      referenceMonth: effectiveReferenceMonth,
+      tenantId,
+      entryCount: entries.length,
+      orphanCount,
+      outOfReferenceMonthCount,
+    },
+    "Ingest parse concluído",
+  );
+
   if (entries.length === 0) {
-    await trace.update({ metadata: { outcome: "failed", reason: "no_entries", orphanCount } });
-    return buildResult("failed", tenantId, referenceMonth, 0, orphanCount);
+    await trace.update({
+      metadata: {
+        outcome: "failed",
+        reason: "no_entries",
+        orphanCount,
+        outOfReferenceMonthCount,
+      },
+    });
+    return buildResult("failed", tenantId, effectiveReferenceMonth, 0, orphanCount);
   }
 
   // 2. Upsert MonthlyAnalysis + ler threshold por tenant (C8) na mesma transação
@@ -62,9 +106,10 @@ export async function ingest(params: {
       Record<string, unknown> | undefined;
     const threshold =
       (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
+    const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
 
     const existing = await tx.monthlyAnalysis.findUnique({
-      where: { tenantId_referenceMonth: { tenantId, referenceMonth } },
+      where: { tenantId_referenceMonth: { tenantId, referenceMonth: effectiveReferenceMonth } },
     });
 
     if (existing) {
@@ -73,14 +118,26 @@ export async function ingest(params: {
       await tx.actionPlanItem.deleteMany({ where: { analysisId: existing.id } });
       await tx.monthlyAnalysis.update({
         where: { id: existing.id },
-        data: { status: "pending", generatedAt: null, deliveredAt: null, approvedAt: null },
+        data: {
+          status: "pending",
+          generatedAt: null,
+          deliveredAt: null,
+          approvedAt: null,
+          mode: subscription.mode,
+          dreJson: Prisma.DbNull,
+          narrativeJson: Prisma.DbNull,
+          actionPlanJson: Prisma.DbNull,
+          clientEditedNarrative: null,
+          clientEditedActionPlan: null,
+          costCents: 0,
+          langfuseTraceId: null,
+        },
       });
       return { analysis: existing, minEntries: threshold };
     }
 
-    const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
     const created = await tx.monthlyAnalysis.create({
-      data: { tenantId, referenceMonth, status: "pending", mode: subscription.mode },
+      data: { tenantId, referenceMonth: effectiveReferenceMonth, status: "pending", mode: subscription.mode },
     });
     return { analysis: created, minEntries: threshold };
   });
@@ -94,6 +151,12 @@ export async function ingest(params: {
       description: e.description,
       amountCents: e.amountCents,
       direction: e.direction,
+      ...(e.confirmedCategory != null ? {
+        predictedCategory:        e.confirmedCategory,
+        confirmedCategory:        e.confirmedCategory,
+        correctionSource:         e.correctionSource ?? "dre-import",
+        classificationConfidence: e.classificationConfidence ?? 1.0,
+      } : {}),
     })),
   });
   persistSpan.end({ output: { analysisId: analysis.id, minEntries } });
@@ -102,7 +165,11 @@ export async function ingest(params: {
   const outcome = entries.length >= minEntries ? "completed" : "partial";
 
   if (outcome === "completed") {
-    await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    if (shouldSkipClassification(entries)) {
+      await enqueueDreNarrative({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    } else {
+      await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    }
     await db.monthlyAnalysis.update({
       where: { id: analysis.id },
       data: { status: "generating" },
@@ -110,12 +177,22 @@ export async function ingest(params: {
   }
 
   await trace.update({
-    metadata: { outcome, analysisId: analysis.id, entryCount: entries.length, orphanCount, minEntries },
+    metadata: {
+      outcome,
+      analysisId: analysis.id,
+      requestedReferenceMonth: referenceMonth,
+      referenceMonth: effectiveReferenceMonth,
+      entryCount: entries.length,
+      orphanCount,
+      outOfReferenceMonthCount,
+      minEntries,
+    },
   });
+  await trace.end({ outcome, entryCount: entries.length });
 
   return {
     analysisId: analysis.id,
-    referenceMonth,
+    referenceMonth: effectiveReferenceMonth,
     entryCount: entries.length,
     orphanCount,
     outcome,
@@ -128,7 +205,9 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
     case "csv":
       return parseExcel(params.buffer!);
     case "pdf":
-      return parsePdf(params.buffer!);
+      // No Aicfo, upload PDF representa DRE consolidado do contador.
+      // Extratos/ledgers devem entrar como Excel, CSV ou texto colado.
+      return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
     case "text":
       return parseText(params.text!);
     case "manual":

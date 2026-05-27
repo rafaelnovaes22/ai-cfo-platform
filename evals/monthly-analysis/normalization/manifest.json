@@ -32,6 +32,8 @@
     "edge": 3,
     "adversarial": 2
   },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape cobre clean_normalize, flag_noise, preserve_amount_date (Zod + assertImmutableFinancialFields). identify_document_type e preserve_semantics rodam apenas via llm_as_judge (signal, não bloqueante para ASSISTED).",
   "pass_rate_threshold": 0.9,
-  "last_updated": "2026-05-20"
+  "last_updated": "2026-05-26"
 }

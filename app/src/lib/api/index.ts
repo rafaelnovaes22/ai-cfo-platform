@@ -1,6 +1,25 @@
 import { apiFetch, apiUpload } from "./client.js";
 import type { paths } from "./types.js";
 
+export interface TrendPoint {
+  referenceMonth: string;
+  receitaLiquida: number;
+  lucroLiquido: number;
+  ebitda: number;
+  margemBruta: number;
+  margemOperacional: number;
+  margemLiquida: number;
+}
+
+export interface AnomalyTimelinePoint {
+  referenceMonth: string;
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+  codes: string[];
+}
+
 type Json<T> = T extends { content: { "application/json": infer R } } ? R : never;
 
 type Req200<P extends keyof paths, M extends keyof paths[P]> =
@@ -127,8 +146,10 @@ export const ingest = {
   upload: (file: File, referenceMonth: string) => {
     const form = new FormData();
     form.append("file", file);
-    form.append("referenceMonth", referenceMonth);
-    return apiUpload<Req200<"/ingest/upload", "post">>("/ingest/upload", form);
+    return apiUpload<Req200<"/ingest/upload", "post">>(
+      `/ingest/upload?referenceMonth=${encodeURIComponent(referenceMonth)}`,
+      form,
+    );
   },
 
   clipboard: (body: Body<"/ingest/clipboard", "post">) =>
@@ -192,6 +213,10 @@ export const hub = {
 
 export const analyses = {
   list: () => apiFetch<AnalysesResponse>("/analyses"),
+
+  trend: () => apiFetch<{ trend: TrendPoint[] }>("/analyses/trend"),
+
+  anomalyTimeline: () => apiFetch<{ timeline: AnomalyTimelinePoint[] }>("/analyses/anomaly-timeline"),
 
   approve: (analysisId: string) =>
     apiFetch<Req200<"/analysis/{analysisId}/approve", "post">>(

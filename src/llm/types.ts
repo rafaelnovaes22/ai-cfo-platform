@@ -3,7 +3,8 @@ export type LegacyLlmTask =
   | "classification-judge"
   | "dre-narrative"
   | "action-plan"
-  | "eval-judge";
+  | "eval-judge"
+  | "dre-extraction";
 
 export type AgenticLlmTask =
   | "normalization"

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { formatBRL } from "../data/categories.ts";
-import { useTransactions, BACKEND_CATEGORIES } from "../data/useTransactions.ts";
+import { useTransactions, BACKEND_CATEGORIES, type ReviewStatus } from "../data/useTransactions.ts";
 import { AnalysisPicker } from "../components/AnalysisPicker.tsx";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import { toast } from "@/components/ui/sonner";
@@ -118,14 +118,18 @@ export default function Transactions() {
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal">Descrição</th>
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[220px]">Categoria</th>
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[140px] text-right">Valor</th>
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[80px] text-right">Conf.</th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px] text-right">Status</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((t) => (
               <tr
                 key={t.id}
-                className="border-b dark:border-[#171132]/60 last:border-0 hover:bg-[#15152f]/10 dark:bg-[#15152f]/40 transition-colors"
+                className={`border-b dark:border-[#171132]/60 last:border-0 hover:bg-[#15152f]/10 transition-colors ${
+                  t.reviewStatus === "needs_review"
+                    ? "dark:bg-amber-950/20"
+                    : "dark:bg-[#15152f]/40"
+                }`}
               >
                 <td className="px-5 py-3.5 text-[12px] opacity-60">{formatDate(t.date)}</td>
                 <td className="px-5 py-3.5">{t.description}</td>
@@ -148,8 +152,8 @@ export default function Transactions() {
                   {t.type === "income" ? "+" : "−"}
                   {formatBRL(Number(t.amount))}
                 </td>
-                <td className="px-5 py-3.5 text-right text-[12px] opacity-50">
-                  {t.confidence !== null ? `${(t.confidence * 100).toFixed(0)}%` : "—"}
+                <td className="px-5 py-3.5 text-right">
+                  <StatusBadge status={t.reviewStatus} confidence={t.confidence} />
                 </td>
               </tr>
             ))}
@@ -198,5 +202,27 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
       <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">{label}</div>
       <div className={`text-[28px] leading-none tracking-tight tabular ${colors}`}>{formatBRL(value)}</div>
     </div>
+  );
+}
+
+function StatusBadge({ status, confidence }: { status: ReviewStatus; confidence: number | null }) {
+  if (status === "needs_review") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+        Revisar
+      </span>
+    );
+  }
+  if (status === "corrected") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30">
+        Corrigido
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+      IA {confidence !== null ? `${(confidence * 100).toFixed(0)}%` : ""}
+    </span>
   );
 }

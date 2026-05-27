@@ -5,6 +5,7 @@ import {
   jsonSchemaTransform,
 } from "fastify-type-provider-zod";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { logger } from "@/observability/logger.js";
@@ -33,12 +34,32 @@ const app = Fastify({
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
-// CORS: lê FRONTEND_ORIGIN do .env. Em dev, default permite Vite (5173).
-// Aceita múltiplas origens separadas por vírgula (ex: dev local + Vercel preview).
-const frontendOrigin = process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
-const allowedOrigins = frontendOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+// Rate limiting global: protege contra abuso e ataques de força bruta.
+// Rotas de auth têm limite próprio mais restrito (ver auth/routes.ts).
+await app.register(rateLimit, {
+  max: Number(process.env.RATE_LIMIT_MAX ?? 100),
+  timeWindow: "1 minute",
+  keyGenerator: (req) => req.ip,
+  skipOnError: true,
+  errorResponseBuilder: (_req, context) => ({
+    statusCode: 429,
+    message: `Limite de requisições atingido. Tente novamente em ${Math.ceil(context.ttl / 1000)}s.`,
+  }),
+});
+
+// CORS: lê FRONTEND_ORIGIN do .env (vírgula para múltiplas origens).
+// Em Railway sem FRONTEND_ORIGIN configurado, aceita qualquer *.up.railway.app.
+// Em dev, fallback para localhost:5173.
+function buildCorsOrigins(): (string | RegExp)[] {
+  const env = process.env.FRONTEND_ORIGIN;
+  if (env) return env.split(",").map((o) => o.trim()).filter(Boolean);
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    return ["http://localhost:5173", /^https:\/\/.*\.up\.railway\.app$/];
+  }
+  return ["http://localhost:5173"];
+}
 await app.register(cors, {
-  origin: allowedOrigins,
+  origin: buildCorsOrigins(),
   credentials: true,
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   exposedHeaders: ["x-request-id"],

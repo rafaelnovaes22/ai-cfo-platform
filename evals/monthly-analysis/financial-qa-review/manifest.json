@@ -16,6 +16,8 @@
       "llm_as_judge"
     ]
   },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape é o método 100% implementado para os outcomes deste sub-agente. llm_as_judge fica como signal quando runner for estendido. Sem este campo, dispatch heurístico escolhe llm_as_judge e SKIPa tudo.",
   "judge_dimensions": [
     "factualidade",
     "severidade_correta",

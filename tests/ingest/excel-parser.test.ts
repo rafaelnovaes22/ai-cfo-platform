@@ -44,10 +44,12 @@ describe("ingest/parsers/excel — happy path", () => {
       ["Data", "Histórico", "Valor"],
       ["30/04/2026", "Recebimento", "1000,00"],
       ["01/05/2026", "Pagamento", "(500,00)"],
+      ["02/05/2026", "Tarifa", "-30,00"],
     ]);
     const r = parseExcel(buf);
     expect(r.entries[0]?.direction).toBe("credit");
     expect(r.entries[1]?.direction).toBe("debit");
+    expect(r.entries[2]?.direction).toBe("debit");
   });
 
   it("cai em parsing posicional quando header não bate", () => {
@@ -81,6 +83,34 @@ describe("ingest/parsers/excel — happy path", () => {
     const r = parseExcel(buf);
     expect(r.entries).toHaveLength(2);
     expect(r.orphanCount).toBe(0);
+  });
+
+  it("parseia extrato bancario com metadados antes do header e colunas credito/debito", () => {
+    const buf = workbookFromAoA([
+      ["EXTRATO DE CONTA CORRENTE", "", "", "", "", "", ""],
+      ["Tipo de Lancamento: Todos", "", "", "", "Extrato de 21/02/2026 a 21/05/2026", "", ""],
+      ["Data ", "Descricao ", "Docto ", "Situacao ", "Credito (R$) ", "Debito (R$) ", "Saldo (R$) "],
+      ["20/05/2026 ", "PIX ENVIADO OPEN FINANCE", "000000", "", "", "-1.000,00", "0,00"],
+      ["20/05/2026 ", "PIX RECEBIDO", "000000", "", "1.000,00", "", "1.000,00"],
+    ]);
+
+    const r = parseExcel(buf);
+
+    expect(r.orphanCount).toBe(0);
+    expect(r.entries).toEqual([
+      {
+        date: "2026-05-20",
+        description: "PIX ENVIADO OPEN FINANCE",
+        amountCents: 100_000,
+        direction: "debit",
+      },
+      {
+        date: "2026-05-20",
+        description: "PIX RECEBIDO",
+        amountCents: 100_000,
+        direction: "credit",
+      },
+    ]);
   });
 });
 

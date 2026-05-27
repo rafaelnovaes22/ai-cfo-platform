@@ -1,0 +1,90 @@
+{
+  "module": "monthly-analysis",
+  "manifest_kind": "sku_aggregate",
+  "outcomes": [
+    "analysis_delivered",
+    "dre_classified",
+    "narrative_generated",
+    "action_plan_generated",
+    "report_exported"
+  ],
+  "lifecycle": "SHADOW_active",
+  "last_updated": "2026-05-26",
+
+  "_strategy": "4 sub-agentes com assertion_shape como gate_method. financial-qa-review cobre o pipeline E2E; normalization, narrative-synthesis e action-planning cobrem os nós LLM individuais. Para ASSISTED→AUTONOMOUS adicionar llm_as_judge como signal de qualidade.",
+
+  "gate_strategy": {
+    "shadow_gate": "delegate_to_financial_qa_review",
+    "shadow_gate_evidence": "evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md (100% pass, 10/10 cases, prompt_hash 0fcd35f0)",
+    "assisted_gate": "all_4_sub_agents_passing",
+    "assisted_gate_evidence": {
+      "normalization": "evals/monthly-analysis/normalization/runs/2026-05-26-eval-3c675670-none.md (100%, 7/7)",
+      "narrative-synthesis": "evals/monthly-analysis/narrative-synthesis/runs/2026-05-26-eval-ab01a111-none.md (100%, 15/15)",
+      "action-planning": "evals/monthly-analysis/action-planning/runs/2026-05-26-eval-f4f3d6ba-none.md (100%, 15/15)",
+      "financial-qa-review": "evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md (100%, 10/10)"
+    },
+    "autonomous_gate_pending": "llm_as_judge para narrative-synthesis e action-planning como signal de qualidade (não bloqueante hoje, bloqueante para AUTONOMOUS)"
+  },
+
+  "sub_agents": {
+    "normalization": {
+      "manifest": "evals/monthly-analysis/normalization/manifest.json",
+      "cases": 10,
+      "runner_status": "fully_implemented_assertion_shape",
+      "gate_method": "assertion_shape",
+      "blocking_for": "ASSISTED",
+      "latest_run": "evals/monthly-analysis/normalization/runs/2026-05-26-eval-3c675670-none.md",
+      "latest_pass_rate": 1.0,
+      "attempted_cases": 7,
+      "note": "3 cases (identify_document_type, preserve_semantics) usam apenas llm_as_judge — skipped no gate assertion_shape"
+    },
+    "narrative-synthesis": {
+      "manifest": "evals/monthly-analysis/narrative-synthesis/manifest.json",
+      "cases": 15,
+      "runner_status": "fully_implemented_assertion_shape",
+      "gate_method": "assertion_shape",
+      "blocking_for": "ASSISTED",
+      "latest_run": "evals/monthly-analysis/narrative-synthesis/runs/2026-05-26-eval-ab01a111-none.md",
+      "latest_pass_rate": 1.0,
+      "attempted_cases": 15
+    },
+    "action-planning": {
+      "manifest": "evals/monthly-analysis/action-planning/manifest.json",
+      "cases": 15,
+      "runner_status": "fully_implemented_assertion_shape",
+      "gate_method": "assertion_shape",
+      "blocking_for": "ASSISTED",
+      "latest_run": "evals/monthly-analysis/action-planning/runs/2026-05-26-eval-f4f3d6ba-none.md",
+      "latest_pass_rate": 1.0,
+      "attempted_cases": 15,
+      "note": "Prompt corrigido em PR #64: mínimo 3 short explícito + impactCents > 0 com exemplos"
+    },
+    "financial-qa-review": {
+      "manifest": "evals/monthly-analysis/financial-qa-review/manifest.json",
+      "cases": 10,
+      "runner_status": "fully_implemented_assertion_shape",
+      "gate_method": "assertion_shape",
+      "blocking_for": "SHADOW",
+      "latest_run": "evals/monthly-analysis/financial-qa-review/runs/2026-05-25-eval-0fcd35f0-none.md",
+      "latest_pass_rate": 1.0,
+      "attempted_cases": 10
+    }
+  },
+
+  "pass_rate_threshold": 0.95,
+  "gate_method": "assertion_shape",
+
+  "shadow_window": {
+    "started_at": "2026-05-25T20:50:00Z",
+    "ends_at_earliest": "2026-06-08T20:50:00Z",
+    "next_promotion_review": "2026-06-08",
+    "target_tenants": "5-10",
+    "status": "open_for_recruitment"
+  },
+
+  "next_session_todo": [
+    "Recrutar 5-10 PMEs para janela SHADOW (sem custo para o cliente)",
+    "Rodar llm_as_judge como signal de qualidade narrativa (narrative-synthesis e action-planning)",
+    "Em 2026-06-08: /acme:promote shadow_to_assisted (Gate 4 já desbloqueado por este PR)"
+  ]
+}

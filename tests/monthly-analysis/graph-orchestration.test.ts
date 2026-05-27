@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock Prisma — duas chamadas: monthlyAnalysis.findUnique + ledgerEntry.findMany
+// Mock Prisma — monthlyAnalysis.findUnique + monthlyAnalysis.findMany (histórico) + ledgerEntry.findMany
 const findUniqueAnalysisMock = vi.fn();
+const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
     monthlyAnalysis: {
       findUnique: (...args: unknown[]) => findUniqueAnalysisMock(...args),
+      findMany: (...args: unknown[]) => findManyAnalysesMock(...args),
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
@@ -31,8 +33,10 @@ const ANALYSIS = "analysis-test";
 
 beforeEach(() => {
   findUniqueAnalysisMock.mockReset();
+  findManyAnalysesMock.mockReset();
   findManyLedgerMock.mockReset();
   callLlmMock.mockReset();
+  findManyAnalysesMock.mockResolvedValue([]); // padrão: sem histórico
 });
 
 function setupHappyPath(): void {
@@ -40,6 +44,9 @@ function setupHappyPath(): void {
     id: ANALYSIS,
     tenantId: TENANT,
     status: "pending",
+    referenceMonth: "2026-04",
+    openingBalanceCents: null,
+    tenant: { industrySegment: "servicos-b2b", taxRegime: "simples", productConfig: {} },
   });
 
   // 8 entries: 4 receita (1000 cents cada), 4 custos (500 cents cada).
@@ -96,7 +103,7 @@ function setupHappyPath(): void {
           { entryId: "e4", category: "receita_bruta", confidence: 0.95 },
           { entryId: "e5", category: "cpv_cmv", confidence: 0.90 },
           { entryId: "e6", category: "despesas_administrativas", confidence: 0.90 },
-          { entryId: "e7", category: "despesas_com_pessoal", confidence: 0.95 },
+          { entryId: "e7", category: "despesas_pessoal", confidence: 0.95 },
           { entryId: "e8", category: "despesas_administrativas", confidence: 0.85 },
         ]),
         provider: "openai", model: "gpt-4.1-mini", inputTokens: 200, outputTokens: 300, costCents: 5, traceId: "t3",
@@ -118,9 +125,9 @@ function setupHappyPath(): void {
           actions: [
             { horizon: "short", title: "Renegociar fornecedor de materia-prima", description: "Buscar 3 cotações alternativas e renegociar prazo de pagamento.", effortLevel: "low", riskLevel: "low", impactCents: 5000, doneWhen: "Contrato renegociado em até 30 dias", evidenceRefs: ["cpv_cmv"], assumptions: [], confidence: 0.7 },
             { horizon: "short", title: "Revisar contratos de fornecedores recorrentes", description: "Mapear top 5 fornecedores e renegociar condições com base em volume.", effortLevel: "medium", riskLevel: "low", impactCents: 3000, doneWhen: "Mapeamento concluido + 2 contratos renegociados", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.65 },
-            { horizon: "short", title: "Auditar gastos administrativos", description: "Revisar lançamentos de despesas administrativas para identificar redundâncias.", effortLevel: "low", riskLevel: "low", impactCents: 2000, doneWhen: "Lista de redundancias entregue ao CEO", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.6 },
-            { horizon: "medium", title: "Implementar controle de orçamento mensal", description: "Criar processo de aprovação de despesas acima de R$500.", effortLevel: "medium", riskLevel: "medium", impactCents: 10000, doneWhen: "Processo implementado e em uso por 60 dias", evidenceRefs: ["margemOperacional"], assumptions: [], confidence: 0.7 },
-            { horizon: "long", title: "Investir em automação de processos", description: "Avaliar ferramentas de automação para reduzir despesas operacionais.", effortLevel: "high", riskLevel: "medium", impactCents: 30000, doneWhen: "Ferramenta selecionada e ROI calculado em 6 meses", evidenceRefs: ["despesasAdm", "despesasPessoal"], assumptions: [], confidence: 0.6 },
+            { horizon: "short", title: "Auditar gastos administrativos", description: "Revisar lançamentos de despesas administrativas para identificar redundâncias.", effortLevel: "low", riskLevel: "low", impactCents: 2000, doneWhen: "Lista de 5 redundancias entregue ao CEO até o fim do mês", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.6 },
+            { horizon: "medium", title: "Implementar controle de orçamento mensal", description: "Criar processo de aprovação de despesas acima de R$500.", effortLevel: "medium", riskLevel: "medium", impactCents: 10000, doneWhen: "Processo aprovado e em uso por 60 dias", evidenceRefs: ["margemOperacional"], assumptions: [], confidence: 0.7 },
+            { horizon: "long", title: "Investir em automação de processos", description: "Avaliar ferramentas de automação para reduzir despesas operacionais.", effortLevel: "high", riskLevel: "medium", impactCents: 30000, doneWhen: "Ferramenta homologada e ROI medido em 6 meses", evidenceRefs: ["despesasAdm", "despesasPessoal"], assumptions: [], confidence: 0.6 },
           ],
         }),
         provider: "google", model: "gemini-2.5-flash", inputTokens: 600, outputTokens: 800, costCents: 2, traceId: "t5",

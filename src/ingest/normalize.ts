@@ -54,7 +54,7 @@ export function normalizeAmountCents(raw: string | number): number | null {
   // Remove R$, espaços, aspas
   s = s.replace(/R\$\s*/gi, "").replace(/\s/g, "").replace(/"/g, "");
   // Parênteses → negativo (formato contábil)
-  const negative = s.startsWith("(") && s.endsWith(")");
+  const negative = (s.startsWith("(") && s.endsWith(")")) || s.startsWith("-");
   s = s.replace(/[()]/g, "");
 
   // Formato BR: 1.234,56 → 1234.56
@@ -74,8 +74,8 @@ export function normalizeAmountCents(raw: string | number): number | null {
 
 // ── Direção ────────────────────────────────────────────────────────────────
 
-const CREDIT_TOKENS = /^(c|cr|cred|crédito|credito|entrada|e|receita|in)$/i;
-const DEBIT_TOKENS  = /^(d|db|deb|débito|debito|saída|saida|s|despesa|out)$/i;
+const CREDIT_TOKENS = /^(c|cr|cred|crédito|credito|entrada|e|receita|in|credit)$/i;
+const DEBIT_TOKENS  = /^(d|db|deb|débito|debito|saída|saida|s|despesa|out|debit)$/i;
 
 export function normalizeDirection(
   raw: string | null | undefined,
@@ -95,19 +95,33 @@ export function normalizeDirection(
 const COL_DATE   = /data|date|dt|vencimento|competência|competencia/i;
 const COL_DESC   = /descri|historico|histórico|memo|lancamento|lançamento|complement/i;
 const COL_AMOUNT = /valor|amount|value|montante|quantia|vlr/i;
-const COL_DIR    = /tipo|natureza|type|d[\/\-]c|dc|entrada|saida|crédito|débito/i;
+const COL_DIR    = /tipo|natureza|type|d[\/\-]c|dc|entrada|saida/i;
+// Colunas separadas de crédito/débito (ex: extrato Itaú "Crédito (R$)" / "Débito (R$)")
+const COL_CREDIT = /crédito|credito/i;
+const COL_DEBIT  = /débito|debito/i;
 
 export function detectColumns(headers: string[]): {
   dateIdx: number;
   descIdx: number;
   amountIdx: number;
   dirIdx: number | null;
+  creditIdx: number | null;
+  debitIdx: number | null;
 } {
-  const find = (re: RegExp) => headers.findIndex((h) => re.test(h.trim()));
+  const normalizedHeaders = headers.map((h) =>
+    h.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim(),
+  );
+  const find = (re: RegExp) => normalizedHeaders.findIndex((h) => re.test(h));
+  const creditIdx = find(COL_CREDIT);
+  const debitIdx  = find(COL_DEBIT);
+  // Quando ambas as colunas existem, são colunas de valor (não de direção)
+  const hasSplitAmounts = creditIdx >= 0 && debitIdx >= 0;
   return {
     dateIdx:   find(COL_DATE),
     descIdx:   find(COL_DESC),
     amountIdx: find(COL_AMOUNT),
-    dirIdx:    find(COL_DIR) >= 0 ? find(COL_DIR) : null,
+    dirIdx:    hasSplitAmounts ? null : (find(COL_DIR) >= 0 ? find(COL_DIR) : null),
+    creditIdx: hasSplitAmounts ? creditIdx : null,
+    debitIdx:  hasSplitAmounts ? debitIdx : null,
   };
 }

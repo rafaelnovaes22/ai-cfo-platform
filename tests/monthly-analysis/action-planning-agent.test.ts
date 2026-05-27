@@ -6,7 +6,7 @@ vi.mock("@/llm/index.js", () => ({
   callLlm: (...args: unknown[]) => callLlmMock(...args),
 }));
 
-import { runActionPlanningAgent } from "@/monthly-analysis/agents/action-planning.js";
+import { runActionPlanningAgent, sortShortsByRoi } from "@/monthly-analysis/agents/action-planning.js";
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -150,6 +150,14 @@ describe("action-planning agent prompts", () => {
     expect(prompt).toMatch(/severity\s*==\s*"high"/);
   });
 
+  it("system prompt inclui regra de ordenação ROI das ações short", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("ORDENAÇÃO DAS AÇÕES SHORT");
+    expect(prompt).toContain("ROI");
+    expect(prompt).toContain("effortScore");
+    expect(prompt).toContain("impactCents");
+  });
+
   it("user prompt includes DRE, anomalies, cards, margin and cashflow context", () => {
     const userPrompt = buildUserPrompt({
       dre: baseDre,
@@ -200,6 +208,63 @@ describe("action-planning agent schema", () => {
       ),
     };
     expect(() => ActionPlanDraftSchema.parse(broken)).toThrow();
+  });
+});
+
+describe("sortShortsByRoi", () => {
+  it("ordena shorts por ROI decrescente (impactCents / effortScore)", () => {
+    const plan = {
+      actions: [
+        // ROI = 10000 / 3 ≈ 3333 — deve vir TERCEIRO
+        makeAction({ horizon: "short", title: "C", impactCents: 10_000, effortLevel: "high" }),
+        // ROI = 5000 / 1 = 5000 — deve vir PRIMEIRO
+        makeAction({ horizon: "short", title: "A", impactCents: 5_000, effortLevel: "low" }),
+        // ROI = 8000 / 2 = 4000 — deve vir SEGUNDO
+        makeAction({ horizon: "short", title: "B", impactCents: 8_000, effortLevel: "medium" }),
+        makeAction({ horizon: "medium", title: "D", impactCents: 20_000, effortLevel: "low" }),
+        makeAction({ horizon: "long",   title: "E", impactCents: 50_000, effortLevel: "high" }),
+      ],
+    };
+    const sorted = sortShortsByRoi(plan);
+    const shortTitles = sorted.actions.filter((a) => a.horizon === "short").map((a) => a.title);
+    expect(shortTitles).toEqual(["A", "B", "C"]);
+  });
+
+  it("desempata por riskLevel crescente (low < medium < high) quando ROI igual", () => {
+    const plan = {
+      actions: [
+        // ROI = 6000/2 = 3000, riskLevel=high — deve vir SEGUNDO
+        makeAction({ horizon: "short", title: "X", impactCents: 6_000, effortLevel: "medium", riskLevel: "high" }),
+        // ROI = 6000/2 = 3000, riskLevel=low — deve vir PRIMEIRO
+        makeAction({ horizon: "short", title: "Y", impactCents: 6_000, effortLevel: "medium", riskLevel: "low" }),
+        // ROI = 6000/2 = 3000, riskLevel=medium — deve vir entre Y e X
+        makeAction({ horizon: "short", title: "Z", impactCents: 6_000, effortLevel: "medium", riskLevel: "medium" }),
+        makeAction({ horizon: "medium", title: "M", impactCents: 10_000 }),
+        makeAction({ horizon: "long",   title: "L", impactCents: 30_000 }),
+      ],
+    };
+    const sorted = sortShortsByRoi(plan);
+    const shortTitles = sorted.actions.filter((a) => a.horizon === "short").map((a) => a.title);
+    expect(shortTitles).toEqual(["Y", "Z", "X"]);
+  });
+
+  it("não altera a ordem de medium e long e reordena os shorts corretamente", () => {
+    const plan = {
+      actions: [
+        makeAction({ horizon: "short", title: "S1", impactCents: 1_000, effortLevel: "low" }),
+        makeAction({ horizon: "short", title: "S2", impactCents: 2_000, effortLevel: "low" }),
+        makeAction({ horizon: "short", title: "S3", impactCents: 3_000, effortLevel: "low" }),
+        makeAction({ horizon: "long",   title: "L1", impactCents: 50_000 }),
+        makeAction({ horizon: "medium", title: "M1", impactCents: 20_000 }),
+      ],
+    };
+    const sorted = sortShortsByRoi(plan);
+    // Shorts reordenados por ROI desc: S3(ROI=3000) > S2(ROI=2000) > S1(ROI=1000)
+    const shortTitles = sorted.actions.filter((a) => a.horizon === "short").map((a) => a.title);
+    expect(shortTitles).toEqual(["S3", "S2", "S1"]);
+    // L1 e M1 preservados na ordem original
+    const nonShort = sorted.actions.filter((a) => a.horizon !== "short").map((a) => a.title);
+    expect(nonShort).toEqual(["L1", "M1"]);
   });
 });
 

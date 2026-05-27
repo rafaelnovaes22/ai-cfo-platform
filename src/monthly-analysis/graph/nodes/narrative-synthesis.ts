@@ -20,6 +20,9 @@ export async function narrativeSynthesisNode(
       anomalies: state.anomalies ?? [],
       marginDiagnosis: state.marginDiagnosis,
       cashflowRisk: state.cashflowRisk,
+      segment: state.segment,
+      taxRegime: state.taxRegime,
+      toneOfVoice: state.toneOfVoice,
     },
     { tenantId: state.tenantId },
   );

@@ -14,6 +14,9 @@ export interface ActionPlanningPromptInput {
   marginDiagnosis: MarginDiagnosis;
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
+  segment?: string;
+  taxRegime?: string;
+  toneOfVoice?: string;
 }
 
 // L0 — estático, cacheável
@@ -33,12 +36,21 @@ HORIZONTES
 - medium → 30 a 90 dias (táticas, médio esforço)
 - long   → acima de 90 dias (estruturais)
 
-MÍNIMO OBRIGATÓRIO: 3 ações short + 1 medium + 1 long (total >= 5).
+QUANTIDADE POR HORIZONTE: exatamente 3 ações short (curto prazo), mínimo 1 medium, mínimo 1 long. Máximo 3 por horizonte.
+Total: entre 5 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
+O schema de saída rejeita planos com menos de 3 ações short ou menos de 5 ações totais.
+
+ORDENAÇÃO DAS AÇÕES SHORT (OBRIGATÓRIO)
+As 3 ações short DEVEM aparecer ordenadas em ordem decrescente de ROI estimado:
+  ROI = impactCents ÷ effortScore  (effortLevel: low=1, medium=2, high=3)
+  A ação com maior ROI aparece PRIMEIRO — o CEO vê a alavanca mais forte antes.
+  Desempate: riskLevel crescente (low < medium < high).
+  Exemplo: impactCents=50000 + effortLevel=low → ROI=50000 vem antes de impactCents=40000 + effortLevel=low → ROI=40000.
 
 PRIORIZAÇÃO POR RISCO
 - Se cashflowRisk.status == "critical" OU existir anomalia com severity == "high":
   favoreça FORTEMENTE o horizonte SHORT (preserve caixa, reduza saída imediata,
-  acelere recebíveis). Pelo menos 4 das 5+ ações devem ser short nesse cenário.
+  acelere recebíveis). Priorize até 3 short nesse cenário.
 - Se margens estiverem "critical", inclua ao menos 1 short que ataque o driver
   principal listado em mainDrivers.
 
@@ -52,6 +64,21 @@ REGRAS DE EVIDÊNCIA (OBRIGATÓRIO)
 - evidenceRefs NÃO PODE ser vazio. Não invente evidências — use apenas o que
   está no contexto fornecido.
 
+NÍVEL DE DETALHE DAS DESCRIÇÕES (OBRIGATÓRIO)
+Cada description DEVE ter exatamente 2 frases operacionais:
+- Frase 1: verbo ativo concreto + objeto específico + critério numérico ou temporal.
+  Use verbos que descrevem uma ação física: Levante, Separe, Compare, Negocie, Mapeie,
+  Meça, Instale, Defina, Liste, Cote, Reajuste, Bloqueie, Cancele.
+  NUNCA use como verbo principal: analisar, verificar, avaliar, pensar, considerar.
+  BOM: "Levante os 5 maiores fornecedores por valor pago nos últimos 3 meses e solicite
+        cotação de 2 concorrentes para cada um."
+  RUIM: "Analise os fornecedores para identificar oportunidades de redução de custo."
+- Frase 2: critério de priorização, condição de alerta ou o que verificar primeiro —
+  algo que ajude o CEO a decidir por onde começar dentro da ação.
+  BOM: "Priorize os que representam mais de 15% do CMV — esses têm maior alavancagem de margem."
+  RUIM: "Isso vai ajudar a empresa a reduzir custos."
+- Toda description DEVE conter pelo menos 1 número (quantidade, %, prazo, valor em R$).
+
 CRITÉRIO DE "FEITO" (OBRIGATÓRIO)
 - doneWhen deve ser objetivo, verificável e mensurável.
   Bom: "Novo contrato assinado com redução >= R$ 800/mês visível na fatura de junho/2026."
@@ -63,12 +90,12 @@ FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
     {
       "horizon": "short",
       "title": "<máx 10 palavras, direto>",
-      "description": "<2-3 frases: o que, como, por quê>",
+      "description": "<2 frases operacionais: frase 1 com verbo ativo + objeto + número; frase 2 com critério de priorização>",
       "effortLevel": "low|medium|high",
       "riskLevel": "low|medium|high",
       "impactCents": <inteiro positivo, impacto MENSAL em centavos>,
       "deadlineDays": <inteiro positivo>,
-      "doneWhen": "<critério mensurável>",
+      "doneWhen": "<critério mensurável com número ou prazo>",
       "evidenceRefs": ["<ref1>", "<ref2>"],
       "assumptions": ["<premissa opcional>"],
       "confidence": <0.0..1.0>
@@ -77,7 +104,9 @@ FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
 }
 
 REGRAS NUMÉRICAS
-- impactCents > 0 sempre. Estime conservador se incerto, nunca 0.
+- impactCents DEVE ser um inteiro positivo (> 0) em centavos. Exemplos: 500000 = R$ 5.000, 10000000 = R$ 100.000.
+  Se o impacto for incerto, estime conservadoramente (ex: 100000 = R$ 1.000). NUNCA use 0.
+  O schema rejeita impactCents = 0 — gere um inteiro positivo sempre.
 - confidence em [0,1]. Use <= 0.6 quando depender de premissas não validadas
   e a anomalia/card de origem tiver severity "low" ou status "insufficient_data".
 - Não repita a mesma ação em horizontes diferentes.
@@ -129,8 +158,16 @@ ${reasons}${limits}`;
 // L1 + L2 — por análise
 export function buildUserPrompt(input: ActionPlanningPromptInput): string {
   const referenceMonth = input.referenceMonth ?? "mês de referência";
+  const segment = input.segment ?? "geral";
+  const taxRegime = input.taxRegime ?? "simples";
+  const toneOfVoice = input.toneOfVoice ?? "formal";
 
-  return `${formatDreForPrompt(input.dre, referenceMonth)}
+  return `CONTEXTO DA EMPRESA
+- Segmento: ${segment}
+- Regime Tributário: ${taxRegime}
+- Tom de voz: ${toneOfVoice}
+
+${formatDreForPrompt(input.dre, referenceMonth)}
 
 ANOMALIAS DETECTADAS
 ${formatAnomalies(input.anomalies)}

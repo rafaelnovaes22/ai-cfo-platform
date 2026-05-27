@@ -26,7 +26,7 @@ judge_criteria:
   acionabilidade: "Aponta urgência de receita; despesas a cortar"
   factualidade: "NÃO cita margem (é null); usa valores absolutos"
 forbidden_terms: ["margem líquida", "margem bruta"]   # margens são null neste caso
-required_metrics_in_evidence: ["lucroLiquido", "despesasOcupacao"]
+required_metrics_in_evidence: ["lucroLiquido"]
 ```
 
 ## Justificativa

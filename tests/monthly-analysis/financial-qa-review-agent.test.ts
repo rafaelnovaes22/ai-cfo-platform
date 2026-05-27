@@ -6,7 +6,7 @@ vi.mock("@/llm/index.js", () => ({
   callLlm: (...args: unknown[]) => callLlmMock(...args),
 }));
 
-import { runFinancialQaReviewAgent } from "@/monthly-analysis/agents/financial-qa-review.js";
+import { runFinancialQaReviewAgent, runDeterministicFinancialQaReview } from "@/monthly-analysis/agents/financial-qa-review.js";
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -362,5 +362,116 @@ describe("runFinancialQaReviewAgent", () => {
       ),
     ).rejects.toThrow(/estado incompleto/);
     expect(callLlmMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("STAGE_MISMATCH — turnaround + expansão", () => {
+  function turnaroundActions(expansionOverrides: Partial<ReturnType<typeof makeAction>>): ReturnType<typeof makeAction>[] {
+    return [
+      makeAction({ horizon: "short", ...expansionOverrides }),
+      makeAction({ horizon: "short", title: "Cortar despesa adm", description: "Reduzir 15% dos custos administrativos em 30 dias.", doneWhen: "Despesa adm cai abaixo de R$ 2.500 até 2026-07-01.", evidenceRefs: ["dre:despesasAdm"] }),
+      makeAction({ horizon: "short", title: "Cobrar recebíveis vencidos", description: "Ligar para 10 clientes inadimplentes esta semana.", doneWhen: "R$ 5.000 recuperados até 2026-07-01.", evidenceRefs: ["dre:receitaBruta"] }),
+      makeAction({ horizon: "medium", title: "Renegociar dívida bancária", description: "Solicitar carência de 60 dias ao banco.", doneWhen: "Contrato renegociado com carência de 60 dias assinado até 2026-08-01.", evidenceRefs: ["dre:despesasFinanceiras"] }),
+      makeAction({ horizon: "long", title: "Diversificar fornecedores", description: "Homologar 2 fornecedores alternativos.", doneWhen: "2 fornecedores alternativos homologados até 2026-12-31.", evidenceRefs: ["dre:custosDiretos"] }),
+    ];
+  }
+
+  const turnaroundDre = makeDre({ lucroLiquido: -5_000_00, margemLiquida: -5.26 });
+  const neutralDiagnosis: MarginDiagnosis = {
+    grossMarginStatus: "attention",
+    operatingMarginStatus: "attention",
+    mainDrivers: [{ driver: "custos diretos", evidenceMetric: "dre:custosDiretos", impactCents: 50000, severity: "medium" }],
+  };
+  const neutralCashflow: CashflowRisk = { status: "attention", reasons: ["saídas altas"], limitations: [] };
+
+  it("bloqueia ação de expandir canal em turnaround", () => {
+    const state = {
+      dre: turnaroundDre,
+      anomalies: [],
+      marginDiagnosis: neutralDiagnosis,
+      cashflowRisk: neutralCashflow,
+      narrativeCards: [],
+      actionPlan: {
+        actions: turnaroundActions({
+          title: "Expandir canal digital",
+          description: "Expandir presença em marketplace e redes sociais para aumentar vendas.",
+          doneWhen: "Canal digital com 10 vendas registradas até 2026-07-31.",
+          evidenceRefs: ["dre:receitaBruta"],
+        }),
+      },
+    };
+
+    const result = runDeterministicFinancialQaReview(state);
+    expect(result.publishable).toBe(false);
+    const issue = result.issues.find((i) => i.code === "STAGE_MISMATCH");
+    expect(issue).toBeDefined();
+    expect(issue?.severity).toBe("blocker");
+    expect(result.retryTargets).toContain("action-planning");
+  });
+
+  it("bloqueia ação de contratar equipe em turnaround", () => {
+    const state = {
+      dre: turnaroundDre,
+      anomalies: [],
+      marginDiagnosis: neutralDiagnosis,
+      cashflowRisk: neutralCashflow,
+      narrativeCards: [],
+      actionPlan: {
+        actions: turnaroundActions({
+          title: "Contratar equipe de vendas",
+          description: "Contratar vendedor sênior para aumentar carteira de clientes.",
+          doneWhen: "Vendedor contratado e com 5 propostas enviadas até 2026-07-31.",
+          evidenceRefs: ["dre:receitaBruta"],
+        }),
+      },
+    };
+
+    const result = runDeterministicFinancialQaReview(state);
+    expect(result.publishable).toBe(false);
+    expect(result.issues.some((i) => i.code === "STAGE_MISMATCH")).toBe(true);
+  });
+
+  it("não bloqueia ações de turnaround apropriadas mesmo com lucroLiquido < 0", () => {
+    const state = {
+      dre: turnaroundDre,
+      anomalies: [],
+      marginDiagnosis: neutralDiagnosis,
+      cashflowRisk: neutralCashflow,
+      narrativeCards: [],
+      actionPlan: {
+        actions: [
+          makeAction({ horizon: "short", title: "Renegociar fornecedor principal", description: "Solicitar desconto de 10% no contrato atual.", doneWhen: "Redução de R$ 2.000/mês registrada na fatura de julho/2026.", evidenceRefs: ["dre:custosDiretos"] }),
+          makeAction({ horizon: "short", title: "Cobrar recebíveis vencidos", description: "Ligar para 10 clientes inadimplentes esta semana.", doneWhen: "R$ 5.000 recuperados registrados até 2026-07-01.", evidenceRefs: ["dre:receitaBruta"] }),
+          makeAction({ horizon: "short", title: "Cortar despesas de viagem", description: "Cancelar 3 viagens não essenciais agendadas para o trimestre.", doneWhen: "Despesa de viagem cai abaixo de R$ 1.000 até 2026-07-31.", evidenceRefs: ["dre:despesasViagem"] }),
+          makeAction({ horizon: "medium", title: "Renegociar dívida bancária", description: "Solicitar carência de 60 dias ao banco principal.", doneWhen: "Contrato renegociado com carência aprovada até 2026-08-01.", evidenceRefs: ["dre:despesasFinanceiras"] }),
+          makeAction({ horizon: "long", title: "Diversificar fornecedores", description: "Homologar 2 fornecedores alternativos ao principal.", doneWhen: "2 fornecedores homologados até 2026-12-31.", evidenceRefs: ["dre:custosDiretos"] }),
+        ],
+      },
+    };
+
+    const result = runDeterministicFinancialQaReview(state);
+    expect(result.issues.filter((i) => i.code === "STAGE_MISMATCH")).toHaveLength(0);
+  });
+
+  it("não bloqueia expansão quando empresa é lucrativa", () => {
+    const state = {
+      dre: makeDre({ lucroLiquido: 1_200_00, margemLiquida: 12.63 }),
+      anomalies: [],
+      marginDiagnosis: { grossMarginStatus: "healthy" as const, operatingMarginStatus: "healthy" as const, mainDrivers: [{ driver: "margens saudáveis", evidenceMetric: "dre:margemBruta", impactCents: 0, severity: "low" as const }] },
+      cashflowRisk: { status: "healthy" as const, reasons: ["folga positiva"], limitations: [] },
+      narrativeCards: [],
+      actionPlan: {
+        actions: [
+          makeAction({ horizon: "short", title: "Expandir canal digital", description: "Lançar novo canal de venda online com meta de 20 pedidos/mês.", doneWhen: "Canal com 20 pedidos registrados em 30 dias.", evidenceRefs: ["dre:receitaBruta"] }),
+          makeAction({ horizon: "short", title: "Contratar vendedor sênior", description: "Contratar vendedor para expandir carteira.", doneWhen: "Vendedor contratado e meta de 5 propostas enviadas até 2026-07-31.", evidenceRefs: ["dre:receitaBruta"] }),
+          makeAction({ horizon: "short", title: "Aumentar marketing digital", description: "Aumentar verba de marketing em R$ 2.000/mês.", doneWhen: "Verba aprovada e campanha publicada até 2026-07-15.", evidenceRefs: ["dre:despesasComerciais"] }),
+          makeAction({ horizon: "medium", title: "Lançar novo produto", description: "Lançar nova linha de serviço premium.", doneWhen: "Produto homologado e 2 contratos assinados até 2026-09-30.", evidenceRefs: ["dre:receitaBruta"] }),
+          makeAction({ horizon: "long", title: "Abrir filial em Campinas", description: "Abrir nova unidade para ampliar mercado geográfico.", doneWhen: "Filial com CNPJ registrado e 5 clientes até 2026-12-31.", evidenceRefs: ["dre:receitaBruta"] }),
+        ],
+      },
+    };
+
+    const result = runDeterministicFinancialQaReview(state);
+    expect(result.issues.filter((i) => i.code === "STAGE_MISMATCH")).toHaveLength(0);
   });
 });

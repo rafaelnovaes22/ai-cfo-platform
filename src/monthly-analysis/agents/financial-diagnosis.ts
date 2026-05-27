@@ -21,6 +21,28 @@ type MarginStatus = MarginDiagnosis["grossMarginStatus"];
 
 type Driver = MarginDiagnosis["mainDrivers"][number];
 
+// Espelha o enum industrySegment do schema Prisma (C8: nenhuma chave fora deste union é válida).
+export type IndustrySegment = "varejo" | "industria-leve" | "servicos-b2b" | "saas" | "agencia" | "geral";
+
+interface SegmentThresholds {
+  gross: { healthy: number; attention: number };
+  operating: { healthy: number; attention: number };
+  netLossThreshold: number; // ratio prejuízo/receita que aciona severidade "high"
+}
+
+const SEGMENT_THRESHOLDS: Record<IndustrySegment, SegmentThresholds> = {
+  varejo:           { gross: { healthy: 30, attention: 15 }, operating: { healthy: 8,  attention: 2  }, netLossThreshold: 0.05 },
+  "industria-leve": { gross: { healthy: 35, attention: 20 }, operating: { healthy: 10, attention: 3  }, netLossThreshold: 0.08 },
+  "servicos-b2b":   { gross: { healthy: 55, attention: 35 }, operating: { healthy: 15, attention: 5  }, netLossThreshold: 0.10 },
+  saas:             { gross: { healthy: 65, attention: 45 }, operating: { healthy: 20, attention: 8  }, netLossThreshold: 0.10 },
+  agencia:          { gross: { healthy: 50, attention: 30 }, operating: { healthy: 12, attention: 4  }, netLossThreshold: 0.08 },
+  geral:            { gross: { healthy: 50, attention: 30 }, operating: { healthy: 15, attention: 5  }, netLossThreshold: 0.10 },
+};
+
+function resolveThresholds(segment?: string): SegmentThresholds {
+  return SEGMENT_THRESHOLDS[segment as IndustrySegment] ?? SEGMENT_THRESHOLDS.geral;
+}
+
 function hashPayload(payload: unknown): string {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
 }
@@ -72,9 +94,12 @@ function anomaly(code: string, title: string, description: string, severity: Age
 export function detectFinancialAnomalies(input: {
   dre?: DreLines;
   normalizedEntries?: NormalizedLedgerEntry[];
+  segment?: string;
+  previousDre?: DreLines;
 }): Anomaly[] {
   const anomalies: Anomaly[] = [];
-  const { dre, normalizedEntries = [] } = input;
+  const { dre, normalizedEntries = [], segment, previousDre } = input;
+  const thresholds = resolveThresholds(segment);
 
   if (!dre || dre.receitaLiquida <= 0) {
     return [
@@ -93,7 +118,7 @@ export function detectFinancialAnomalies(input: {
   const unclassifiedRatio = safeRatio(dre.naoClassificado, revenue);
   const financeExpenseRatio = safeRatio(dre.despesasFinanceiras, revenue);
 
-  if (dre.lucroLiquido < 0 && netLossRatio >= 0.1) {
+  if (dre.lucroLiquido < 0 && netLossRatio >= thresholds.netLossThreshold) {
     anomalies.push(anomaly(
       "net_loss_critical",
       "Prejuízo líquido relevante",
@@ -113,32 +138,87 @@ export function detectFinancialAnomalies(input: {
       `margem_operacional=${pct(dre.margemOperacional)}; ebit=${money(dre.ebit)}`,
       Math.abs(Math.min(dre.ebit, 0)),
     ));
-  } else if (dre.margemOperacional < 5) {
+  } else if (dre.margemOperacional < thresholds.operating.attention) {
     anomalies.push(anomaly(
       "thin_operating_margin",
       "Margem operacional estreita",
-      `A margem operacional de ${pct(dre.margemOperacional)} deixa pouca folga para impostos, juros e oscilações de receita.`,
+      `A margem operacional de ${pct(dre.margemOperacional)} está abaixo do mínimo esperado para este segmento (${thresholds.operating.attention}%), deixando pouca folga para impostos e oscilações.`,
       "medium",
       `margem_operacional=${pct(dre.margemOperacional)}`,
     ));
   }
 
-  if (dre.margemBruta < 20) {
+  if (dre.ebit >= 0 && dre.margemBruta > 0 && dre.totalDespesasOp > 0) {
+    const breakEvenRevenue = (dre.totalDespesasOp / dre.margemBruta) * 100;
+    const safetyMargin = safeRatio(revenue - breakEvenRevenue, revenue);
+    if (safetyMargin < 0.10) {
+      anomalies.push(anomaly(
+        "near_breakeven",
+        "Operação próxima ao break-even",
+        `Break-even operacional estimado em ${money(Math.round(breakEvenRevenue))}; folga atual de ${(safetyMargin * 100).toFixed(1)}% (${money(Math.round(revenue - breakEvenRevenue))}) — qualquer recuo de receita coloca a operação no vermelho.`,
+        "medium",
+        `break_even=${money(Math.round(breakEvenRevenue))}; receita_liquida=${money(revenue)}; folga=${(safetyMargin * 100).toFixed(1)}%`,
+      ));
+    }
+  }
+
+  if (dre.margemBruta < thresholds.gross.attention) {
     anomalies.push(anomaly(
       "gross_margin_critical",
       "Margem bruta crítica",
-      `Custos diretos consomem a maior parte da receita; margem bruta atual é ${pct(dre.margemBruta)}.`,
+      `Custos diretos consomem a maior parte da receita; margem bruta atual é ${pct(dre.margemBruta)}, abaixo do mínimo de ${thresholds.gross.attention}% esperado para este segmento.`,
       "high",
       `margem_bruta=${pct(dre.margemBruta)}; custos_diretos=${money(dre.custosDiretos)}`,
-      Math.max(0, dre.custosDiretos - Math.round(revenue * 0.8)),
+      Math.max(0, dre.custosDiretos - Math.round(revenue * (1 - thresholds.gross.attention / 100))),
     ));
-  } else if (dre.margemBruta < 35) {
+  } else if (dre.margemBruta < thresholds.gross.healthy) {
     anomalies.push(anomaly(
       "gross_margin_attention",
       "Margem bruta em atenção",
-      `A margem bruta de ${pct(dre.margemBruta)} sugere pressão de custos diretos ou precificação.`,
+      `A margem bruta de ${pct(dre.margemBruta)} está abaixo da referência saudável de ${thresholds.gross.healthy}% para este segmento, sugerindo pressão de custos ou precificação.`,
       "medium",
       `margem_bruta=${pct(dre.margemBruta)}`,
+    ));
+  }
+
+  const peopleCostRatio = safeRatio(dre.despesasPessoal + dre.prolabore, revenue);
+  if (peopleCostRatio >= 0.5) {
+    anomalies.push(anomaly(
+      "people_cost_high",
+      "Custo de pessoal crítico",
+      `Pessoal + pró-labore somam ${money(dre.despesasPessoal + dre.prolabore)}, equivalente a ${(peopleCostRatio * 100).toFixed(2)}% da receita líquida — alto demais para sustentar margens.`,
+      "high",
+      `despesasPessoal=${money(dre.despesasPessoal)}; prolabore=${money(dre.prolabore)}; receita_liquida=${money(revenue)}`,
+      dre.despesasPessoal + dre.prolabore,
+    ));
+  } else if (peopleCostRatio >= 0.4) {
+    anomalies.push(anomaly(
+      "people_cost_high",
+      "Custo de pessoal elevado",
+      `Pessoal + pró-labore somam ${money(dre.despesasPessoal + dre.prolabore)}, representando ${(peopleCostRatio * 100).toFixed(2)}% da receita líquida.`,
+      "medium",
+      `despesasPessoal=${money(dre.despesasPessoal)}; prolabore=${money(dre.prolabore)}; receita_liquida=${money(revenue)}`,
+      dre.despesasPessoal + dre.prolabore,
+    ));
+  }
+
+  if (dre.prolabore > 0 && dre.lucroLiquido < 0) {
+    anomalies.push(anomaly(
+      "prolabore_exceeds_profit",
+      "Pró-labore com empresa no prejuízo",
+      `A empresa fechou com prejuízo de ${money(Math.abs(dre.lucroLiquido))} enquanto o sócio retirou pró-labore de ${money(dre.prolabore)}.`,
+      "high",
+      `prolabore=${money(dre.prolabore)}; lucro_liquido=${money(dre.lucroLiquido)}`,
+      dre.prolabore,
+    ));
+  } else if (dre.prolabore > dre.lucroLiquido && dre.lucroLiquido > 0) {
+    anomalies.push(anomaly(
+      "prolabore_exceeds_profit",
+      "Pró-labore supera lucro líquido",
+      `O pró-labore de ${money(dre.prolabore)} supera o lucro líquido de ${money(dre.lucroLiquido)} — o sócio retira mais do que a empresa gera.`,
+      "medium",
+      `prolabore=${money(dre.prolabore)}; lucro_liquido=${money(dre.lucroLiquido)}`,
+      dre.prolabore - dre.lucroLiquido,
     ));
   }
 
@@ -173,6 +253,29 @@ export function detectFinancialAnomalies(input: {
     ));
   }
 
+  const leverageRatio = safeRatio(dre.despesasFinanceiras, dre.ebitda);
+  if (dre.ebitda > 0) {
+    if (leverageRatio >= 0.6) {
+      anomalies.push(anomaly(
+        "leverage_ebitda_high",
+        "Alavancagem financeira crítica",
+        `Despesas financeiras de ${money(dre.despesasFinanceiras)} consomem ${(leverageRatio * 100).toFixed(2)}% do EBITDA (${money(dre.ebitda)}), indicando pressão de dívida acima do sustentável.`,
+        "high",
+        `despesas_financeiras=${money(dre.despesasFinanceiras)}; ebitda=${money(dre.ebitda)}`,
+        dre.despesasFinanceiras,
+      ));
+    } else if (leverageRatio >= 0.3) {
+      anomalies.push(anomaly(
+        "leverage_ebitda_high",
+        "Alavancagem financeira elevada",
+        `Despesas financeiras de ${money(dre.despesasFinanceiras)} consomem ${(leverageRatio * 100).toFixed(2)}% do EBITDA (${money(dre.ebitda)}).`,
+        "medium",
+        `despesas_financeiras=${money(dre.despesasFinanceiras)}; ebitda=${money(dre.ebitda)}`,
+        dre.despesasFinanceiras,
+      ));
+    }
+  }
+
   const largestOutflow = normalizedEntries
     .filter((entry) => entry.direction === "out")
     .reduce<NormalizedLedgerEntry | undefined>((largest, entry) => {
@@ -191,10 +294,139 @@ export function detectFinancialAnomalies(input: {
     ));
   }
 
+  const outflowEntries = normalizedEntries.filter((e) => e.direction === "out");
+  const totalOutflow = outflowEntries.reduce((sum, e) => sum + Math.abs(e.amountCents), 0);
+  if (outflowEntries.length > 0 && totalOutflow > revenue * 0.05) {
+    const byDescription = new Map<string, number>();
+    for (const e of outflowEntries) {
+      byDescription.set(e.normalizedDescription, (byDescription.get(e.normalizedDescription) ?? 0) + Math.abs(e.amountCents));
+    }
+    const topEntry = [...byDescription.entries()].reduce<[string, number] | undefined>(
+      (biggest, current) => (!biggest || current[1] > biggest[1] ? current : biggest),
+      undefined,
+    );
+    if (topEntry) {
+      const concentrationRatio = safeRatio(topEntry[1], totalOutflow);
+      if (concentrationRatio >= 0.4) {
+        anomalies.push(anomaly(
+          "outflow_concentration_high",
+          "Saída concentrada em fornecedor único",
+          `"${topEntry[0]}" representa ${(concentrationRatio * 100).toFixed(2)}% das saídas do período (${money(topEntry[1])} de ${money(totalOutflow)} em saídas).`,
+          "medium",
+          `fornecedor=${topEntry[0]}; concentracao=${(concentrationRatio * 100).toFixed(2)}%; total_saidas=${money(totalOutflow)}`,
+          topEntry[1],
+        ));
+      }
+    }
+  }
+
+  const clientEntries = normalizedEntries.filter((e) => e.direction === "in");
+  const totalClientInflow = clientEntries.reduce((sum, e) => sum + Math.abs(e.amountCents), 0);
+  if (clientEntries.length > 0 && totalClientInflow > revenue * 0.05) {
+    const byClient = new Map<string, number>();
+    for (const e of clientEntries) {
+      byClient.set(e.normalizedDescription, (byClient.get(e.normalizedDescription) ?? 0) + Math.abs(e.amountCents));
+    }
+    const topClient = [...byClient.entries()].reduce<[string, number] | undefined>(
+      (biggest, current) => (!biggest || current[1] > biggest[1] ? current : biggest),
+      undefined,
+    );
+    if (topClient) {
+      const clientConcentration = safeRatio(topClient[1], totalClientInflow);
+      if (clientConcentration >= 0.5) {
+        anomalies.push(anomaly(
+          "inflow_concentration_high",
+          "Receita concentrada em cliente único",
+          `"${topClient[0]}" representa ${(clientConcentration * 100).toFixed(2)}% das entradas do período (${money(topClient[1])} de ${money(totalClientInflow)}). Saída desse cliente comprometeria a operação.`,
+          "high",
+          `cliente=${topClient[0]}; concentracao=${(clientConcentration * 100).toFixed(2)}%; total_entradas=${money(totalClientInflow)}`,
+          topClient[1],
+        ));
+      } else if (clientConcentration >= 0.35) {
+        anomalies.push(anomaly(
+          "inflow_concentration_high",
+          "Receita parcialmente concentrada em cliente único",
+          `"${topClient[0]}" representa ${(clientConcentration * 100).toFixed(2)}% das entradas do período (${money(topClient[1])} de ${money(totalClientInflow)}).`,
+          "medium",
+          `cliente=${topClient[0]}; concentracao=${(clientConcentration * 100).toFixed(2)}%; total_entradas=${money(totalClientInflow)}`,
+          topClient[1],
+        ));
+      }
+    }
+  }
+
+  if (previousDre && previousDre.receitaLiquida > 0) {
+    const prevRevenue = previousDre.receitaLiquida;
+    const revenueChange = (revenue - prevRevenue) / prevRevenue;
+
+    if (revenueChange <= -0.20) {
+      anomalies.push(anomaly(
+        "revenue_decline_mom",
+        "Queda de receita relevante vs mês anterior",
+        `Receita líquida caiu ${Math.abs(revenueChange * 100).toFixed(1)}% em relação ao mês anterior (${money(prevRevenue)} → ${money(revenue)}).`,
+        "high",
+        `receita_liquida=${money(revenue)}; receita_anterior=${money(prevRevenue)}; variacao=${(revenueChange * 100).toFixed(1)}%`,
+        Math.abs(revenue - prevRevenue),
+      ));
+    } else if (revenueChange <= -0.10) {
+      anomalies.push(anomaly(
+        "revenue_decline_mom",
+        "Queda de receita vs mês anterior",
+        `Receita líquida caiu ${Math.abs(revenueChange * 100).toFixed(1)}% em relação ao mês anterior (${money(prevRevenue)} → ${money(revenue)}).`,
+        "medium",
+        `receita_liquida=${money(revenue)}; receita_anterior=${money(prevRevenue)}; variacao=${(revenueChange * 100).toFixed(1)}%`,
+        Math.abs(revenue - prevRevenue),
+      ));
+    }
+
+    const marginChangePp = dre.margemBruta - previousDre.margemBruta;
+    if (marginChangePp <= -10) {
+      anomalies.push(anomaly(
+        "margin_deterioration_mom",
+        "Queda acentuada de margem bruta vs mês anterior",
+        `Margem bruta caiu ${Math.abs(marginChangePp).toFixed(1)}pp em relação ao mês anterior (${pct(previousDre.margemBruta)} → ${pct(dre.margemBruta)}).`,
+        "high",
+        `margem_bruta=${pct(dre.margemBruta)}; margem_anterior=${pct(previousDre.margemBruta)}; queda=${Math.abs(marginChangePp).toFixed(1)}pp`,
+        Math.abs(dre.custosDiretos - previousDre.custosDiretos),
+      ));
+    } else if (marginChangePp <= -5) {
+      anomalies.push(anomaly(
+        "margin_deterioration_mom",
+        "Queda de margem bruta vs mês anterior",
+        `Margem bruta caiu ${Math.abs(marginChangePp).toFixed(1)}pp em relação ao mês anterior (${pct(previousDre.margemBruta)} → ${pct(dre.margemBruta)}).`,
+        "medium",
+        `margem_bruta=${pct(dre.margemBruta)}; margem_anterior=${pct(previousDre.margemBruta)}; queda=${Math.abs(marginChangePp).toFixed(1)}pp`,
+      ));
+    }
+
+    if (previousDre.totalDespesasOp > 0) {
+      const expenseChange = (dre.totalDespesasOp - previousDre.totalDespesasOp) / previousDre.totalDespesasOp;
+      if (expenseChange >= 0.40 && revenueChange < 0.05) {
+        anomalies.push(anomaly(
+          "expense_spike_mom",
+          "Salto expressivo de despesas operacionais vs mês anterior",
+          `Despesas operacionais cresceram ${(expenseChange * 100).toFixed(1)}% vs mês anterior (${money(previousDre.totalDespesasOp)} → ${money(dre.totalDespesasOp)}) sem crescimento equivalente de receita.`,
+          "high",
+          `totalDespesasOp=${money(dre.totalDespesasOp)}; despesas_anteriores=${money(previousDre.totalDespesasOp)}; variacao=${(expenseChange * 100).toFixed(1)}%`,
+          dre.totalDespesasOp - previousDre.totalDespesasOp,
+        ));
+      } else if (expenseChange >= 0.25 && revenueChange < 0.05) {
+        anomalies.push(anomaly(
+          "expense_spike_mom",
+          "Crescimento de despesas operacionais vs mês anterior",
+          `Despesas operacionais cresceram ${(expenseChange * 100).toFixed(1)}% vs mês anterior (${money(previousDre.totalDespesasOp)} → ${money(dre.totalDespesasOp)}) sem crescimento equivalente de receita.`,
+          "medium",
+          `totalDespesasOp=${money(dre.totalDespesasOp)}; despesas_anteriores=${money(previousDre.totalDespesasOp)}; variacao=${(expenseChange * 100).toFixed(1)}%`,
+          dre.totalDespesasOp - previousDre.totalDespesasOp,
+        ));
+      }
+    }
+  }
+
   return anomalies;
 }
 
-export function diagnoseMargins(dre?: DreLines): MarginDiagnosis {
+export function diagnoseMargins(dre?: DreLines, segment?: string): MarginDiagnosis {
   if (!dre || dre.receitaLiquida <= 0) {
     return MarginDiagnosisSchema.parse({
       grossMarginStatus: "critical",
@@ -208,12 +440,15 @@ export function diagnoseMargins(dre?: DreLines): MarginDiagnosis {
     });
   }
 
-  const grossMarginStatus = statusFromMargin(dre.margemBruta, { healthy: 50, attention: 30 });
-  const operatingMarginStatus = statusFromMargin(dre.margemOperacional, { healthy: 15, attention: 5 });
+  const thresholds = resolveThresholds(segment);
+  const grossMarginStatus = statusFromMargin(dre.margemBruta, thresholds.gross);
+  const operatingMarginStatus = statusFromMargin(dre.margemOperacional, thresholds.operating);
   const drivers: Driver[] = [];
 
   if (grossMarginStatus !== "healthy") {
-    const targetCostRatio = grossMarginStatus === "critical" ? 0.7 : 0.5;
+    // targetCostRatio: percentual máximo de custos diretos sobre receita líquida para o segmento
+    const targetGrossMargin = grossMarginStatus === "critical" ? thresholds.gross.attention : thresholds.gross.healthy;
+    const targetCostRatio = (100 - targetGrossMargin) / 100;
     drivers.push({
       driver: "Custos diretos pressionam a margem bruta",
       evidenceMetric: `margem_bruta=${pct(dre.margemBruta)}; custos_diretos=${money(dre.custosDiretos)}`,
@@ -244,7 +479,42 @@ export function diagnoseMargins(dre?: DreLines): MarginDiagnosis {
   return MarginDiagnosisSchema.parse({ grossMarginStatus, operatingMarginStatus, mainDrivers: drivers });
 }
 
-export function assessCashflowRisk(entries?: NormalizedLedgerEntry[]): CashflowRisk {
+function applyRunway(result: CashflowRisk, inflow: number, outflow: number, openingBalance?: number): CashflowRisk {
+  const monthlyBurn = outflow - inflow;
+
+  if (openingBalance === undefined) {
+    if (monthlyBurn > 0) {
+      return CashflowRiskSchema.parse({
+        ...result,
+        limitations: [...result.limitations, "Saldo inicial de caixa não informado — runway não calculado."],
+      });
+    }
+    return result;
+  }
+
+  if (monthlyBurn <= 0) return result;
+
+  const runwayMonths = openingBalance / monthlyBurn;
+  if (runwayMonths < 2) {
+    return CashflowRiskSchema.parse({
+      status: "critical",
+      reasons: [...result.reasons, `Runway estimado em ${runwayMonths.toFixed(1)} mês(es) com o ritmo atual de consumo.`],
+      limitations: result.limitations,
+    });
+  }
+  if (runwayMonths < 4) {
+    return CashflowRiskSchema.parse({
+      status: result.status === "healthy" ? "attention" : result.status,
+      reasons: [...result.reasons, `Runway de caixa estimado em ${runwayMonths.toFixed(1)} meses — reserva abaixo de 4 meses.`],
+      limitations: result.limitations,
+    });
+  }
+  return result;
+}
+
+export function assessCashflowRisk(entries?: NormalizedLedgerEntry[], options?: { openingBalance?: number }): CashflowRisk {
+  const openingBalance = options?.openingBalance;
+
   if (!entries || entries.length < MIN_CASHFLOW_ENTRIES) {
     return CashflowRiskSchema.parse({
       status: "insufficient_data",
@@ -278,41 +548,39 @@ export function assessCashflowRisk(entries?: NormalizedLedgerEntry[]): CashflowR
     .reduce((largest, entry) => Math.max(largest, Math.abs(entry.amountCents)), 0);
   const inflowConcentration = safeRatio(topInflow, inflow);
 
+  let baseResult: CashflowRisk;
+
   if (inflow <= 0) {
-    return CashflowRiskSchema.parse({
+    baseResult = CashflowRiskSchema.parse({
       status: "critical",
       reasons: ["Não há entradas registradas no período, mas existem saídas de caixa."],
       limitations: [],
     });
-  }
-
-  if (netCashflow < 0 && burnRatio >= 0.15) {
-    return CashflowRiskSchema.parse({
+  } else if (netCashflow < 0 && burnRatio >= 0.15) {
+    baseResult = CashflowRiskSchema.parse({
       status: "critical",
       reasons: [`Saídas superam entradas em ${(burnRatio * 100).toFixed(2)}% (${money(Math.abs(netCashflow))}).`],
       limitations: [],
     });
-  }
-
-  if (netCashflow < 0 || netMargin < 0.1 || inflowConcentration >= 0.7) {
+  } else if (netCashflow < 0 || netMargin < 0.1 || inflowConcentration >= 0.7) {
     const reasons = [
       netCashflow < 0
         ? `Fluxo de caixa líquido negativo em ${money(Math.abs(netCashflow))}.`
         : `Folga líquida baixa: ${(netMargin * 100).toFixed(2)}% das entradas.`,
     ];
-
     if (inflowConcentration >= 0.7) {
       reasons.push(`Entrada mais relevante concentra ${(inflowConcentration * 100).toFixed(2)}% das entradas.`);
     }
-
-    return CashflowRiskSchema.parse({ status: "attention", reasons, limitations: [] });
+    baseResult = CashflowRiskSchema.parse({ status: "attention", reasons, limitations: [] });
+  } else {
+    baseResult = CashflowRiskSchema.parse({
+      status: "healthy",
+      reasons: [`Entradas cobrem saídas com folga líquida de ${(netMargin * 100).toFixed(2)}%.`],
+      limitations: [],
+    });
   }
 
-  return CashflowRiskSchema.parse({
-    status: "healthy",
-    reasons: [`Entradas cobrem saídas com folga líquida de ${(netMargin * 100).toFixed(2)}%.`],
-    limitations: [],
-  });
+  return applyRunway(baseResult, inflow, outflow, openingBalance);
 }
 
 function appendTrace(state: MonthlyAnalysisState, agent: AgentName, input: unknown, output: unknown): MonthlyAnalysisState["traces"][number] {
@@ -333,7 +601,7 @@ function appendAgentError(state: MonthlyAnalysisState, agent: AgentName, error: 
 export function runAnomalyDetectionAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "anomaly-detection";
   try {
-    const input = { dre: state.dre, normalizedEntries: state.normalizedEntries };
+    const input = { dre: state.dre, normalizedEntries: state.normalizedEntries, segment: state.segment, previousDre: state.previousDre };
     const anomalies = detectFinancialAnomalies(input);
     return { ...state, anomalies, traces: [...state.traces, appendTrace(state, agent, input, anomalies)] };
   } catch (error) {
@@ -344,7 +612,7 @@ export function runAnomalyDetectionAgent(state: MonthlyAnalysisState): MonthlyAn
 export function runMarginDiagnosisAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "margin-diagnosis";
   try {
-    const marginDiagnosis = diagnoseMargins(state.dre);
+    const marginDiagnosis = diagnoseMargins(state.dre, state.segment);
     return { ...state, marginDiagnosis, traces: [...state.traces, appendTrace(state, agent, state.dre, marginDiagnosis)] };
   } catch (error) {
     return { ...state, errors: [...state.errors, appendAgentError(state, agent, error)] };
@@ -354,7 +622,7 @@ export function runMarginDiagnosisAgent(state: MonthlyAnalysisState): MonthlyAna
 export function runCashflowRiskAgent(state: MonthlyAnalysisState): MonthlyAnalysisState {
   const agent: AgentName = "cashflow-risk";
   try {
-    const cashflowRisk = assessCashflowRisk(state.normalizedEntries);
+    const cashflowRisk = assessCashflowRisk(state.normalizedEntries, { openingBalance: state.openingBalance });
     return { ...state, cashflowRisk, traces: [...state.traces, appendTrace(state, agent, state.normalizedEntries, cashflowRisk)] };
   } catch (error) {
     return { ...state, errors: [...state.errors, appendAgentError(state, agent, error)] };
