@@ -1,11 +1,11 @@
 {
   "$schema": "https://acme.com.br/forge/manifest-v1.json",
-  "manifest_version": "0.21.0",
+  "manifest_version": "0.22.1",
   "framework": {
     "name": "Acme Forge",
-    "version": "0.21.0",
-    "phase": "Forge-20 self-harness loop — Aicfo consumer aligned with canonical v0.21.0",
-    "last_updated": "2026-05-20",
+    "version": "0.22.1",
+    "phase": "Forge-21 — Aicfo consumer aligned with canonical v0.22.1 (WireLog analytics_provider opcional + bifurcação C6 + patch Langfuse→LangSmith)",
+    "last_updated": "2026-05-26",
     "constitution_version": "0.3.0",
     "constitution_path": ".claude/CONSTITUTION.md",
     "constitution_sha256": null,

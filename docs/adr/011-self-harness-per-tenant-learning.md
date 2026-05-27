@@ -223,12 +223,30 @@ Todos os nós de agente passam a:
 - `PATCH /actions/{id}/status` — cliente atualiza status de ação
 - `POST /tenant/lgpd-erasure-request` — dispara fluxo de esquecimento
 
+## Implicações em infraestrutura
+
+### Ambiente staging dedicado (pré-requisito)
+
+Esta ADR introduz mudanças de comportamento que **não podem ser validadas em produção sem risco para os tenants ativos**: aprendizado per-tenant escrevendo em contexto L1, gates de 95% promovendo/rebaixando agentes automaticamente, deleções LGPD com k-anonimidade global. Antes de iniciar a Etapa 1 do roadmap, precisamos de um ambiente staging completo e isolado:
+
+- **Banco de dados separado** (instância Postgres dedicada — não schema compartilhado): permite migrations destrutivas, seed de tenants sintéticos e `prisma migrate reset` sem afetar dados de cliente
+- **Workers e filas isolados** (Redis/BullMQ dedicado): self-harness escrevendo em staging não pode disparar trabalhos em produção
+- **Projeto Vertex AI Brasil separado** (ou ao menos service account distinta com quota independente): evita que loops de eval contínuo em staging consumam quota de produção e poluam métricas de custo do C3
+- **Projeto LangSmith separado** (ou tag `env=staging` consistente): traces de experimentação não devem misturar com traces auditáveis dos tenants reais
+- **Branch deploy convention**: PRs e branches `feat/aicfo-*` deployam automaticamente em staging; merge em `main` só após validação manual em staging + eval suite verde
+- **Tenants sintéticos representativos**: ≥3 tenants gerados a partir de dados anonimizados de clientes reais (com consentimento) para que gates de 95% e concordância de 5-tenants tenham material realista de teste
+
+**Custo estimado**: instância Postgres pequena (~R$ 50/mês) + Redis dedicado (~R$ 30/mês) + quota Vertex/LangSmith adicional (~R$ 30/mês no volume de eval). Total ~R$ 110/mês — barato comparado ao risco de degradar análise de cliente pagante.
+
+**Decisão de plataforma de staging**: a definir em ADR separada antes da Etapa 1 (opções: Railway environment paralelo, GCP Cloud Run staging, ou nova instância no provedor atual). Não-bloqueante para esta ADR, mas bloqueante para Etapa 1.
+
 ## Roadmap de implementação
 
 | Etapa | Escopo | Duração | Pré-requisito |
 |---|---|---|---|
 | 0 | Atualizar CLAUDE.md/Constituição para refletir LangSmith (não Langfuse) | <1 dia | — |
-| 1 | Promover LangGraph para default (substitui BullMQ legacy no `monthly-analysis`) | 4-6 semanas calendário | ADR-008 cumprida em SHADOW |
+| 0.5 | **Ambiente staging dedicado** (Postgres + Redis + Vertex + LangSmith isolados; convenção de deploy por branch; seed de tenants sintéticos) | ~1 semana | ADR de plataforma de staging assinada |
+| 1 | Promover LangGraph para default (substitui BullMQ legacy no `monthly-analysis`) | 4-6 semanas calendário | ADR-008 cumprida em SHADOW; **Etapa 0.5 concluída** |
 | 2 | Lifecycle de Action Plan (`status` + histórico) — gera sinal de validação do `action-planning` | ~2 semanas | Etapa 1 |
 | 3 | Tabela `TenantMemoryItem` + retrievers de feedback + injeção no contexto L1 dos agentes | ~2 semanas | Etapa 1 |
 | 4 | `SelfHarnessWorker` MVP — primeiro loop fechado (classificação corrigida → contexto atualizado) | ~3 semanas | Etapa 3 |
