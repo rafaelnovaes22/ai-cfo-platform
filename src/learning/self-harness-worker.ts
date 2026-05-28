@@ -3,6 +3,7 @@ import IORedis from "ioredis";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { HarnessJob, HarnessJobCorrected, HarnessJobValidated } from "@/queue/index.js";
+import { evaluateAutonomyGate, updateTenantAutonomy } from "@/learning/autonomy-gate.js";
 
 function createRedisForWorker(): IORedis {
   const url = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -61,6 +62,10 @@ export async function handleClassificationCorrected(data: HarnessJobCorrected): 
     { tenantId: data.tenantId, entryId: data.entryId },
     "self-harness: classification.corrected processado",
   );
+
+  // Reavalia gate de autonomia após cada sinal negativo (ADR-011 §3 — auto-rebaixamento)
+  const newLevel = await evaluateAutonomyGate(data.tenantId, "classification");
+  await updateTenantAutonomy(data.tenantId, "classification", newLevel);
 }
 
 export async function handleClassificationValidated(data: HarnessJobValidated): Promise<void> {
@@ -81,6 +86,10 @@ export async function handleClassificationValidated(data: HarnessJobValidated): 
     { tenantId: data.tenantId, entryId: data.entryId },
     "self-harness: classification.validated processado",
   );
+
+  // Reavalia gate de autonomia após cada sinal positivo (ADR-011 §3 — promoção automática)
+  const newLevel = await evaluateAutonomyGate(data.tenantId, "classification");
+  await updateTenantAutonomy(data.tenantId, "classification", newLevel);
 }
 
 export function startSelfHarnessWorker(): Worker<HarnessJob> {

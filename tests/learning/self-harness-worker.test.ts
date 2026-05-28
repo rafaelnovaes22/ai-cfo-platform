@@ -29,6 +29,12 @@ vi.mock("ioredis", () => ({
   default: vi.fn().mockImplementation(() => ({})),
 }));
 
+// Gate de autonomia é testado separadamente em autonomy-gate.test.ts
+vi.mock("@/learning/autonomy-gate.js", () => ({
+  evaluateAutonomyGate: vi.fn().mockResolvedValue("needs_review"),
+  updateTenantAutonomy: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/observability/logger.js", () => ({
   logger: {
     info: vi.fn(),
