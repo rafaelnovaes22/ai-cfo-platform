@@ -134,3 +134,26 @@ export function getSelfHarnessQueue(): Queue {
 export async function enqueueHarnessEvent(job: HarnessJob): Promise<void> {
   await getSelfHarnessQueue().add(job.type, job, JOB_OPTIONS);
 }
+
+// ── Eval Continuous (ADR-011 Etapa 7) ─────────────────────────────────────
+// Job sem payload — scan completo de drift em todos os tenants.
+
+export interface EvalContinuousJob {}
+
+let _evalContinuousQueue: Queue | null = null;
+
+export function getEvalContinuousQueue(): Queue {
+  if (!_evalContinuousQueue) {
+    _evalContinuousQueue = new Queue("eval-continuous", { connection: getRedis() });
+  }
+  return _evalContinuousQueue;
+}
+
+export async function enqueueEvalContinuous(): Promise<void> {
+  await getEvalContinuousQueue().add("run", {}, {
+    ...JOB_OPTIONS,
+    jobId: "eval-continuous-singleton", // evita enfileirar duplicatas
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}
