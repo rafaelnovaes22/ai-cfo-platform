@@ -4,6 +4,7 @@ import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { HarnessJob, HarnessJobCorrected, HarnessJobValidated } from "@/queue/index.js";
 import { evaluateAutonomyGate, updateTenantAutonomy } from "@/learning/autonomy-gate.js";
+import { checkAndPromoteToGlobal } from "@/learning/global-signal-promoter.js";
 
 function createRedisForWorker(): IORedis {
   const url = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -62,6 +63,9 @@ export async function handleClassificationCorrected(data: HarnessJobCorrected): 
     { tenantId: data.tenantId, entryId: data.entryId },
     "self-harness: classification.corrected processado",
   );
+
+  // Verifica concordância intra-segmento para promoção ao pool global (ADR-011 §2)
+  await checkAndPromoteToGlobal(data.tenantId, data.segment, data.description, data.correctedCategory);
 
   // Reavalia gate de autonomia após cada sinal negativo (ADR-011 §3 — auto-rebaixamento)
   const newLevel = await evaluateAutonomyGate(data.tenantId, "classification");

@@ -35,6 +35,11 @@ vi.mock("@/learning/autonomy-gate.js", () => ({
   updateTenantAutonomy: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Promoter global é testado separadamente em global-signal-promoter.test.ts
+vi.mock("@/learning/global-signal-promoter.js", () => ({
+  checkAndPromoteToGlobal: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/observability/logger.js", () => ({
   logger: {
     info: vi.fn(),
