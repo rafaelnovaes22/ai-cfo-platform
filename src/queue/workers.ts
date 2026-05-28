@@ -7,6 +7,7 @@ import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { ClassificationJob, DreNarrativeJob, ActionPlanJob, MonthlyAnalysisGraphJob } from "@/queue/index.js";
+import { startSelfHarnessWorker } from "@/learning/self-harness-worker.js";
 
 let _redis: IORedis | null = null;
 
@@ -118,5 +119,7 @@ export function startWorkers(): void {
     }
   });
 
-  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph]");
+  startSelfHarnessWorker();
+
+  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph, self-harness]");
 }

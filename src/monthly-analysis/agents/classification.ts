@@ -3,6 +3,7 @@ import {
   buildSystemPrompt as buildDreSystemPrompt,
   buildUserPrompt as buildDreUserPrompt,
   type EntryForClassification,
+  type TenantFact,
 } from "@/classification/prompts.js";
 import {
   CLARITY_CONFIDENCE_CAP,
@@ -22,6 +23,7 @@ export interface MonthlyAgentRunOptions {
   tenantId: string;
   traceId?: string;
   segment?: string;
+  tenantFacts?: TenantFact[];
 }
 
 export type DreClassificationAgentInput = EntryForClassification;
@@ -85,7 +87,7 @@ export async function runDreClassificationAgent(
   const response = await callLlm({
     task: "dre-classification",
     systemPrompt: buildDreSystemPrompt(),
-    userPrompt: buildDreUserPrompt(entries, options.segment),
+    userPrompt: buildDreUserPrompt(entries, options.segment, options.tenantFacts),
     tenantId: options.tenantId,
     traceId: options.traceId,
     jsonMode: true,

@@ -17,7 +17,21 @@ export async function dreClassifierNode(
     amountCents: entry.amountCents,
     direction: entry.direction,
   }));
-  const classifications = await runDreClassificationAgent(inputs, { tenantId: state.tenantId, segment: state.segment });
+  const tenantFacts = (state.tenantMemory?.facts ?? [])
+    .filter((f): f is { content: { description: string; category: string }; confidence: number } =>
+      typeof (f.content as Record<string, unknown>)?.description === "string" &&
+      typeof (f.content as Record<string, unknown>)?.category === "string"
+    )
+    .map((f) => ({
+      description: (f.content as { description: string; category: string }).description,
+      category: (f.content as { description: string; category: string }).category,
+    }));
+
+  const classifications = await runDreClassificationAgent(inputs, {
+    tenantId: state.tenantId,
+    segment: state.segment,
+    tenantFacts,
+  });
   const finalClassifications =
     state.clarityResults && state.clarityResults.length > 0
       ? applyClarityCaps(classifications, state.clarityResults)
