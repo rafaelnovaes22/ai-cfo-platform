@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { getPrisma } from "@/persistence/prisma.js";
 import type { Granularity, ChartEntry, TableRow } from "./types.js";
 
@@ -41,6 +42,10 @@ export async function querySummary(
 ): Promise<{ totalCreditsCents: number; totalDebitsCents: number; creditCount: number; debitCount: number }> {
   const db = getPrisma();
 
+  const categoryFilter = category
+    ? Prisma.sql`AND (COALESCE("confirmedCategory", "predictedCategory") = ${category})`
+    : Prisma.empty;
+
   const rows = await db.$queryRaw<SummaryRow[]>`
     SELECT direction,
            SUM("amountCents")::bigint AS total,
@@ -49,7 +54,7 @@ export async function querySummary(
     WHERE "tenantId" = ${tenantId}
       AND date >= ${startDate}
       AND date <= ${endDate}
-      ${category ? db.$queryRaw`AND ("confirmedCategory" = ${category} OR ("confirmedCategory" IS NULL AND "predictedCategory" = ${category}))` : db.$queryRaw``}
+      ${categoryFilter}
     GROUP BY direction
   `;
 
@@ -89,6 +94,10 @@ export async function queryChart(
   const db = getPrisma();
   const trunc = granularityTrunc[granularity];
 
+  const categoryFilter = category
+    ? Prisma.sql`AND COALESCE("confirmedCategory", "predictedCategory") = ${category}`
+    : Prisma.empty;
+
   const rows = await db.$queryRaw<ChartRawRow[]>`
     SELECT date_trunc(${trunc}, date) AS period,
            direction,
@@ -97,7 +106,7 @@ export async function queryChart(
     WHERE "tenantId" = ${tenantId}
       AND date >= ${startDate}
       AND date <= ${endDate}
-      ${category ? db.$queryRaw`AND COALESCE("confirmedCategory", "predictedCategory") = ${category}` : db.$queryRaw``}
+      ${categoryFilter}
     GROUP BY 1, 2
     ORDER BY 1 ASC
   `;
@@ -134,6 +143,10 @@ export async function queryTable(
   const db = getPrisma();
   const trunc = granularityTrunc[granularity];
 
+  const categoryFilter = category
+    ? Prisma.sql`AND COALESCE("confirmedCategory", "predictedCategory") = ${category}`
+    : Prisma.empty;
+
   const rows = await db.$queryRaw<TableRawRow[]>`
     SELECT COALESCE("confirmedCategory", "predictedCategory", 'Sem categoria') AS category,
            date_trunc(${trunc}, date) AS period,
@@ -143,7 +156,7 @@ export async function queryTable(
     WHERE "tenantId" = ${tenantId}
       AND date >= ${startDate}
       AND date <= ${endDate}
-      ${category ? db.$queryRaw`AND COALESCE("confirmedCategory", "predictedCategory") = ${category}` : db.$queryRaw``}
+      ${categoryFilter}
     GROUP BY 1, 2, 3
     ORDER BY 1, 2 ASC
   `;
