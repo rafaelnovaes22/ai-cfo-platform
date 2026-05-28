@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findUniqueMock = vi.fn();
 const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
+const findManyMemoryMock = vi.fn();
+const findManyGlobalMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
@@ -12,6 +14,12 @@ vi.mock("@/persistence/prisma.js", () => ({
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
+    },
+    tenantMemoryItem: {
+      findMany: (...args: unknown[]) => findManyMemoryMock(...args),
+    },
+    globalSignal: {
+      findMany: (...args: unknown[]) => findManyGlobalMock(...args),
     },
   }),
 }));
@@ -85,7 +93,11 @@ beforeEach(() => {
   findUniqueMock.mockReset();
   findManyAnalysesMock.mockReset();
   findManyLedgerMock.mockReset();
+  findManyMemoryMock.mockReset();
+  findManyGlobalMock.mockReset();
   findManyLedgerMock.mockResolvedValue([]);
+  findManyMemoryMock.mockResolvedValue([]);
+  findManyGlobalMock.mockResolvedValue([]);
 });
 
 describe("loadAnalysisNode — previousDre e historicalDre", () => {

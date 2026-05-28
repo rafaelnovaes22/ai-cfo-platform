@@ -1,5 +1,6 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
+import { buildTenantContext } from "@/learning/tenant-context.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import type { RawLedgerEntry } from "@/monthly-analysis/agents/normalization.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
@@ -46,7 +47,14 @@ export async function loadAnalysisNode(
     return {};
   }
 
-  const [entries, historicalRecords] = await Promise.all([
+  const tenantData = analysis.tenant as {
+    industrySegment?: string;
+    taxRegime?: string;
+    productConfig?: unknown;
+  } | undefined;
+  const segment = tenantData?.industrySegment ?? "geral";
+
+  const [entries, historicalRecords, tenantMemory] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { analysisId: state.analysisId, tenantId: state.tenantId },
       select: { id: true, date: true, description: true, amountCents: true, direction: true },
@@ -63,6 +71,8 @@ export async function loadAnalysisNode(
       take: HISTORY_WINDOW,
       select: { referenceMonth: true, dreJson: true },
     }),
+    // Carrega memória L1 do tenant (ADR-011 Etapa 3) — fatos, preferências, padrões e sinais globais
+    buildTenantContext(state.tenantId, segment),
   ]);
 
   const rawEntries: RawLedgerEntry[] = entries.map((entry) => ({
@@ -82,7 +92,6 @@ export async function loadAnalysisNode(
   const previousDre = historicalDre.length > 0 ? historicalDre[historicalDre.length - 1] : undefined;
   const openingBalance = analysis.openingBalanceCents ?? undefined;
 
-  const tenantData = analysis.tenant as { industrySegment?: string; taxRegime?: string; productConfig?: unknown } | undefined;
   const config = (tenantData?.productConfig as Record<string, unknown>)?.monthlyAnalysis as
     Record<string, string> | undefined;
   const toneOfVoice = config?.toneOfVoice ?? "formal";
@@ -102,9 +111,10 @@ export async function loadAnalysisNode(
 
   return {
     rawEntries,
-    segment: tenantData?.industrySegment ?? "geral",
+    segment,
     taxRegime: tenantData?.taxRegime ?? "simples",
     toneOfVoice,
+    tenantMemory,
     previousDre,
     historicalDre,
     openingBalance,
