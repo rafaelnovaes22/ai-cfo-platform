@@ -21,6 +21,10 @@ const ActionItemSchema = z.object({
   doneWhen:     z.string().nullable(),
   clientApproved: z.boolean().nullable(),
   clientComment:  z.string().nullable(),
+  // Lifecycle de execução — ADR-011 Etapa 2
+  status:              z.string(),
+  statusReason:        z.string().nullable(),
+  lastStatusUpdatedAt: z.string().datetime().nullable(),
 });
 
 export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
@@ -69,8 +73,12 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
 
       // Prisma gera horizon/effortLevel/riskLevel como nativeEnum; valores são idênticos
       // ao z.enum() do response schema, mas TS não infere essa equivalência.
+      // lastStatusUpdatedAt é DateTime? no Prisma — serializa para ISO 8601 ou null.
       return reply.send({
-        items: items as z.infer<typeof ActionItemSchema>[],
+        items: items.map((i) => ({
+          ...i,
+          lastStatusUpdatedAt: i.lastStatusUpdatedAt ? i.lastStatusUpdatedAt.toISOString() : null,
+        })) as z.infer<typeof ActionItemSchema>[],
         summary: {
           shortImpact:  sum("short"),
           mediumImpact: sum("medium"),
@@ -115,6 +123,50 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
         data: { clientApproved: req.body.approved, clientComment: req.body.comment ?? null },
       });
       return reply.send({ id: updated.id });
+    },
+  });
+
+  // Lifecycle de status do item de ação — sinal de validação para self-harness (ADR-011 Etapa 2)
+  f.patch("/actions/:itemId/status", {
+    schema: {
+      params: z.object({ itemId: z.string() }),
+      body: z.object({
+        status: z.enum(["pending", "in_progress", "blocked", "done", "abandoned"]),
+        reason: z.string().max(500).optional(),
+      }),
+      response: {
+        200: z.object({ id: z.string(), status: z.string() }),
+        ...defaultErrorResponses,
+      },
+    },
+    preHandler: [requireAuth, requireMode("shadow", "assisted", "autonomous")],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const item = await db.actionPlanItem.findFirst({
+        where: {
+          id: req.params.itemId,
+          analysis: { tenantId: req.auth!.tenantId },
+        },
+      });
+      if (!item) {
+        return reply.status(404).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/action-item-not-found",
+          title: "Item não encontrado",
+          status: 404,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
+
+      const updated = await db.actionPlanItem.update({
+        where: { id: item.id },
+        data: {
+          status: req.body.status,
+          statusReason: req.body.reason ?? null,
+          lastStatusUpdatedAt: new Date(),
+        },
+      });
+      return reply.send({ id: updated.id, status: updated.status });
     },
   });
 

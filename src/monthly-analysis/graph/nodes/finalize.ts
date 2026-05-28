@@ -81,6 +81,7 @@ export async function finalizeNode(
             impactCents: a.impactCents,
             deadlineDays: a.deadlineDays ?? null,
             doneWhen: a.doneWhen,
+            status: "pending",
           })),
         });
       }

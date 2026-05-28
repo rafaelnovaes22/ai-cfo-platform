@@ -309,6 +309,11 @@ model ActionPlanItem {
   clientApproved Boolean?
   clientComment  String?
 
+  // Lifecycle de execução — sinal de validação para self-harness (ADR-011 Etapa 2)
+  status               String    @default("pending") // "pending" | "in_progress" | "blocked" | "done" | "abandoned"
+  statusReason         String?
+  lastStatusUpdatedAt  DateTime?
+
   createdAt    DateTime        @default(now())
 
   @@index([analysisId])
