@@ -54,10 +54,11 @@ Produto **self-serve** que entrega análise financeira mensal para PMEs:
 | Modo | Comportamento |
 |---|---|
 | **SHADOW** | Análise gerada mas não entregue ao cliente; humano (Rafael) revisa em paralelo |
+| **PILOT** | Análise entregue normalmente para ≤50 clientes controlados; CEO monitora ativamente; sem cobrança variável adicional nesta fase |
 | **ASSISTED** | Análise gerada + entregue; cliente pode editar/comentar antes de "fechar" o mês |
 | **AUTONOMOUS** | Análise entregue diretamente; cliente audita amostra |
 
-Promoção entre modos exige eval suite passing + N execuções no modo atual + aprovação humana.
+Promoção entre modos exige eval suite passing + N execuções no modo atual + aprovação humana. Entrada em PILOT pode usar Synthetic pre-validation (Rota B — ADR-013) no lugar de 14 dias de SHADOW.
 
 ### Documentos canônicos
 
@@ -74,7 +75,7 @@ Promoção entre modos exige eval suite passing + N execuções no modo atual + 
 
 - [`docs/forge/README.md`](docs/forge/README.md) — Overview
 - [`docs/forge/manifest.json`](docs/forge/manifest.json) — Inventory machine-readable
-- [`docs/forge/decisions.md`](docs/forge/decisions.md) — Decisões F1-F22
+- [`docs/forge/decisions.md`](docs/forge/decisions.md) — Decisões F1-F27
 - [`docs/forge/reviewer-contract.md`](docs/forge/reviewer-contract.md) — Contrato com DeepAgent
 
 ---

@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock Prisma — monthlyAnalysis.findUnique + monthlyAnalysis.findMany (histórico)
 //               + ledgerEntry.findMany + ledgerEntry.updateMany (flywheel)
+//               + tenantMemoryItem.findMany + globalSignal.findMany (learning L1 — ADR-011)
 //               + $transaction (finalizeNode)
 const findUniqueAnalysisMock = vi.fn();
 const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
 const ledgerUpdateManyMock = vi.fn().mockResolvedValue({ count: 0 });
+const findManyMemoryMock = vi.fn().mockResolvedValue([]);
+const findManyGlobalMock = vi.fn().mockResolvedValue([]);
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
@@ -18,6 +21,12 @@ vi.mock("@/persistence/prisma.js", () => ({
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
       updateMany: (...args: unknown[]) => ledgerUpdateManyMock(...args),
+    },
+    tenantMemoryItem: {
+      findMany: (...args: unknown[]) => findManyMemoryMock(...args),
+    },
+    globalSignal: {
+      findMany: (...args: unknown[]) => findManyGlobalMock(...args),
     },
     narrativeCard: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -55,8 +64,12 @@ beforeEach(() => {
   findUniqueAnalysisMock.mockReset();
   findManyAnalysesMock.mockReset();
   findManyLedgerMock.mockReset();
+  findManyMemoryMock.mockReset();
+  findManyGlobalMock.mockReset();
   callLlmMock.mockReset();
   findManyAnalysesMock.mockResolvedValue([]); // padrão: sem histórico
+  findManyMemoryMock.mockResolvedValue([]); // padrão: sem memória de tenant
+  findManyGlobalMock.mockResolvedValue([]); // padrão: sem sinais globais
 });
 
 function setupHappyPath(): void {

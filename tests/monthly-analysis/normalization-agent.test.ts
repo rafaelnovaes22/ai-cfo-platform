@@ -154,6 +154,40 @@ describe("runNormalizationAgent", () => {
     ).rejects.toThrow(/alterou date.*e1/);
   });
 
+  it("recovers when LLM hallucinates a new entryId but amountCents+date match by position", async () => {
+    callLlmMock.mockResolvedValue(llmResponse([
+      {
+        entryId: "hallucinated-uuid-0000-0000-000000000001", // UUID alucinado
+        date: "2026-04-10",
+        description: "NF 123 CLIENTE ABC LTDA",
+        normalizedDescription: "NF 123 - Cliente ABC Ltda",
+        amountCents: 100000, // idêntico ao original
+        direction: "in",
+        documentType: "nf",
+        features: [],
+        noiseFlags: [],
+      },
+      {
+        entryId: "e2", // este está correto
+        date: "2026-04-11",
+        description: "PIX FORNECEDOR XYZ",
+        normalizedDescription: "PIX para Fornecedor XYZ",
+        amountCents: 25000,
+        direction: "out",
+        documentType: "pix",
+        features: [],
+        noiseFlags: [],
+      },
+    ]));
+
+    const result = await runNormalizationAgent(rawEntries, { tenantId: "tenant-1" });
+
+    // entryId deve ter sido corrigido de volta para "e1"
+    expect(result).toHaveLength(2);
+    expect(result[0]?.entryId).toBe("e1");
+    expect(result[1]?.entryId).toBe("e2");
+  });
+
   it("returns [] without calling the LLM when input is empty", async () => {
     await expect(
       runNormalizationAgent([], { tenantId: "tenant-1" }),

@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findUniqueMock = vi.fn();
 const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
+const findManyMemoryMock = vi.fn();
+const findManyGlobalMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
@@ -12,6 +14,12 @@ vi.mock("@/persistence/prisma.js", () => ({
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
+    },
+    tenantMemoryItem: {
+      findMany: (...args: unknown[]) => findManyMemoryMock(...args),
+    },
+    globalSignal: {
+      findMany: (...args: unknown[]) => findManyGlobalMock(...args),
     },
   }),
 }));
@@ -31,9 +39,13 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
     findUniqueMock.mockReset();
     findManyAnalysesMock.mockReset();
     findManyLedgerMock.mockReset();
+    findManyMemoryMock.mockReset();
+    findManyGlobalMock.mockReset();
     callLlmMock.mockReset();
-    // padrão: sem histórico
+    // padrão: sem histórico nem memória de tenant
     findManyAnalysesMock.mockResolvedValue([]);
+    findManyMemoryMock.mockResolvedValue([]);
+    findManyGlobalMock.mockResolvedValue([]);
   });
 
   it("compila e fecha o grafo sem dados — todos os nós degradam graciosamente", async () => {

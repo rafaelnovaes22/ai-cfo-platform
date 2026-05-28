@@ -1,7 +1,7 @@
-# Acme Forge — Decisões F1–F22
+# Acme Forge — Decisões F1–F27
 
-> **Status**: ✅ Defaults aprovados em 2026-04-30 (v0.1.0) e refinados em ondas subsequentes até v0.4.1
-> **Versão atual**: 0.4.1
+> **Status**: ✅ Defaults aprovados em 2026-04-30 (v0.1.0) e refinados em ondas subsequentes até v0.22.1 (Forge-22)
+> **Versão atual**: 0.22.1
 
 Decisões fundacionais do framework Acme Forge. Mudança em qualquer uma destas exige nova ADR.
 
@@ -477,6 +477,35 @@ reviewer/deepagents/skills/reviewer/forge-auditor/
 
 ---
 
+## F26 (NOVO 2026-05-08) — Forge-9: Constitution delivery-type agnostic (v0.3.0)
+
+**Status**: ✅ **Formalizado em 2026-05-08 — Constitution v0.3.0**
+
+**Decisão**: Desacoplar a Constitution do pressuposto de "agente de IA". Introduzir `project_type` (`agentic_saas` / `platform` / `automation` / `hybrid`) e `ai_enabled` para que os 8 princípios se apliquem igualmente a plataformas, automações e produtos híbridos.
+
+**Mudanças em C1–C8**: C1 renomeado "Diagnose-before-build"; C3 generalizado para custo-por-outcome OU margem-de-plataforma; C4 ganha vocabulário paralelo (DRAFT/STAGING/PILOT/CANONICAL/DEPRECATED); C6 ganha audit-log como provedor obrigatório quando `ai_enabled=false`; C7 ampliado para integrações/pagamentos/infra.
+
+**Backwards compatible**: projetos sem `docs/forge/project.json` tratados como `agentic_saas` + `ai_enabled=true`.
+
+---
+
+## F27 (NOVO 2026-05-27) — Forge-22: PILOT mode + Synthetic pre-validation para `agentic_saas` (Constitution v0.4.0)
+
+**Status**: ✅ **Formalizado em 2026-05-27 — Constitution v0.4.0**
+
+**Decisão**: Introduzir modo `PILOT` na tabela C4 de `agentic_saas` e reconhecer formalmente `Synthetic pre-validation` (Rota B) como caminho alternativo ao SHADOW mínimo de 14 dias.
+
+**O que muda em C4**:
+- Nova linha `PILOT` na tabela de modos: agente entrega output normalmente para ≤N clientes controlados (default N=50); CEO aprova ativação; sem cobrança variável adicional nesta fase.
+- Rota A (SHADOW precedente): mantém requisito de ≥ 14 dias em SHADOW + eval passing + aprovação CEO.
+- Rota B (Synthetic pre-validation): ≥ 3 perfis sintéticos × ≥ 10 análises/perfil, documentados em `docs/evals/synthetic-prevalidation.md`, KPIs ≥ thresholds, aprovação CEO. **Substitui** a janela de 14 dias.
+- Promoção para ASSISTED: ≥ 30 dias em PILOT + qualidade ≥ threshold + feedback real documentado + CEO.
+- Promoção para AUTONOMOUS: igual ao original + cross-approval Promotion Officer + Security Guardian.
+
+**Contexto (Aicfo)**: 10/10 análises LangGraph validadas em staging. ADR-013 documenta a aplicação no SKU `monthly-analysis`.
+
+---
+
 ## Histórico de mudanças
 
 | Versão | Data | Mudança | Razão |
@@ -490,3 +519,5 @@ reviewer/deepagents/skills/reviewer/forge-auditor/
 | 0.5.0 | 2026-05-06 | F23 adicionada; Forge-6 AIOS infraestrutura entregue | Adoção de AIOS Server pelo projeto consumidor SchoolPlatform/EDIX |
 | 0.6.0 | 2026-05-07 | F24 adicionada; Forge-7 AIOS templates portáveis entregues | 6 agentes canônicos em templates/aios/ para serem reusados por todos os projetos consumidores; schema_agent stack-agnostic |
 | 0.7.0 | 2026-05-07 | F25 adicionada; Forge-8 CI/CD esteira completa entregue | Gate 6 obrigatório para AUTONOMOUS; 4 templates CI/CD; Wave 6 no tasks; promotion-officer atualizado |
+| 0.22.0 | 2026-05-08 | F26 adicionada; Constitution v0.3.0 delivery-type agnostic | `project_type` + `ai_enabled` desacoplam regras de IA de regras de plataforma |
+| 0.22.1 | 2026-05-27 | F27 adicionada; Constitution v0.4.0 PILOT mode + Synthetic pre-validation | C4 `agentic_saas` ganha PILOT mode (entrega real ≤50 clientes) e Rota B (synthetic pre-validation substitui SHADOW 14 dias) |
