@@ -231,6 +231,7 @@ model LedgerEntry {
   @@index([tenantId])
   @@index([analysisId])
   @@index([date])
+  @@index([tenantId, date])              // cashflow: queries de período por tenant
   @@index([tenantId, confirmedCategory]) // acelera extração de dataset de treinamento
 }
 
