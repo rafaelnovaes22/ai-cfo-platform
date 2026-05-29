@@ -24,6 +24,7 @@ export type QaGateDecision = "narrative_synthesis" | "action_planning" | "finali
 export interface MonthlyAnalysisState {
   analysisId: string;
   tenantId: string;
+  traceId?: string;
   segment?: string;
   taxRegime?: string;
   toneOfVoice?: string;
@@ -62,10 +63,12 @@ export interface MonthlyAnalysisState {
 export function createInitialMonthlyAnalysisState(input: {
   analysisId: string;
   tenantId: string;
+  traceId?: string;
 }): MonthlyAnalysisState {
   return {
     analysisId: input.analysisId,
     tenantId: input.tenantId,
+    traceId: input.traceId,
     costs: [],
     traces: [],
     errors: [],

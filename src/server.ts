@@ -32,6 +32,7 @@ const port = Number(process.env.PORT ?? 3000);
 const app = Fastify({
   loggerInstance: logger,
   trustProxy: true,
+  ignoreTrailingSlash: true,
 });
 
 app.setValidatorCompiler(validatorCompiler);

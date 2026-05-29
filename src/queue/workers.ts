@@ -92,6 +92,7 @@ export function startWorkers(): void {
       await graph.invoke({
         analysisId: job.data.analysisId,
         tenantId: job.data.tenantId,
+        traceId: job.data.traceId,
         costs: [],
         traces: [],
         errors: [],

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { callLlm } from "@/llm/index.js";
+import type { LlmResponse } from "@/llm/types.js";
 import {
   NormalizedLedgerEntrySchema,
   type NormalizedLedgerEntry,
@@ -9,6 +10,7 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
 } from "@/monthly-analysis/agents/prompts/normalization.js";
+import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
 import { logger } from "@/observability/logger.js";
 
 // RawLedgerEntry é o contrato de entrada para o normalizador.
@@ -41,8 +43,26 @@ export async function runNormalizationAgent(
   rawEntries: RawLedgerEntry[],
   options: MonthlyAgentRunOptions,
 ): Promise<NormalizedLedgerEntry[]> {
-  if (rawEntries.length === 0) return [];
+  const { data } = await runNormalizationAgentWithTelemetry(rawEntries, options);
+  return data;
+}
 
+/**
+ * Variante que devolve a resposta crua do LLM e a latência medida, para que o nó
+ * do grafo possa emitir AgentCost / AgentTrace via buildAgentTelemetry.
+ *
+ * Quando rawEntries é vazio, retorna telemetria zerada (provider="noop") — assim
+ * o nó pode emitir um trace mesmo no caminho sem LLM, mantendo schemaPassed=true.
+ */
+export async function runNormalizationAgentWithTelemetry(
+  rawEntries: RawLedgerEntry[],
+  options: MonthlyAgentRunOptions,
+): Promise<{ data: NormalizedLedgerEntry[]; response: LlmResponse; latencyMs: number }> {
+  if (rawEntries.length === 0) {
+    return { data: [], response: NOOP_LLM_RESPONSE, latencyMs: 0 };
+  }
+
+  const start = Date.now();
   const response = await callLlm({
     task: "normalization",
     systemPrompt: buildSystemPrompt(),
@@ -53,9 +73,10 @@ export async function runNormalizationAgent(
   });
 
   const normalized = parseAgentJson(response.content, NormalizedLedgerEntriesSchema);
-
-  return assertImmutableFinancialFields(rawEntries, normalized);
+  const data = assertImmutableFinancialFields(rawEntries, normalized);
+  return { data, response, latencyMs: Date.now() - start };
 }
+
 
 /**
  * Guard que valida que o LLM não tocou em `amountCents` nem `date`.

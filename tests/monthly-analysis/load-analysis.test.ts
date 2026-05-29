@@ -229,22 +229,18 @@ describe("loadAnalysisNode — carregamento de entries e tenant", () => {
     expect(result.toneOfVoice).toBe("informal");
   });
 
-  it("retorna {} sem chamar findMany quando analysis não existe no Prisma", async () => {
+  it("lança erro sem chamar findMany quando analysis não existe no Prisma", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
 
-    const result = await loadAnalysisNode(baseState());
-
-    expect(result).toEqual({});
+    await expect(loadAnalysisNode(baseState())).rejects.toThrow(/analysisId "analysis-1" não encontrada/);
     expect(findManyAnalysesMock).not.toHaveBeenCalled();
     expect(findManyLedgerMock).not.toHaveBeenCalled();
   });
 
-  it("retorna {} sem chamar findMany quando há tenant mismatch", async () => {
+  it("lança erro sem chamar findMany quando há tenant mismatch (violação C5/L1)", async () => {
     findUniqueMock.mockResolvedValueOnce(baseAnalysis({ tenantId: "outro-tenant" }));
 
-    const result = await loadAnalysisNode(baseState());
-
-    expect(result).toEqual({});
+    await expect(loadAnalysisNode(baseState())).rejects.toThrow(/violação C5\/L1/);
     expect(findManyAnalysesMock).not.toHaveBeenCalled();
     expect(findManyLedgerMock).not.toHaveBeenCalled();
   });

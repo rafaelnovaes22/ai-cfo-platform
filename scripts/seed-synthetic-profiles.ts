@@ -54,7 +54,7 @@ function day(month: string, d: number): string {
 
 /** Variação sazonal: jan/fev mais fraco, mai-ago pico, dez forte */
 function sazonalFactor(month: string): number {
-  const m = parseInt(month.split("-")[1]);
+  const m = parseInt(month.split("-")[1]!, 10);
   const table: Record<number, number> = {
     1: 0.75, 2: 0.80, 3: 0.90, 4: 0.95,
     5: 1.05, 6: 1.10, 7: 1.15, 8: 1.10,
@@ -153,7 +153,7 @@ function gerarPerfilConsultoria(month: string): Entry[] {
   clientes.forEach((c, i) => {
     const variacao = 0.85 + Math.random() * 0.30;
     entries.push({
-      date: day(month, [5, 12, 18, 25][i % 4]),
+      date: day(month, [5, 12, 18, 25][i % 4]!),
       description: c.nome,
       amountCents: Math.round(c.base * fator * variacao),
       direction: "credit",

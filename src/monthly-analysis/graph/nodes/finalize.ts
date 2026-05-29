@@ -50,8 +50,8 @@ export async function finalizeNode(
     });
 
     if (!analysis) {
-      logger.warn({ analysisId, tenantId }, "monthly-analysis.graph.finalize: analysis não encontrada");
-      return {};
+      logger.error({ analysisId, tenantId }, "monthly-analysis.graph.finalize: analysis não encontrada");
+      throw new Error(`finalize: analysisId "${analysisId}" não encontrada ao finalizar`);
     }
 
     await db.$transaction(async (tx) => {
@@ -86,7 +86,9 @@ export async function finalizeNode(
         });
       }
 
-      const isAutonomous = analysis.mode === "autonomous";
+      // QA gate pode marcar needsReview=true mesmo em autonomous — nesse caso,
+      // não publica direto; cai para "ready" e espera revisão humana.
+      const isAutonomous = analysis.mode === "autonomous" && state.needsReview !== true;
 
       await tx.monthlyAnalysis.update({
         where: { id: analysisId },
@@ -105,9 +107,9 @@ export async function finalizeNode(
   } catch (error) {
     logger.error(
       { analysisId, tenantId, error },
-      "monthly-analysis.graph.finalize: erro ao persistir resultado",
+      "monthly-analysis.graph.finalize: erro ao persistir resultado — job falhará para revert via BullMQ",
     );
-    return {};
+    throw error;
   }
 
   logger.info(

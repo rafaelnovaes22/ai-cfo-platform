@@ -28,14 +28,14 @@ function sampleBeta(alpha: number, beta: number): number {
 // Seleciona a variante com a maior amostra da distribuição Beta — explora variantes
 // menos testadas e explota as mais promissoras conforme o histórico cresce.
 export function selectVariantByBandit(variants: VariantStats[]): VariantStats {
-  if (variants.length === 0) throw new Error("selectVariantByBandit: nenhuma variante fornecida");
-  if (variants.length === 1) return variants[0];
+  const [first, ...rest] = variants;
+  if (!first) throw new Error("selectVariantByBandit: nenhuma variante fornecida");
+  if (rest.length === 0) return first;
 
-  let best = variants[0];
+  let best = first;
   let bestSample = sampleBeta(Math.max(best.alpha, 1), Math.max(best.beta, 1));
 
-  for (let i = 1; i < variants.length; i++) {
-    const v = variants[i];
+  for (const v of rest) {
     const sample = sampleBeta(Math.max(v.alpha, 1), Math.max(v.beta, 1));
     if (sample > bestSample) {
       best = v;

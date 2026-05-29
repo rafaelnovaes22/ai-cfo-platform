@@ -1,4 +1,5 @@
-import { runClarityJudgeAgent } from "@/monthly-analysis/agents/classification.js";
+import { runClarityJudgeAgentWithTelemetry } from "@/monthly-analysis/agents/classification.js";
+import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { JudgeInput } from "@/classification/judge.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
@@ -9,6 +10,19 @@ export async function clarityJudgeNode(
     entryId: entry.entryId,
     description: entry.normalizedDescription,
   }));
-  const clarityResults = await runClarityJudgeAgent(inputs, { tenantId: state.tenantId });
-  return { clarityResults };
+
+  const { data, response, latencyMs } = await runClarityJudgeAgentWithTelemetry(inputs, {
+    tenantId: state.tenantId,
+    traceId: state.traceId,
+  });
+
+  const { costs, traces } = buildAgentTelemetry({
+    agent: "clarity-judge",
+    response,
+    latencyMs,
+    inputPayload: inputs,
+    outputPayload: data,
+  });
+
+  return { clarityResults: data, costs, traces };
 }

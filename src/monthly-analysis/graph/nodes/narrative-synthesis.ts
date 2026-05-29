@@ -1,4 +1,5 @@
-import { runNarrativeSynthesisAgent } from "@/monthly-analysis/agents/narrative-synthesis.js";
+import { runNarrativeSynthesisAgentWithTelemetry } from "@/monthly-analysis/agents/narrative-synthesis.js";
+import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 // Skip se não há entradas normalizadas — sem dados, sem narrativa.
@@ -14,17 +15,27 @@ export async function narrativeSynthesisNode(
       "narrative_synthesis: precondição violada — dre/marginDiagnosis/cashflowRisk ausentes",
     );
   }
-  const narrativeCards = await runNarrativeSynthesisAgent(
-    {
-      dre: state.dre,
-      anomalies: state.anomalies ?? [],
-      marginDiagnosis: state.marginDiagnosis,
-      cashflowRisk: state.cashflowRisk,
-      segment: state.segment,
-      taxRegime: state.taxRegime,
-      toneOfVoice: state.toneOfVoice,
-    },
-    { tenantId: state.tenantId },
-  );
-  return { narrativeCards };
+  const input = {
+    dre: state.dre,
+    anomalies: state.anomalies ?? [],
+    marginDiagnosis: state.marginDiagnosis,
+    cashflowRisk: state.cashflowRisk,
+    segment: state.segment,
+    taxRegime: state.taxRegime,
+    toneOfVoice: state.toneOfVoice,
+  };
+  const { data, response, latencyMs } = await runNarrativeSynthesisAgentWithTelemetry(input, {
+    tenantId: state.tenantId,
+    traceId: state.traceId,
+  });
+
+  const { costs, traces } = buildAgentTelemetry({
+    agent: "narrative-synthesis",
+    response,
+    latencyMs,
+    inputPayload: input,
+    outputPayload: data,
+  });
+
+  return { narrativeCards: data, costs, traces };
 }

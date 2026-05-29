@@ -29,6 +29,7 @@ import type {
   NormalizedLedgerEntry,
   QaReview,
 } from "@/monthly-analysis/schemas/agents.js";
+import type { TenantMemoryContext } from "@/learning/tenant-context.js";
 
 // Annotation root espelhando MonthlyAnalysisState. Arrays usam reducer de
 // concatenação — necessário para o fan-out paralelo (anomaly/margin/cashflow)
@@ -36,10 +37,12 @@ import type {
 export const MonthlyAnalysisAnnotation = Annotation.Root({
   analysisId: Annotation<string>(),
   tenantId: Annotation<string>(),
+  traceId: Annotation<string | undefined>(),
   segment: Annotation<string | undefined>(),
   taxRegime: Annotation<string | undefined>(),
   toneOfVoice: Annotation<string | undefined>(),
 
+  tenantMemory: Annotation<TenantMemoryContext | undefined>(),
   openingBalance: Annotation<number | undefined>(),
   previousDre: Annotation<DreLines | undefined>(),
   historicalDre: Annotation<DreLines[] | undefined>(),

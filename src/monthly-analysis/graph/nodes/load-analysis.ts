@@ -28,11 +28,13 @@ export async function loadAnalysisNode(
   });
 
   if (!analysis) {
-    logger.warn(
+    logger.error(
       { analysisId: state.analysisId, tenantId: state.tenantId },
-      "monthly-analysis.graph.load_analysis: analysis not found, prosseguindo com estado vazio",
+      "monthly-analysis.graph.load_analysis: analysis não encontrada — job será revertido para pending",
     );
-    return {};
+    throw new Error(
+      `load_analysis: analysisId "${state.analysisId}" não encontrada para tenant "${state.tenantId}"`,
+    );
   }
 
   if (analysis.tenantId !== state.tenantId) {
@@ -42,9 +44,12 @@ export async function loadAnalysisNode(
         stateTenantId: state.tenantId,
         dbTenantId: analysis.tenantId,
       },
-      "monthly-analysis.graph.load_analysis: tenant mismatch — possível violação de C5/L1",
+      "monthly-analysis.graph.load_analysis: tenant mismatch — violação C5/L1",
     );
-    return {};
+    throw new Error(
+      `load_analysis: violação C5/L1 — tenantId do estado (${state.tenantId}) ` +
+        `≠ tenantId do registro (${analysis.tenantId}) para analysisId "${state.analysisId}"`,
+    );
   }
 
   const tenantData = analysis.tenant as {
@@ -86,7 +91,7 @@ export async function loadAnalysisNode(
   // Filtra registros sem DRE gerado e ordena do mais antigo ao mais recente
   const validHistorical = historicalRecords
     .filter((r) => r.dreJson != null)
-    .reverse() as { referenceMonth: string; dreJson: DreLines }[];
+    .reverse() as unknown as { referenceMonth: string; dreJson: DreLines }[];
 
   const historicalDre = validHistorical.map((r) => r.dreJson);
   const previousDre = historicalDre.length > 0 ? historicalDre[historicalDre.length - 1] : undefined;

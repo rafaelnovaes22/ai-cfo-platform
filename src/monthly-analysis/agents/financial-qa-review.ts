@@ -1,4 +1,6 @@
 import { callLlm } from "@/llm/index.js";
+import type { LlmResponse } from "@/llm/types.js";
+import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
 import { parseAgentJson, type MonthlyAgentRunOptions } from "@/monthly-analysis/agents/classification.js";
 import {
   buildSystemPrompt,
@@ -30,6 +32,21 @@ export async function runFinancialQaReviewAgent(
   >,
   options: FinancialQaReviewRunOptions,
 ): Promise<QaReview> {
+  const { data } = await runFinancialQaReviewAgentWithTelemetry(state, options);
+  return data;
+}
+
+/**
+ * Variante com telemetria. Quando o pré-checador determinístico já reprova,
+ * o LLM não é chamado e retornamos NOOP_LLM_RESPONSE — o nó ainda emite trace.
+ */
+export async function runFinancialQaReviewAgentWithTelemetry(
+  state: Pick<
+    MonthlyAnalysisState,
+    "dre" | "anomalies" | "marginDiagnosis" | "cashflowRisk" | "narrativeCards" | "actionPlan"
+  >,
+  options: FinancialQaReviewRunOptions,
+): Promise<{ data: QaReview; response: LlmResponse; latencyMs: number }> {
   if (
     !state.dre ||
     !state.anomalies ||
@@ -45,7 +62,7 @@ export async function runFinancialQaReviewAgent(
 
   const deterministicReview = runDeterministicFinancialQaReview(state);
   if (!deterministicReview.publishable) {
-    return deterministicReview;
+    return { data: deterministicReview, response: NOOP_LLM_RESPONSE, latencyMs: 0 };
   }
 
   const input: FinancialQaReviewAgentInput = {
@@ -60,6 +77,7 @@ export async function runFinancialQaReviewAgent(
     taxRegime: options.taxRegime,
   };
 
+  const start = Date.now();
   const response = await callLlm({
     task: "financial-qa-review",
     systemPrompt: buildSystemPrompt(),
@@ -69,7 +87,8 @@ export async function runFinancialQaReviewAgent(
     jsonMode: true,
   });
 
-  return parseAgentJson(response.content, QaReviewSchema);
+  const data = parseAgentJson(response.content, QaReviewSchema);
+  return { data, response, latencyMs: Date.now() - start };
 }
 
 type QaIssue = QaReview["issues"][number];

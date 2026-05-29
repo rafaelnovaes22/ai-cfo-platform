@@ -1,8 +1,9 @@
 import { aggregateDre } from "@/dre-narrative/aggregator.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
-// Determinístico — sem LLM. Combina entries normalizadas + classificações
-// em DreLines (totais, margens). Reusa aggregator do pipeline legacy.
+// Determinístico — sem LLM e sem decisão. Combina entries normalizadas +
+// classificações em DreLines (totais, margens). Reusa aggregator do pipeline
+// legacy. Não emite telemetria: é função pura de shape, não ponto de decisão.
 export async function aggregateDreNode(
   state: MonthlyAnalysisState,
 ): Promise<Partial<MonthlyAnalysisState>> {

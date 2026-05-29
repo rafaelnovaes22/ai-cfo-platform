@@ -1,7 +1,8 @@
 import {
   applyClarityCaps,
-  runDreClassificationAgent,
+  runDreClassificationAgentWithTelemetry,
 } from "@/monthly-analysis/agents/classification.js";
+import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { EntryForClassification } from "@/classification/prompts.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 import { getPrisma } from "@/persistence/prisma.js";
@@ -27,15 +28,25 @@ export async function dreClassifierNode(
       category: (f.content as { description: string; category: string }).category,
     }));
 
-  const classifications = await runDreClassificationAgent(inputs, {
-    tenantId: state.tenantId,
-    segment: state.segment,
-    tenantFacts,
-  });
+  const { data: classifications, response, latencyMs } =
+    await runDreClassificationAgentWithTelemetry(inputs, {
+      tenantId: state.tenantId,
+      traceId: state.traceId,
+      segment: state.segment,
+      tenantFacts,
+    });
   const finalClassifications =
     state.clarityResults && state.clarityResults.length > 0
       ? applyClarityCaps(classifications, state.clarityResults)
       : classifications;
+
+  const { costs, traces } = buildAgentTelemetry({
+    agent: "dre-classification",
+    response,
+    latencyMs,
+    inputPayload: inputs,
+    outputPayload: finalClassifications,
+  });
 
   // Flywheel de treinamento: persiste predição + confiança para cada lançamento.
   // Usado por SelfHarnessWorker (ADR-011 Etapa 4) para construir dataset rotulado.
@@ -69,5 +80,5 @@ export async function dreClassifierNode(
     }
   }
 
-  return { classifiedEntries: finalClassifications };
+  return { classifiedEntries: finalClassifications, costs, traces };
 }
