@@ -22,6 +22,7 @@ import { dreNarrativeRoutes } from "@/dre-narrative/routes.js";
 import { actionPlanRoutes } from "@/action-plan/routes.js";
 import { hubRoutes } from "@/hub/routes.js";
 import { exportRoutes } from "@/export/routes.js";
+import { cashflowRoutes } from "@/cashflow/routes.js";
 import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushTraces } from "@/observability/tracing.js";
@@ -31,6 +32,7 @@ const port = Number(process.env.PORT ?? 3000);
 const app = Fastify({
   loggerInstance: logger,
   trustProxy: true,
+  ignoreTrailingSlash: true,
 });
 
 app.setValidatorCompiler(validatorCompiler);
@@ -141,6 +143,7 @@ await app.register(dreNarrativeRoutes);
 await app.register(actionPlanRoutes);
 await app.register(hubRoutes);
 await app.register(exportRoutes);
+await app.register(cashflowRoutes);
 
 startWorkers();
 

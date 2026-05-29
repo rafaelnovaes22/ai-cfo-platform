@@ -225,7 +225,7 @@ function parseDreKeyValueString(input: string): DreLines {
     if (eqIdx === -1) continue;
     const k = pair.slice(0, eqIdx).trim();
     const v = parseFloat(pair.slice(eqIdx + 1).trim());
-    if (k && !isNaN(v) && k in dre) (dre as Record<string, number>)[k] = v;
+    if (k && !isNaN(v) && k in dre) (dre as unknown as Record<string, number>)[k] = v;
   }
   return dre;
 }

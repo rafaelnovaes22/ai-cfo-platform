@@ -1,7 +1,7 @@
 # Acme Forge — Constitution
 
-> **Versão**: 0.3.0
-> **Data**: 2026-05-08
+> **Versão**: 0.4.0
+> **Data**: 2026-05-27
 > **Aprovação**: ✅ Mantenedor
 > **Mudanças**: exigem nova ADR + bump de versão + comunicação ao reviewer (DeepAgent / GPT-5.5)
 
@@ -137,11 +137,23 @@ Combinado a `project_type`, cada projeto declara em `docs/forge/project.json` um
 
 | Modo | Comportamento |
 |---|---|
-| `SHADOW` | Agente roda mas output não é entregue/cobrado; humano executa em paralelo; mede-se concordância |
+| `SHADOW` | Agente roda mas output **não** é entregue/cobrado; humano executa em paralelo; mede-se concordância |
+| `PILOT` | Agente roda e **entrega output normalmente** para ≤N clientes controlados (default N=50); CEO/decisor aprova ativação; mede-se qualidade + feedback real; sem cobrança variável adicional nesta fase |
 | `ASSISTED` | Agente roda e propõe; humano aprova antes de executar/entregar; mede-se taxa de aprovação sem edição |
 | `AUTONOMOUS` | Agente executa diretamente; humano audita amostra; mede-se taxa de erro pós-execução |
 
-Promoção entre modos exige: N execuções mínimas, threshold de qualidade pré-contratado, eval suite passing, aprovação humana explícita. SHADOW mínimo de 14 dias.
+**Promoção para PILOT — duas rotas reconhecidas:**
+
+| Rota | Requisito |
+|---|---|
+| **A — SHADOW precedente** | ≥ 14 dias em SHADOW + N execuções mínimas declaradas + threshold de qualidade pré-contratado + eval suite passing + aprovação CEO |
+| **B — Synthetic pre-validation** | Execução formal documentada de ≥ 3 perfis sintéticos × ≥ 10 análises por perfil; resultados registrados em `docs/evals/synthetic-prevalidation.md`; KPIs acima dos thresholds pré-contratados; aprovação CEO explícita registrada. **Substitui** a janela de 14 dias em SHADOW de produção. |
+
+**Promoção para ASSISTED**: ≥ 30 dias em PILOT (ou N análises entregues a clientes reais, conforme declarado no artifact spec) + taxa de qualidade ≥ threshold pré-contratado + feedback real positivo documentado + eval suite passing + aprovação CEO.
+
+**Promoção para AUTONOMOUS**: ≥ 30 dias em ASSISTED + taxa de aprovação humana ≥ 90% + CI/CD pipeline ativo + aprovação CEO + cross-approval Promotion Officer + Security Guardian.
+
+**N máximo em PILOT**: configurável por projeto via `docs/forge/project.json` campo `pilot.max_clients` (default: 50).
 
 #### Para `platform` / `automation` (e módulos `ai_enabled=false` em hybrid)
 
@@ -168,7 +180,7 @@ Cada módulo segue a tabela do seu tipo. Conjunto deve ser auditável.
 - Promoção registrada em log auditável (`promotions.md` ou `pilot-state.md`).
 - Reviewer audita transições.
 
-**Exceções**: nenhuma. Mesmo cliente disposto a "pular SHADOW/PILOT" precisa cumprir a janela mínima.
+**Exceções**: nenhuma. Mesmo cliente disposto a "pular SHADOW/PILOT" precisa cumprir a janela mínima ou documentar Synthetic pre-validation (Rota B).
 
 ---
 
@@ -327,6 +339,7 @@ Para alterar, adicionar ou remover qualquer princípio:
 | 0.1.0 | 2026-04-30 | Versão inicial — 8 princípios fundadores (acoplados ao contexto Acme) |
 | 0.2.0 | 2026-04-30 | Generalização — princípios desacoplados de Acme específico; vocabulário multi-domínio; refs a examples/acme/ para extensões |
 | 0.3.0 | 2026-05-08 | **Delivery-type agnostic** — introdução de `project_type` (`agentic_saas`/`platform`/`automation`/`hybrid`) e `ai_enabled`. C1 renomeado para "Diagnose-before-build". C3 generalizado para custo-por-outcome OU margem-de-plataforma. C4 ganha vocabulário paralelo (DRAFT/STAGING/PILOT/CANONICAL/DEPRECATED). C6 ganha audit-log como provedor obrigatório quando `ai_enabled=false`. C7 ampliado para integrações/pagamentos/infra. Backwards compatible — defaults legados quando `project.json` ausente. ADR F26. |
+| 0.4.0 | 2026-05-27 | **PILOT mode + Synthetic pre-validation** — C4 ganha modo `PILOT` para `agentic_saas` (entrega real para ≤N clientes controlados; clientes veem output normalmente) e Rota B de promoção via pré-validação sintética formal como substituto do SHADOW mínimo de 14 dias. ADR F57. |
 
 ---
 

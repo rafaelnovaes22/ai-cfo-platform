@@ -1,5 +1,6 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
+import { buildTenantContext } from "@/learning/tenant-context.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import type { RawLedgerEntry } from "@/monthly-analysis/agents/normalization.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
@@ -27,11 +28,13 @@ export async function loadAnalysisNode(
   });
 
   if (!analysis) {
-    logger.warn(
+    logger.error(
       { analysisId: state.analysisId, tenantId: state.tenantId },
-      "monthly-analysis.graph.load_analysis: analysis not found, prosseguindo com estado vazio",
+      "monthly-analysis.graph.load_analysis: analysis não encontrada — job será revertido para pending",
     );
-    return {};
+    throw new Error(
+      `load_analysis: analysisId "${state.analysisId}" não encontrada para tenant "${state.tenantId}"`,
+    );
   }
 
   if (analysis.tenantId !== state.tenantId) {
@@ -41,12 +44,22 @@ export async function loadAnalysisNode(
         stateTenantId: state.tenantId,
         dbTenantId: analysis.tenantId,
       },
-      "monthly-analysis.graph.load_analysis: tenant mismatch — possível violação de C5/L1",
+      "monthly-analysis.graph.load_analysis: tenant mismatch — violação C5/L1",
     );
-    return {};
+    throw new Error(
+      `load_analysis: violação C5/L1 — tenantId do estado (${state.tenantId}) ` +
+        `≠ tenantId do registro (${analysis.tenantId}) para analysisId "${state.analysisId}"`,
+    );
   }
 
-  const [entries, historicalRecords] = await Promise.all([
+  const tenantData = analysis.tenant as {
+    industrySegment?: string;
+    taxRegime?: string;
+    productConfig?: unknown;
+  } | undefined;
+  const segment = tenantData?.industrySegment ?? "geral";
+
+  const [entries, historicalRecords, tenantMemory] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { analysisId: state.analysisId, tenantId: state.tenantId },
       select: { id: true, date: true, description: true, amountCents: true, direction: true },
@@ -63,6 +76,8 @@ export async function loadAnalysisNode(
       take: HISTORY_WINDOW,
       select: { referenceMonth: true, dreJson: true },
     }),
+    // Carrega memória L1 do tenant (ADR-011 Etapa 3) — fatos, preferências, padrões e sinais globais
+    buildTenantContext(state.tenantId, segment),
   ]);
 
   const rawEntries: RawLedgerEntry[] = entries.map((entry) => ({
@@ -76,13 +91,12 @@ export async function loadAnalysisNode(
   // Filtra registros sem DRE gerado e ordena do mais antigo ao mais recente
   const validHistorical = historicalRecords
     .filter((r) => r.dreJson != null)
-    .reverse() as { referenceMonth: string; dreJson: DreLines }[];
+    .reverse() as unknown as { referenceMonth: string; dreJson: DreLines }[];
 
   const historicalDre = validHistorical.map((r) => r.dreJson);
   const previousDre = historicalDre.length > 0 ? historicalDre[historicalDre.length - 1] : undefined;
   const openingBalance = analysis.openingBalanceCents ?? undefined;
 
-  const tenantData = analysis.tenant as { industrySegment?: string; taxRegime?: string; productConfig?: unknown } | undefined;
   const config = (tenantData?.productConfig as Record<string, unknown>)?.monthlyAnalysis as
     Record<string, string> | undefined;
   const toneOfVoice = config?.toneOfVoice ?? "formal";
@@ -102,9 +116,10 @@ export async function loadAnalysisNode(
 
   return {
     rawEntries,
-    segment: tenantData?.industrySegment ?? "geral",
+    segment,
     taxRegime: tenantData?.taxRegime ?? "simples",
     toneOfVoice,
+    tenantMemory,
     previousDre,
     historicalDre,
     openingBalance,

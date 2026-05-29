@@ -77,3 +77,83 @@ export function getActionPlanQueue(): Queue {
 export async function enqueueActionPlan(job: ActionPlanJob): Promise<void> {
   await getActionPlanQueue().add("plan", job, JOB_OPTIONS);
 }
+
+// ── Monthly Analysis Graph (LangGraph) ────────────────────────────────────
+// Usado quando productConfig.monthlyAnalysis.orchestrator = "langgraph"
+// ou MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR=langgraph.
+// Substitui a cadeia classification → dre-narrative → action-plan com pipeline unificado.
+
+let _monthlyAnalysisGraphQueue: Queue | null = null;
+
+export interface MonthlyAnalysisGraphJob { analysisId: string; tenantId: string; traceId?: string }
+
+export function getMonthlyAnalysisGraphQueue(): Queue {
+  if (!_monthlyAnalysisGraphQueue) {
+    _monthlyAnalysisGraphQueue = new Queue("monthly-analysis-graph", { connection: getRedis() });
+  }
+  return _monthlyAnalysisGraphQueue;
+}
+
+export async function enqueueMonthlyAnalysisGraph(job: MonthlyAnalysisGraphJob): Promise<void> {
+  await getMonthlyAnalysisGraphQueue().add("run-graph", job, JOB_OPTIONS);
+}
+
+// ── Self-Harness (ADR-011 Etapa 4) ────────────────────────────────────────
+
+export type HarnessJobType = "classification.corrected" | "classification.validated";
+
+export interface HarnessJobCorrected {
+  type: "classification.corrected";
+  tenantId: string;
+  entryId: string;
+  description: string;
+  predictedCategory: string | null;
+  correctedCategory: string;
+  confidence: number | null;
+  segment: string;
+}
+
+export interface HarnessJobValidated {
+  type: "classification.validated";
+  tenantId: string;
+  entryId: string;
+  confidence: number | null;
+}
+
+export type HarnessJob = HarnessJobCorrected | HarnessJobValidated;
+
+let _selfHarnessQueue: Queue | null = null;
+
+export function getSelfHarnessQueue(): Queue {
+  if (!_selfHarnessQueue) {
+    _selfHarnessQueue = new Queue("self-harness", { connection: getRedis() });
+  }
+  return _selfHarnessQueue;
+}
+
+export async function enqueueHarnessEvent(job: HarnessJob): Promise<void> {
+  await getSelfHarnessQueue().add(job.type, job, JOB_OPTIONS);
+}
+
+// ── Eval Continuous (ADR-011 Etapa 7) ─────────────────────────────────────
+// Job sem payload — scan completo de drift em todos os tenants.
+
+export interface EvalContinuousJob {}
+
+let _evalContinuousQueue: Queue | null = null;
+
+export function getEvalContinuousQueue(): Queue {
+  if (!_evalContinuousQueue) {
+    _evalContinuousQueue = new Queue("eval-continuous", { connection: getRedis() });
+  }
+  return _evalContinuousQueue;
+}
+
+export async function enqueueEvalContinuous(): Promise<void> {
+  await getEvalContinuousQueue().add("run", {}, {
+    ...JOB_OPTIONS,
+    jobId: "eval-continuous-singleton", // evita enfileirar duplicatas
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}

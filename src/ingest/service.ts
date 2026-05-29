@@ -1,6 +1,6 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { Prisma } from "@prisma/client";
-import { enqueueClassification, enqueueDreNarrative } from "@/queue/index.js";
+import { enqueueClassification, enqueueDreNarrative, enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
@@ -97,7 +97,7 @@ export async function ingest(params: {
   const db = getPrisma();
   const persistSpan = trace.span({ name: "persist", input: { entryCount: entries.length } });
 
-  const { analysis, minEntries } = await db.$transaction(async (tx) => {
+  const { analysis, minEntries, orchestrator } = await db.$transaction(async (tx) => {
     const tenant = await tx.tenant.findUniqueOrThrow({
       where: { id: tenantId },
       select: { productConfig: true },
@@ -106,6 +106,10 @@ export async function ingest(params: {
       Record<string, unknown> | undefined;
     const threshold =
       (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
+    const orchestrator =
+      (tenantConfig?.orchestrator as string | undefined) ??
+      process.env.MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR ??
+      "bullmq";
     const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
 
     const existing = await tx.monthlyAnalysis.findUnique({
@@ -133,13 +137,13 @@ export async function ingest(params: {
           traceId: null,
         },
       });
-      return { analysis: existing, minEntries: threshold };
+      return { analysis: existing, minEntries: threshold, orchestrator };
     }
 
     const created = await tx.monthlyAnalysis.create({
       data: { tenantId, referenceMonth: effectiveReferenceMonth, status: "pending", mode: subscription.mode },
     });
-    return { analysis: created, minEntries: threshold };
+    return { analysis: created, minEntries: threshold, orchestrator };
   });
 
   // 3. Bulk insert LedgerEntry
@@ -165,7 +169,10 @@ export async function ingest(params: {
   const outcome = entries.length >= minEntries ? "completed" : "partial";
 
   if (outcome === "completed") {
-    if (shouldSkipClassification(entries)) {
+    if (orchestrator === "langgraph") {
+      await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId: trace.id });
+      logger.info({ analysisId: analysis.id, tenantId }, "Ingest: despachando para LangGraph");
+    } else if (shouldSkipClassification(entries)) {
       await enqueueDreNarrative({ analysisId: analysis.id, tenantId, traceId: trace.id });
     } else {
       await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });

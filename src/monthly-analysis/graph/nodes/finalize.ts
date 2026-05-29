@@ -1,6 +1,36 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
+import type { DreLines } from "@/dre-narrative/aggregator.js";
+import type { Anomaly, NarrativeEvidence } from "@/monthly-analysis/schemas/agents.js";
+
+const PERCENTAGE_DRE_KEYS = new Set([
+  "margemBruta", "margemEbitda", "margemOperacional", "margemLiquida",
+]);
+
+// Resolve evidenceRefs (nomes de métricas DRE / codes de anomalia / status)
+// para o formato estruturado esperado pelo modelo NarrativeCard no banco.
+function resolveEvidence(
+  refs: string[],
+  dre: DreLines | undefined,
+  anomalies: Anomaly[] | undefined,
+): NarrativeEvidence[] {
+  return refs.map((ref) => {
+    if (dre && ref in dre) {
+      const value = (dre as unknown as Record<string, number>)[ref] ?? 0;
+      return { metric: ref, value, unit: PERCENTAGE_DRE_KEYS.has(ref) ? "percent" : "brl_cents" };
+    }
+    if (ref.startsWith("marginDiagnosis.") || ref.startsWith("cashflowRisk.")) {
+      return { metric: ref, value: 0, unit: "status" };
+    }
+    const anomaly = anomalies?.find((a) => a.code === ref);
+    return {
+      metric: ref,
+      value: anomaly?.impactCents ?? 0,
+      unit: "code",
+    };
+  });
+}
 
 // Persiste o resultado completo do pipeline LangGraph no banco e atualiza status.
 // Equivale ao que narrator.ts + action-plan/generator.ts fazem no pipeline BullMQ.
@@ -20,8 +50,8 @@ export async function finalizeNode(
     });
 
     if (!analysis) {
-      logger.warn({ analysisId, tenantId }, "monthly-analysis.graph.finalize: analysis não encontrada");
-      return {};
+      logger.error({ analysisId, tenantId }, "monthly-analysis.graph.finalize: analysis não encontrada");
+      throw new Error(`finalize: analysisId "${analysisId}" não encontrada ao finalizar`);
     }
 
     await db.$transaction(async (tx) => {
@@ -33,7 +63,7 @@ export async function finalizeNode(
             cardType: card.type,
             title: card.title,
             body: card.body,
-            evidence: [] as unknown as object,
+            evidence: resolveEvidence(card.evidenceRefs, dre, anomalies) as unknown as object,
           })),
         });
       }
@@ -51,11 +81,14 @@ export async function finalizeNode(
             impactCents: a.impactCents,
             deadlineDays: a.deadlineDays ?? null,
             doneWhen: a.doneWhen,
+            status: "pending",
           })),
         });
       }
 
-      const isAutonomous = analysis.mode === "autonomous";
+      // QA gate pode marcar needsReview=true mesmo em autonomous — nesse caso,
+      // não publica direto; cai para "ready" e espera revisão humana.
+      const isAutonomous = analysis.mode === "autonomous" && state.needsReview !== true;
 
       await tx.monthlyAnalysis.update({
         where: { id: analysisId },
@@ -74,9 +107,9 @@ export async function finalizeNode(
   } catch (error) {
     logger.error(
       { analysisId, tenantId, error },
-      "monthly-analysis.graph.finalize: erro ao persistir resultado",
+      "monthly-analysis.graph.finalize: erro ao persistir resultado — job falhará para revert via BullMQ",
     );
-    return {};
+    throw error;
   }
 
   logger.info(

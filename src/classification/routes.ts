@@ -6,6 +6,8 @@ import { getPrisma } from "@/persistence/prisma.js";
 import { requireAuth, requireMode } from "@/auth/middleware.js";
 import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
 import { defaultErrorResponses, problemDetail } from "@/http/problem-detail.js";
+import { enqueueHarnessEvent } from "@/queue/index.js";
+import { logger } from "@/observability/logger.js";
 
 const CorrectBody = z.object({
   category: z.enum(DRE_CATEGORIES as [string, ...string[]]),
@@ -111,6 +113,32 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
         },
         select: { id: true, confirmedCategory: true },
       });
+
+      // Emite evento para o SelfHarnessWorker (ADR-011 Etapa 4) — não-bloqueante
+      try {
+        const entryData = await db.ledgerEntry.findFirst({
+          where: { id: entry.id },
+          select: { predictedCategory: true, classificationConfidence: true, description: true, tenantId: true },
+        });
+        if (entryData) {
+          const tenantData = await db.tenant.findUnique({
+            where: { id: entryData.tenantId },
+            select: { industrySegment: true },
+          });
+          await enqueueHarnessEvent({
+            type: "classification.corrected",
+            tenantId: entryData.tenantId,
+            entryId: entry.id,
+            description: entryData.description,
+            predictedCategory: entryData.predictedCategory ?? null,
+            correctedCategory: req.body.category,
+            confidence: entryData.classificationConfidence ?? null,
+            segment: tenantData?.industrySegment ?? "geral",
+          });
+        }
+      } catch (harnessErr) {
+        logger.warn({ entryId: entry.id, err: harnessErr }, "self-harness enqueue falhou — ignorando");
+      }
 
       return reply.send({ id: updated.id, confirmedCategory: updated.confirmedCategory! });
     },

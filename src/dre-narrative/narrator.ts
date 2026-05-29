@@ -60,7 +60,7 @@ export async function generateDreNarrative(analysisId: string, tenantId: string)
 
   // 1b. Detecção de anomalias (determinística — sem LLM)
   const previousDre = previousAnalysis?.dreJson != null
-    ? (previousAnalysis.dreJson as DreLines)
+    ? (previousAnalysis.dreJson as unknown as DreLines)
     : undefined;
 
   const normalizedEntries = entries.map((e, i) => ({

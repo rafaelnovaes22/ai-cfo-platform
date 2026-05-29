@@ -1,4 +1,5 @@
 import { callLlm } from "@/llm/index.js";
+import type { LlmResponse } from "@/llm/types.js";
 import {
   ActionPlanDraftSchema,
   type ActionPlanDraft,
@@ -47,6 +48,15 @@ export async function runActionPlanningAgent(
   input: ActionPlanningAgentInput,
   options: MonthlyAgentRunOptions,
 ): Promise<ActionPlanDraft> {
+  const { data } = await runActionPlanningAgentWithTelemetry(input, options);
+  return data;
+}
+
+export async function runActionPlanningAgentWithTelemetry(
+  input: ActionPlanningAgentInput,
+  options: MonthlyAgentRunOptions,
+): Promise<{ data: ActionPlanDraft; response: LlmResponse; latencyMs: number }> {
+  const start = Date.now();
   const response = await callLlm({
     task: "action-planning",
     systemPrompt: buildSystemPrompt(),
@@ -56,5 +66,6 @@ export async function runActionPlanningAgent(
     jsonMode: true,
   });
 
-  return sortShortsByRoi(parseAgentJson(response.content, ActionPlanDraftSchema));
+  const data = sortShortsByRoi(parseAgentJson(response.content, ActionPlanDraftSchema));
+  return { data, response, latencyMs: Date.now() - start };
 }

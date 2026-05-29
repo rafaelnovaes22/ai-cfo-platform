@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { callLlm } from "@/llm/index.js";
+import type { LlmResponse } from "@/llm/types.js";
 import {
   NormalizedLedgerEntrySchema,
   type NormalizedLedgerEntry,
@@ -9,6 +10,8 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
 } from "@/monthly-analysis/agents/prompts/normalization.js";
+import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
+import { logger } from "@/observability/logger.js";
 
 // RawLedgerEntry é o contrato de entrada para o normalizador.
 // Vem do ingest (CSV/PDF/manual) ainda sem o passe estruturado.
@@ -31,6 +34,8 @@ const NormalizedLedgerEntriesSchema = z.array(NormalizedLedgerEntrySchema);
  * - Guard pós-LLM verifica que `amountCents` e `date` não foram alterados:
  *   se foram, lança erro nomeando o entryId — esses campos são lei contábil
  *   e qualquer mutação pelo modelo é um bug crítico.
+ * - Recuperação de entryId: LLM às vezes alucina UUID novo; se amountCents+date
+ *   batem por posição, re-estampamos o entryId correto sem lançar erro.
  *
  * Modelo primário: gpt-4.1-nano (SLM). Ver src/llm/router.ts.
  */
@@ -38,8 +43,26 @@ export async function runNormalizationAgent(
   rawEntries: RawLedgerEntry[],
   options: MonthlyAgentRunOptions,
 ): Promise<NormalizedLedgerEntry[]> {
-  if (rawEntries.length === 0) return [];
+  const { data } = await runNormalizationAgentWithTelemetry(rawEntries, options);
+  return data;
+}
 
+/**
+ * Variante que devolve a resposta crua do LLM e a latência medida, para que o nó
+ * do grafo possa emitir AgentCost / AgentTrace via buildAgentTelemetry.
+ *
+ * Quando rawEntries é vazio, retorna telemetria zerada (provider="noop") — assim
+ * o nó pode emitir um trace mesmo no caminho sem LLM, mantendo schemaPassed=true.
+ */
+export async function runNormalizationAgentWithTelemetry(
+  rawEntries: RawLedgerEntry[],
+  options: MonthlyAgentRunOptions,
+): Promise<{ data: NormalizedLedgerEntry[]; response: LlmResponse; latencyMs: number }> {
+  if (rawEntries.length === 0) {
+    return { data: [], response: NOOP_LLM_RESPONSE, latencyMs: 0 };
+  }
+
+  const start = Date.now();
   const response = await callLlm({
     task: "normalization",
     systemPrompt: buildSystemPrompt(),
@@ -50,25 +73,45 @@ export async function runNormalizationAgent(
   });
 
   const normalized = parseAgentJson(response.content, NormalizedLedgerEntriesSchema);
-
-  assertImmutableFinancialFields(rawEntries, normalized);
-
-  return normalized;
+  const data = assertImmutableFinancialFields(rawEntries, normalized);
+  return { data, response, latencyMs: Date.now() - start };
 }
+
 
 /**
  * Guard que valida que o LLM não tocou em `amountCents` nem `date`.
  * Esses campos vêm do extrato/planilha do cliente e não podem ser inventados
  * pelo modelo — qualquer divergência é tratada como erro fatal.
+ *
+ * Recuperação de entryId: quando o LLM alucina um UUID novo mas os campos
+ * imutáveis (amountCents + date) batem por posição, re-estampamos o entryId
+ * correto e logamos aviso — sem lançar erro.
  */
 function assertImmutableFinancialFields(
   rawEntries: RawLedgerEntry[],
   normalized: NormalizedLedgerEntry[],
-): void {
+): NormalizedLedgerEntry[] {
   const rawById = new Map(rawEntries.map((entry) => [entry.entryId, entry]));
+  const corrected: NormalizedLedgerEntry[] = [];
 
-  for (const entry of normalized) {
-    const original = rawById.get(entry.entryId);
+  for (let i = 0; i < normalized.length; i++) {
+    let entry = normalized[i]!;
+    let original = rawById.get(entry.entryId);
+
+    // LLM às vezes alucina um entryId novo. Se o tamanho bate e amountCents+date
+    // conferem por posição, re-estampamos o entryId correto e continuamos.
+    if (!original && normalized.length === rawEntries.length) {
+      const positional = rawEntries[i]!;
+      if (entry.amountCents === positional.amountCents && entry.date === positional.date) {
+        logger.warn(
+          { hallucinatedEntryId: entry.entryId, correctEntryId: positional.entryId, idx: i },
+          "normalization: LLM alucinoui entryId — corrigido por posição",
+        );
+        entry = { ...entry, entryId: positional.entryId };
+        original = positional;
+      }
+    }
+
     if (!original) {
       throw new Error(
         `normalization: entryId "${entry.entryId}" devolvido pelo LLM não existe no input original`,
@@ -88,7 +131,11 @@ function assertImmutableFinancialFields(
           `(original="${original.date}", recebido="${entry.date}")`,
       );
     }
+
+    corrected.push(entry);
   }
+
+  return corrected;
 }
 
 export const _internals = { assertImmutableFinancialFields, NormalizedLedgerEntriesSchema };

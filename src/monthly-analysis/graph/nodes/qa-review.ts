@@ -1,4 +1,5 @@
-import { runFinancialQaReviewAgent } from "@/monthly-analysis/agents/financial-qa-review.js";
+import { runFinancialQaReviewAgentWithTelemetry } from "@/monthly-analysis/agents/financial-qa-review.js";
+import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 // Executa o revisor financeiro antes do finalize. Se o grafo não produziu
@@ -23,17 +24,26 @@ export async function qaReviewNode(
     };
   }
 
-  const qaReview = await runFinancialQaReviewAgent(
-    {
-      dre: state.dre,
-      anomalies: state.anomalies ?? [],
-      marginDiagnosis: state.marginDiagnosis,
-      cashflowRisk: state.cashflowRisk,
-      narrativeCards: state.narrativeCards,
-      actionPlan: state.actionPlan,
-    },
-    { tenantId: state.tenantId },
+  const reviewInput = {
+    dre: state.dre,
+    anomalies: state.anomalies ?? [],
+    marginDiagnosis: state.marginDiagnosis,
+    cashflowRisk: state.cashflowRisk,
+    narrativeCards: state.narrativeCards,
+    actionPlan: state.actionPlan,
+  };
+  const { data, response, latencyMs } = await runFinancialQaReviewAgentWithTelemetry(
+    reviewInput,
+    { tenantId: state.tenantId, traceId: state.traceId },
   );
 
-  return { qaReview };
+  const { costs, traces } = buildAgentTelemetry({
+    agent: "financial-qa-review",
+    response,
+    latencyMs,
+    inputPayload: reviewInput,
+    outputPayload: data,
+  });
+
+  return { qaReview: data, costs, traces };
 }

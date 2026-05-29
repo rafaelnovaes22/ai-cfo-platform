@@ -1,4 +1,5 @@
-import { runActionPlanningAgent } from "@/monthly-analysis/agents/action-planning.js";
+import { runActionPlanningAgentWithTelemetry } from "@/monthly-analysis/agents/action-planning.js";
+import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 // Skip se não há narrativeCards (consequência de não haver dados normalizados).
@@ -14,18 +15,28 @@ export async function actionPlanningNode(
       "action_planning: precondição violada — dre/diagnósticos ausentes",
     );
   }
-  const actionPlan = await runActionPlanningAgent(
-    {
-      dre: state.dre,
-      anomalies: state.anomalies ?? [],
-      narrativeCards: state.narrativeCards,
-      marginDiagnosis: state.marginDiagnosis,
-      cashflowRisk: state.cashflowRisk,
-      segment: state.segment,
-      taxRegime: state.taxRegime,
-      toneOfVoice: state.toneOfVoice,
-    },
-    { tenantId: state.tenantId },
-  );
-  return { actionPlan };
+  const input = {
+    dre: state.dre,
+    anomalies: state.anomalies ?? [],
+    narrativeCards: state.narrativeCards,
+    marginDiagnosis: state.marginDiagnosis,
+    cashflowRisk: state.cashflowRisk,
+    segment: state.segment,
+    taxRegime: state.taxRegime,
+    toneOfVoice: state.toneOfVoice,
+  };
+  const { data, response, latencyMs } = await runActionPlanningAgentWithTelemetry(input, {
+    tenantId: state.tenantId,
+    traceId: state.traceId,
+  });
+
+  const { costs, traces } = buildAgentTelemetry({
+    agent: "action-planning",
+    response,
+    latencyMs,
+    inputPayload: input,
+    outputPayload: data,
+  });
+
+  return { actionPlan: data, costs, traces };
 }

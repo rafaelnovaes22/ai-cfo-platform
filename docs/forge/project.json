@@ -81,11 +81,14 @@
     },
     {
       "id": "cashflow",
-      "type": "agentic-skill",
-      "ai_enabled": true,
-      "lifecycle_state": "DRAFT",
+      "type": "platform-module",
+      "ai_enabled": false,
+      "lifecycle_state": "STAGING",
       "criticality": "standard",
-      "onda": 2
+      "onda": 2,
+      "linked_spec": "docs/specs/cashflow.md",
+      "linked_plan": "docs/clients/aicfo/plan-cashflow.md",
+      "linked_tasks": "docs/clients/aicfo/tasks-cashflow.md"
     },
     {
       "id": "kpis",

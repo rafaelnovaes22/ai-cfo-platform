@@ -14,6 +14,7 @@ import type {
   NormalizedLedgerEntry,
   QaReview,
 } from "@/monthly-analysis/schemas/agents.js";
+import type { TenantMemoryContext } from "@/learning/tenant-context.js";
 
 
 // Estado canônico do grafo LangGraph do SKU monthly-analysis.
@@ -23,10 +24,12 @@ export type QaGateDecision = "narrative_synthesis" | "action_planning" | "finali
 export interface MonthlyAnalysisState {
   analysisId: string;
   tenantId: string;
+  traceId?: string;
   segment?: string;
   taxRegime?: string;
   toneOfVoice?: string;
 
+  tenantMemory?: TenantMemoryContext;
   openingBalance?: number;
   previousDre?: DreLines;
   // últimos 12 meses fechados, ordenados do mais antigo ao mais recente (sem o mês atual)
@@ -60,10 +63,12 @@ export interface MonthlyAnalysisState {
 export function createInitialMonthlyAnalysisState(input: {
   analysisId: string;
   tenantId: string;
+  traceId?: string;
 }): MonthlyAnalysisState {
   return {
     analysisId: input.analysisId,
     tenantId: input.tenantId,
+    traceId: input.traceId,
     costs: [],
     traces: [],
     errors: [],
