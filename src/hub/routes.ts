@@ -169,7 +169,7 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
         .filter((r) => r.dreJson != null)
         .reverse()
         .map((r) => {
-          const d = r.dreJson as DreLines;
+          const d = r.dreJson as unknown as DreLines;
           return {
             referenceMonth:    r.referenceMonth,
             receitaLiquida:    d.receitaLiquida,

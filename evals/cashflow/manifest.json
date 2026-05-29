@@ -1,0 +1,24 @@
+{
+  "module": "cashflow",
+  "outcomes": ["cashflow_loaded"],
+  "eval_method": "assertion_shape",
+  "pass_rate_threshold": 1.0,
+  "pass_rate_per_outcome": {
+    "cashflow_loaded": 1.00
+  },
+  "source_distribution": {
+    "real": ">=0.40",
+    "synthetic": "<=0.40",
+    "edge": ">=0.10",
+    "adversarial": ">=0.05"
+  },
+  "min_cases_per_outcome": 30,
+  "total_cases": 32,
+  "ai_enabled": false,
+  "eval_target": "http_endpoint",
+  "endpoint": "GET /cashflow",
+  "auth": "bearer_jwt",
+  "latency_p95_threshold_ms": 800,
+  "notes": "Módulo determinístico (sem LLM). Eval = HTTP request ao endpoint real + assertion de shape/valores. Pass rate 1.00 porque qualquer divergência é bug. Casos cobrem: happy path monthly/daily/quarterly, edges (sem lançamentos, openingBalance null, category null), security (cross-tenant, 401), adversarial (volume grande, período longo).",
+  "last_updated": "2026-05-28"
+}

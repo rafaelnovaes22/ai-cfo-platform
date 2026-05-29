@@ -1,8 +1,11 @@
 import { callLlm } from "@/llm/index.js";
+import type { LlmResponse } from "@/llm/types.js";
+import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
 import {
   buildSystemPrompt as buildDreSystemPrompt,
   buildUserPrompt as buildDreUserPrompt,
   type EntryForClassification,
+  type TenantFact,
 } from "@/classification/prompts.js";
 import {
   CLARITY_CONFIDENCE_CAP,
@@ -22,6 +25,7 @@ export interface MonthlyAgentRunOptions {
   tenantId: string;
   traceId?: string;
   segment?: string;
+  tenantFacts?: TenantFact[];
 }
 
 export type DreClassificationAgentInput = EntryForClassification;
@@ -62,8 +66,19 @@ export async function runClarityJudgeAgent(
   entries: JudgeInput[],
   options: MonthlyAgentRunOptions,
 ): Promise<ClarityResult[]> {
-  if (entries.length === 0) return [];
+  const { data } = await runClarityJudgeAgentWithTelemetry(entries, options);
+  return data;
+}
 
+export async function runClarityJudgeAgentWithTelemetry(
+  entries: JudgeInput[],
+  options: MonthlyAgentRunOptions,
+): Promise<{ data: ClarityResult[]; response: LlmResponse; latencyMs: number }> {
+  if (entries.length === 0) {
+    return { data: [], response: NOOP_LLM_RESPONSE, latencyMs: 0 };
+  }
+
+  const start = Date.now();
   const response = await callLlm({
     task: "clarity-judge",
     systemPrompt: clarityJudgeInternals.buildSystemPrompt(),
@@ -73,26 +88,39 @@ export async function runClarityJudgeAgent(
     jsonMode: true,
   });
 
-  return parseAgentJson(response.content, ClarityResultsSchema);
+  const data = parseAgentJson(response.content, ClarityResultsSchema);
+  return { data, response, latencyMs: Date.now() - start };
 }
 
 export async function runDreClassificationAgent(
   entries: DreClassificationAgentInput[],
   options: MonthlyAgentRunOptions,
 ): Promise<DreClassificationResult[]> {
-  if (entries.length === 0) return [];
+  const { data } = await runDreClassificationAgentWithTelemetry(entries, options);
+  return data;
+}
 
+export async function runDreClassificationAgentWithTelemetry(
+  entries: DreClassificationAgentInput[],
+  options: MonthlyAgentRunOptions,
+): Promise<{ data: DreClassificationResult[]; response: LlmResponse; latencyMs: number }> {
+  if (entries.length === 0) {
+    return { data: [], response: NOOP_LLM_RESPONSE, latencyMs: 0 };
+  }
+
+  const start = Date.now();
   const response = await callLlm({
     task: "dre-classification",
     systemPrompt: buildDreSystemPrompt(),
-    userPrompt: buildDreUserPrompt(entries, options.segment),
+    userPrompt: buildDreUserPrompt(entries, options.segment, options.tenantFacts),
     tenantId: options.tenantId,
     traceId: options.traceId,
     jsonMode: true,
   });
 
-  return parseAgentJson(response.content, DreClassificationResultsSchema).map((result) => ({
+  const data = parseAgentJson(response.content, DreClassificationResultsSchema).map((result) => ({
     ...result,
     category: coerceDreCategory(result.category),
   }));
+  return { data, response, latencyMs: Date.now() - start };
 }

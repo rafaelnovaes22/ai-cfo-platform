@@ -1,4 +1,5 @@
 import { callLlm } from "@/llm/index.js";
+import type { LlmResponse } from "@/llm/types.js";
 import { parseAgentJson, type MonthlyAgentRunOptions } from "@/monthly-analysis/agents/classification.js";
 import {
   buildSystemPrompt,
@@ -23,6 +24,15 @@ export async function runNarrativeSynthesisAgent(
   input: NarrativeSynthesisAgentInput,
   options: MonthlyAgentRunOptions,
 ): Promise<NarrativeCardDraft[]> {
+  const { data } = await runNarrativeSynthesisAgentWithTelemetry(input, options);
+  return data;
+}
+
+export async function runNarrativeSynthesisAgentWithTelemetry(
+  input: NarrativeSynthesisAgentInput,
+  options: MonthlyAgentRunOptions,
+): Promise<{ data: NarrativeCardDraft[]; response: LlmResponse; latencyMs: number }> {
+  const start = Date.now();
   const response = await callLlm({
     task: "narrative-synthesis",
     systemPrompt: buildSystemPrompt(),
@@ -32,5 +42,6 @@ export async function runNarrativeSynthesisAgent(
     jsonMode: true,
   });
 
-  return parseAgentJson(response.content, NarrativeCardDraftsSchema);
+  const data = parseAgentJson(response.content, NarrativeCardDraftsSchema);
+  return { data, response, latencyMs: Date.now() - start };
 }

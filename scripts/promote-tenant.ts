@@ -32,7 +32,7 @@ async function main() {
         { users: { some: { email: identifier } } },
       ],
     },
-    include: { subscription: true },
+    include: { subscriptions: { take: 1 } },
   });
 
   if (!tenant) {
@@ -40,12 +40,14 @@ async function main() {
     process.exit(1);
   }
 
-  if (!tenant.subscription) {
+  // Schema relaciona subscriptions como to-many (apesar de tenantId @unique torná-la 0..1).
+  const subscription = tenant.subscriptions[0];
+  if (!subscription) {
     console.error(`Tenant "${tenant.name}" não tem subscription. Crie primeiro via /workspace/setup.`);
     process.exit(1);
   }
 
-  const prev = tenant.subscription.mode;
+  const prev = subscription.mode;
   await prisma.subscription.update({
     where: { tenantId: tenant.id },
     data: { mode: targetMode as Mode },
@@ -53,7 +55,7 @@ async function main() {
 
   console.log(`✓ Tenant "${tenant.name}" (${tenant.id})`);
   console.log(`  ${prev} → ${targetMode}`);
-  console.log(`  Subscription ID: ${tenant.subscription.id}`);
+  console.log(`  Subscription ID: ${subscription.id}`);
 }
 
 main()

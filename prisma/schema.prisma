@@ -26,6 +26,8 @@ model Tenant {
   // Estrutura: { monthlyAnalysis: { toneOfVoice, ...}, ... }
   productConfig   Json     @default("{}")
 
+  learningAutonomyState Json @default("{\"classification\":\"needs_review\",\"narrative\":\"needs_review\",\"action\":\"needs_review\"}")
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -34,6 +36,8 @@ model Tenant {
   ledgerEntries    LedgerEntry[]
   monthlyAnalyses  MonthlyAnalysis[]
   apiTokens        ApiToken[]
+  memoryItems      TenantMemoryItem[]
+  validationMetrics ValidationMetric[]
 
   @@index([industrySegment])
 }
@@ -227,6 +231,7 @@ model LedgerEntry {
   @@index([tenantId])
   @@index([analysisId])
   @@index([date])
+  @@index([tenantId, date])              // cashflow: queries de período por tenant
   @@index([tenantId, confirmedCategory]) // acelera extração de dataset de treinamento
 }
 
@@ -309,7 +314,82 @@ model ActionPlanItem {
   clientApproved Boolean?
   clientComment  String?
 
+  // Lifecycle de execução — sinal de validação para self-harness (ADR-011 Etapa 2)
+  status               String    @default("pending") // "pending" | "in_progress" | "blocked" | "done" | "abandoned"
+  statusReason         String?
+  lastStatusUpdatedAt  DateTime?
+
   createdAt    DateTime        @default(now())
 
   @@index([analysisId])
+}
+
+// ===== ONDA 1 — learning / memória per-tenant (ADR-011 Etapa 3) =====
+
+model TenantMemoryItem {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  kind        String   // "fact" | "preference" | "pattern" | "interpretation"
+  content     Json
+  confidence  Float    @default(1.0)
+  evidenceRefs Json    @default("[]")
+
+  clientEdited      Boolean   @default(false)
+  dismissedAt       DateTime?
+  dismissalReason   String?
+
+  contributesToGlobal Boolean  @default(false)
+  globalSignalId      String?
+
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, kind])
+  @@index([globalSignalId])
+}
+
+model GlobalSignal {
+  id               String   @id @default(uuid())
+  segment          String
+  kind             String   // "fact" | "pattern"
+  content          Json
+  contributorCount Int      @default(0)
+
+  promotedAt  DateTime  @default(now())
+  retiredAt   DateTime?
+
+  @@index([segment, kind])
+}
+
+model ValidationMetric {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  agentName      String   // "classification" | "narrative-synthesis" | "action-planning"
+  confidenceBand String?  // "easy" | "hard" | null
+  signal         String   // "positive" | "negative"
+  refType        String   // "ledger_entry" | "narrative_card" | "action_item"
+  refId          String
+
+  observedAt  DateTime  @default(now())
+
+  @@index([tenantId, agentName, observedAt])
+}
+
+model LegalRetention {
+  id                String   @id @default(uuid())
+  originalTenantId  String
+  cnpj              String?
+
+  retainedData      Json
+  retentionUntil    DateTime
+
+  forgottenAt       DateTime @default(now())
+  termAcceptedHash  String
+
+  @@index([retentionUntil])
 }

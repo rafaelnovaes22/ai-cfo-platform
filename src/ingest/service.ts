@@ -137,7 +137,7 @@ export async function ingest(params: {
           traceId: null,
         },
       });
-      return { analysis: existing, minEntries: threshold };
+      return { analysis: existing, minEntries: threshold, orchestrator };
     }
 
     const created = await tx.monthlyAnalysis.create({

@@ -86,9 +86,23 @@ export interface EntryForClassification {
   direction: string;
 }
 
-export function buildUserPrompt(entries: EntryForClassification[], segment?: string): string {
+// L1 — fatos aprendidos sobre o tenant (C5: contexto tenant-specific vai no user prompt).
+export type TenantFact = { description: string; category: string };
+
+function buildTenantFactsBlock(tenantFacts: TenantFact[]): string {
+  if (tenantFacts.length === 0) return "";
+  const lines = tenantFacts.map((f) => `- "${f.description}" → ${f.category}`).join("\n");
+  return `REGRAS APRENDIDAS DESTE TENANT (alta prioridade — aplicar sempre que a descrição combinar):\n${lines}\n\n`;
+}
+
+export function buildUserPrompt(
+  entries: EntryForClassification[],
+  segment?: string,
+  tenantFacts?: TenantFact[],
+): string {
   const segmentLine = segment
     ? `Segmento da empresa: ${segment}. Use o vocabulário típico do setor ao classificar (ex: mensalidades → receita_bruta para SaaS; CMV → custos_diretos para varejo).\n\n`
     : "";
-  return `${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
+  const factsBlock = tenantFacts && tenantFacts.length > 0 ? buildTenantFactsBlock(tenantFacts) : "";
+  return `${factsBlock}${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
 }

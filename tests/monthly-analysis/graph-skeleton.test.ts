@@ -3,16 +3,32 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findUniqueMock = vi.fn();
 const findManyAnalysesMock = vi.fn();
 const findManyLedgerMock = vi.fn();
+const findManyMemoryMock = vi.fn();
+const findManyGlobalMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
     monthlyAnalysis: {
       findUnique: (...args: unknown[]) => findUniqueMock(...args),
       findMany: (...args: unknown[]) => findManyAnalysesMock(...args),
+      update: vi.fn().mockResolvedValue({}),
     },
     ledgerEntry: {
       findMany: (...args: unknown[]) => findManyLedgerMock(...args),
     },
+    tenantMemoryItem: {
+      findMany: (...args: unknown[]) => findManyMemoryMock(...args),
+    },
+    globalSignal: {
+      findMany: (...args: unknown[]) => findManyGlobalMock(...args),
+    },
+    $transaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      return fn({
+        monthlyAnalysis: { update: vi.fn().mockResolvedValue({}) },
+        narrativeCard: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        actionPlanItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      });
+    }),
   }),
 }));
 
@@ -31,19 +47,27 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
     findUniqueMock.mockReset();
     findManyAnalysesMock.mockReset();
     findManyLedgerMock.mockReset();
+    findManyMemoryMock.mockReset();
+    findManyGlobalMock.mockReset();
     callLlmMock.mockReset();
-    // padrão: sem histórico
+    // padrão: sem histórico nem memória de tenant
     findManyAnalysesMock.mockResolvedValue([]);
+    findManyMemoryMock.mockResolvedValue([]);
+    findManyGlobalMock.mockResolvedValue([]);
   });
 
   it("compila e fecha o grafo sem dados — todos os nós degradam graciosamente", async () => {
-    findUniqueMock.mockResolvedValueOnce({
+    // load_analysis e finalize ambos chamam findUnique — devolve dois shapes diferentes
+    // (load pede tenant nested; finalize pede mode/costCents). mockResolvedValue cobre ambos.
+    findUniqueMock.mockResolvedValue({
       id: "test-id",
       tenantId: "test-tenant",
       status: "pending",
       referenceMonth: "2026-05",
       openingBalanceCents: null,
       tenant: { industrySegment: "servicos-b2b", taxRegime: "simples", productConfig: {} },
+      mode: "shadow",
+      costCents: 0,
     });
     findManyLedgerMock.mockResolvedValueOnce([]);
 
@@ -73,25 +97,24 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
     expect(callLlmMock).not.toHaveBeenCalled();
   });
 
-  it("tolera analysis ausente no Prisma e ainda fecha o grafo", async () => {
+  it("falha hard quando analysis ausente no Prisma — BullMQ deve reverter status", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
 
     const graph = buildMonthlyAnalysisGraph();
 
-    const result = await graph.invoke({
-      analysisId: "missing-id",
-      tenantId: "test-tenant",
-      costs: [],
-      traces: [],
-      errors: [],
-    });
-
-    expect(result.analysisId).toBe("missing-id");
-    expect(result.rawEntries).toBeUndefined();
+    await expect(
+      graph.invoke({
+        analysisId: "missing-id",
+        tenantId: "test-tenant",
+        costs: [],
+        traces: [],
+        errors: [],
+      }),
+    ).rejects.toThrow(/analysisId "missing-id" não encontrada/);
     expect(callLlmMock).not.toHaveBeenCalled();
   });
 
-  it("detecta tenant mismatch sem lançar erro (apenas loga e segue)", async () => {
+  it("detecta tenant mismatch e lança erro hard (violação C5/L1)", async () => {
     findUniqueMock.mockResolvedValueOnce({
       id: "test-id",
       tenantId: "outro-tenant",
@@ -102,16 +125,15 @@ describe("monthly-analysis graph skeleton (data-empty paths)", () => {
 
     const graph = buildMonthlyAnalysisGraph();
 
-    const result = await graph.invoke({
-      analysisId: "test-id",
-      tenantId: "test-tenant",
-      costs: [],
-      traces: [],
-      errors: [],
-    });
-
-    expect(result.tenantId).toBe("test-tenant");
-    expect(result.rawEntries).toBeUndefined();
+    await expect(
+      graph.invoke({
+        analysisId: "test-id",
+        tenantId: "test-tenant",
+        costs: [],
+        traces: [],
+        errors: [],
+      }),
+    ).rejects.toThrow(/violação C5\/L1/);
     expect(callLlmMock).not.toHaveBeenCalled();
   });
 });
