@@ -36,6 +36,7 @@ export async function ingest(params: {
   buffer?: Buffer;        // para file uploads
   text?: string;          // para clipboard
   entries?: unknown[];    // para manual
+  skipAnalysis?: boolean; // true = parse+store apenas, sem enfileirar LLM (ex: plano student)
 }): Promise<IngestResult> {
   const { tenantId, referenceMonth, source } = params;
 
@@ -168,7 +169,9 @@ export async function ingest(params: {
   // 4. Determinar outcome e enfileirar classificação se possível
   const outcome = entries.length >= minEntries ? "completed" : "partial";
 
-  if (outcome === "completed") {
+  // skipAnalysis=true: apenas parse+store, sem LLM — usado por planos que não geram análise (ex: student).
+  // Dados ficam disponíveis imediatamente para GET /cashflow/summary (direction+amountCents+date).
+  if (outcome === "completed" && !params.skipAnalysis) {
     if (orchestrator === "langgraph") {
       await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId: trace.id });
       logger.info({ analysisId: analysis.id, tenantId }, "Ingest: despachando para LangGraph");
