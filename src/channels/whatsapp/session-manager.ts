@@ -40,7 +40,7 @@ export class RedisSessionStore implements IWhatsAppSessionStore {
 let _redis: IORedis | null = null;
 let _sessionStore: RedisSessionStore | null = null;
 
-function getRedis(): IORedis {
+export function getRedis(): IORedis {
   if (!_redis) {
     const url = process.env.REDIS_URL ?? "redis://localhost:6379";
     const isRailwayInternal = url.includes(".railway.internal");

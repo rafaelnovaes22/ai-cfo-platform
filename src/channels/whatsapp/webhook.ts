@@ -9,6 +9,7 @@ import { processMessage } from "./conversation-flow.js";
 import { getSessionStore } from "./session-manager.js";
 import { getWhatsAppAdapter } from "./adapter.js";
 import { verifyMetaSignature } from "./signature.js";
+import { claimMessage, releaseMessage } from "./dedup.js";
 
 export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
@@ -32,8 +33,12 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /webhooks/whatsapp — recebe eventos do WhatsApp (Meta Cloud API)
   // config.rawBody: fastify-raw-body preserva os bytes originais para o HMAC.
+  // config.rateLimit=false: o limite global é por-IP, mas todo webhook chega do
+  // MESMO IP da Meta — limitar por-IP bloquearia tráfego legítimo de todos os
+  // usuários ao mesmo tempo. A proteção real aqui é a assinatura (forjados → 401
+  // barato) + a dedup; por-IP não se aplica.
   f.post("/webhooks/whatsapp", {
-    config: { rawBody: true },
+    config: { rawBody: true, rateLimit: false },
     schema: {
       body: WaWebhookPayloadSchema,
       response: {
@@ -68,10 +73,18 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
       const sessionStore = getSessionStore();
       const adapter = getWhatsAppAdapter();
 
-      // Processa cada mensagem de forma assíncrona (não bloqueia o ACK)
+      // Dedup + processamento assíncrono (não bloqueia o ACK já enviado).
+      // A Meta reentrega o webhook (entrega ao-menos-uma-vez); claimMessage
+      // garante que cada messageId seja processado uma única vez.
       for (const msg of messages) {
-        processMessage(msg, { sessionStore, adapter }).catch((err) => {
+        if ((await claimMessage(msg.messageId)) === "duplicate") {
+          logger.info({ requestId, messageId: msg.messageId }, "whatsapp.webhook.duplicate.skipped");
+          continue;
+        }
+        processMessage(msg, { sessionStore, adapter }).catch(async (err) => {
           logger.error({ requestId, from: msg.from, err }, "whatsapp.message.process.error");
+          // Libera a dedup-key para permitir reprocesso na reentrega da Meta.
+          await releaseMessage(msg.messageId);
         });
       }
 
