@@ -16,7 +16,7 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
   f.get("/webhooks/whatsapp", {
     schema: {
       querystring: WaVerifyQuerySchema,
-      response: { 200: z.string() },
+      response: { 200: z.string(), 403: z.string() },
     },
     handler: async (req, reply) => {
       const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN ?? "";

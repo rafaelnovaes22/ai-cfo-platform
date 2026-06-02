@@ -194,7 +194,7 @@ export async function sendDailyCashflowToAll(adapter: IWhatsAppAdapter): Promise
       whatsappEnabled: true,
       whatsappPhone: { not: null },
       subscriptions: {
-        plan: { not: "student" },
+        some: { plan: { not: "student" } },
       },
     },
     select: {

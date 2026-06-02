@@ -29,6 +29,29 @@ export function filterEntriesByReferenceMonth(
   };
 }
 
+/**
+ * Mês (YYYY-MM) com mais lançamentos. Usado como competência-container quando
+ * keepAllEntries=true — o extrato pode cruzar meses, mas a MonthlyAnalysis precisa
+ * de uma chave (tenantId, referenceMonth). Empate resolve pelo primeiro mês visto.
+ */
+export function predominantMonth(entries: RawLedger[]): string | null {
+  if (entries.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    const ym = e.date.slice(0, 7);
+    counts.set(ym, (counts.get(ym) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = -1;
+  for (const [ym, c] of counts) {
+    if (c > bestCount) {
+      best = ym;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
 export async function ingest(params: {
   tenantId: string;
   referenceMonth: string; // "YYYY-MM"
@@ -37,6 +60,7 @@ export async function ingest(params: {
   text?: string;          // para clipboard
   entries?: unknown[];    // para manual
   skipAnalysis?: boolean; // true = parse+store apenas, sem enfileirar LLM (ex: plano student)
+  keepAllEntries?: boolean; // true = não recorta por competência; ingere o extrato inteiro (ex: fluxo de caixa do aluno)
 }): Promise<IngestResult> {
   const { tenantId, referenceMonth, source } = params;
 
@@ -63,11 +87,15 @@ export async function ingest(params: {
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
-  const effectiveReferenceMonth = parseResult.referenceMonth ?? referenceMonth;
-  const { entries, ignoredCount: outOfReferenceMonthCount } = filterEntriesByReferenceMonth(
-    parseResult.entries,
-    effectiveReferenceMonth,
-  );
+  // keepAllEntries (fluxo de caixa do aluno a partir de extrato): ingere todos os
+  // lançamentos do arquivo, sem recortar por competência — o período exibido vem do
+  // range real das datas. A competência-container usa o mês predominante só como chave.
+  const effectiveReferenceMonth = params.keepAllEntries
+    ? predominantMonth(parseResult.entries) ?? parseResult.referenceMonth ?? referenceMonth
+    : parseResult.referenceMonth ?? referenceMonth;
+  const { entries, ignoredCount: outOfReferenceMonthCount } = params.keepAllEntries
+    ? { entries: parseResult.entries, ignoredCount: 0 }
+    : filterEntriesByReferenceMonth(parseResult.entries, effectiveReferenceMonth);
   const { orphanCount } = parseResult;
   logger.info(
     {

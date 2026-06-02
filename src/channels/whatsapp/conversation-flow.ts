@@ -12,6 +12,7 @@ import { getCashflowSummaryDay, getCashflow } from "@/cashflow/service.js"
 import {
   formatCashflowSummary,
   formatCashflowPeriod,
+  formatCashflowStatement,
   formatWelcomeMenu,
   formatError,
   formatIngestReceived,
@@ -120,18 +121,63 @@ async function transitionTo(
   return updated
 }
 
-/** Executa o ingest em background sem bloquear a resposta ao usuário. */
+/**
+ * Calcula e envia o fluxo de caixa do período exato do extrato recém-ingerido.
+ * O range vem das datas reais dos lançamentos (min/max), não de um mês fixo —
+ * é o "conforme o extrato enviado". Sem LLM: pura agregação determinística.
+ */
+async function sendStatementCashflow(
+  phone: string,
+  tenantId: string,
+  analysisId: string,
+  adapter: IWhatsAppAdapter,
+): Promise<void> {
+  const prisma = getPrisma()
+  const range = await prisma.ledgerEntry.aggregate({
+    where: { analysisId },
+    _min: { date: true },
+    _max: { date: true },
+  })
+  const min = range._min.date
+  const max = range._max.date
+  if (!min || !max) {
+    logger.warn({ tenantId, analysisId }, "whatsapp:ingest — sem range de datas; não há caixa a enviar")
+    return
+  }
+
+  const requestId = randomUUID()
+  const cashflow = await getCashflow({
+    tenantId,
+    startDate: min.toISOString().slice(0, 10),
+    endDate: max.toISOString().slice(0, 10),
+    granularity: "daily",
+    requestId,
+  })
+  await adapter.sendText(phone, formatCashflowStatement(cashflow))
+}
+
+/**
+ * Executa o ingest em background sem bloquear a resposta ao usuário.
+ * Quando keepAllEntries=true (fluxo do aluno), já devolve o fluxo de caixa do
+ * extrato automaticamente — o aluno não precisa pedir.
+ */
 function ingestDocumentBackground(
   msg: WaIncomingMessage,
   tenantId: string,
   adapter: IWhatsAppAdapter,
-  opts: { skipAnalysis?: boolean },
+  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean },
 ): void {
-  ingestDoc(msg, tenantId, adapter, opts).then((result) => {
+  ingestDoc(msg, tenantId, adapter, opts).then(async (result) => {
     if ("error" in result) {
       logger.error({ tenantId, error: result.error }, "whatsapp:ingest — background ingest falhou")
-    } else {
-      logger.info({ tenantId, analysisId: result.analysisId, entryCount: result.entryCount }, "whatsapp:ingest — concluído")
+      await adapter.sendText(msg.from, result.error).catch((sendErr) => {
+        logger.error({ tenantId, sendErr }, "whatsapp:ingest — falha ao avisar erro de ingest ao usuário")
+      })
+      return
+    }
+    logger.info({ tenantId, analysisId: result.analysisId, entryCount: result.entryCount }, "whatsapp:ingest — concluído")
+    if (opts.keepAllEntries && result.entryCount > 0) {
+      await sendStatementCashflow(msg.from, tenantId, result.analysisId, adapter)
     }
   }).catch((err) => {
     logger.error({ tenantId, err }, "whatsapp:ingest — exceção no background ingest")
@@ -247,9 +293,13 @@ async function handleIngestDocument(
   await transitionTo(session, "INGEST_FLOW", deps.store, {
     context: { mediaId: msg.document?.id, filename },
   })
-  // Dispara ingest em background — student: só parse+store (zero LLM); pago: pipeline completo
+  // Dispara ingest em background — student: parse+store (zero LLM) + caixa do extrato;
+  // pago: pipeline completo (classificação → DRE → plano de ação).
   if (msg.document?.id && session.tenantId) {
-    ingestDocumentBackground(msg, session.tenantId, deps.adapter, { skipAnalysis: isStudent })
+    ingestDocumentBackground(msg, session.tenantId, deps.adapter, {
+      skipAnalysis: isStudent,
+      keepAllEntries: isStudent,
+    })
   }
 }
 
