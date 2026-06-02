@@ -8,6 +8,7 @@ import { extractMessages, extractStatuses } from "./message-parser.js";
 import { processMessage } from "./conversation-flow.js";
 import { getSessionStore } from "./session-manager.js";
 import { getWhatsAppAdapter } from "./adapter.js";
+import { verifyMetaSignature } from "./signature.js";
 
 export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
@@ -29,16 +30,31 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
     },
   });
 
-  // POST /webhooks/whatsapp — recebe eventos do Unnichat
+  // POST /webhooks/whatsapp — recebe eventos do WhatsApp (Meta Cloud API)
+  // config.rawBody: fastify-raw-body preserva os bytes originais para o HMAC.
   f.post("/webhooks/whatsapp", {
+    config: { rawBody: true },
     schema: {
       body: WaWebhookPayloadSchema,
-      response: { 200: z.object({ ok: z.boolean() }) },
+      response: {
+        200: z.object({ ok: z.boolean() }),
+        401: z.object({ message: z.string() }),
+      },
     },
     handler: async (req, reply) => {
+      // Autenticação: valida HMAC-SHA256 do corpo bruto contra X-Hub-Signature-256.
+      // Sem isso, qualquer um que descubra a URL poderia forjar mensagens.
+      const sigHeader = req.headers["x-hub-signature-256"];
+      const signature = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+      const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody;
+      if (!verifyMetaSignature(rawBody, signature, process.env.META_APP_SECRET)) {
+        logger.warn({ url: req.url }, "whatsapp.webhook.signature.invalid");
+        return reply.status(401).send({ message: "Assinatura inválida" });
+      }
+
       const requestId = randomUUID();
 
-      // Responde 200 imediatamente — Unnichat exige ACK rápido
+      // Responde 200 imediatamente — Meta exige ACK rápido
       void reply.send({ ok: true });
 
       const messages = extractMessages(req.body);
