@@ -64,8 +64,8 @@ export async function handleIngestDocument(
   msg: WaIncomingMessage,
   tenantId: string,
   adapter: IWhatsAppAdapter,
-  opts: { skipAnalysis?: boolean } = {},
-): Promise<{ analysisId: string; entryCount: number } | { error: string }> {
+  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean } = {},
+): Promise<{ analysisId: string; entryCount: number; referenceMonth: string } | { error: string }> {
   // 1. Validações iniciais
   if (msg.type !== "document" || !msg.document) {
     logger.warn({ tenantId, messageId: msg.messageId }, "whatsapp:ingest — mensagem sem documento")
@@ -119,6 +119,7 @@ export async function handleIngestDocument(
   // 4. Chamar ingest service
   let analysisId: string
   let entryCount: number
+  let resultReferenceMonth: string
 
   try {
     const result = await ingest({
@@ -127,6 +128,7 @@ export async function handleIngestDocument(
       source,
       buffer,
       skipAnalysis: opts.skipAnalysis,
+      keepAllEntries: opts.keepAllEntries,
     })
 
     if (result.outcome === "failed") {
@@ -144,6 +146,7 @@ export async function handleIngestDocument(
 
     analysisId = result.analysisId
     entryCount = result.entryCount
+    resultReferenceMonth = result.referenceMonth
   } catch (err) {
     logger.error(
       { tenantId, referenceMonth, source, err },
@@ -165,5 +168,5 @@ export async function handleIngestDocument(
     "whatsapp:ingest — documento processado com sucesso",
   )
 
-  return { analysisId, entryCount }
+  return { analysisId, entryCount, referenceMonth: resultReferenceMonth }
 }

@@ -140,9 +140,45 @@ export function formatError(
  */
 export function formatIngestReceived(filename: string, studentPlan = false): string {
   const body = studentPlan
-    ? "Lançamentos importados! Envie *caixa* para ver seu fluxo de caixa atualizado."
+    ? "Já estou lendo seus lançamentos e calculando o fluxo de caixa do extrato. Um instante…"
     : "Estou processando os lançamentos. Você será notificado assim que a análise ficar pronta."
   return `✅ *Arquivo recebido!*\n\n📄 ${filename}\n\n${body}`
+}
+
+/**
+ * Formata o fluxo de caixa calculado a partir de um extrato enviado pelo aluno.
+ * Usa o período real (range de datas) dos lançamentos do arquivo, não um mês fixo.
+ * Mostra o resultado do período (entradas − saídas), sempre calculável; o saldo
+ * final só aparece quando há saldo inicial conhecido.
+ */
+export function formatCashflowStatement(data: {
+  period: { startDate: string; endDate: string }
+  summary: {
+    closingBalanceCents: number | null
+    totalCreditsCents: number
+    totalDebitsCents: number
+    creditCount: number
+    debitCount: number
+  }
+}): string {
+  const { period, summary } = data
+  const resultCents = summary.totalCreditsCents - summary.totalDebitsCents
+
+  const lines: string[] = [
+    `📊 *Fluxo de caixa do extrato*`,
+    `🗓️ ${formatDate(period.startDate)} a ${formatDate(period.endDate)}`,
+    "",
+    `⬆️ Entradas: ${formatBRL(summary.totalCreditsCents)} (${summary.creditCount} lançamentos)`,
+    `⬇️ Saídas: ${formatBRL(summary.totalDebitsCents)} (${summary.debitCount} lançamentos)`,
+    `${resultCents >= 0 ? "🟢" : "🔴"} Resultado: ${formatBRL(resultCents)}`,
+  ]
+
+  if (summary.closingBalanceCents !== null) {
+    lines.push(`💰 Saldo final: ${formatBRL(summary.closingBalanceCents)}`)
+  }
+
+  lines.push("", "_Aicfo · Calculado a partir do seu extrato_")
+  return lines.join("\n")
 }
 
 /**

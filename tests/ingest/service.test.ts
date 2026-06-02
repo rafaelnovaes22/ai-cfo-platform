@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { filterEntriesByReferenceMonth, shouldSkipClassification } from "@/ingest/service.js";
+import { filterEntriesByReferenceMonth, shouldSkipClassification, predominantMonth } from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
 
 vi.mock("@/persistence/prisma.js", () => ({ getPrisma: vi.fn() }));
@@ -52,5 +52,31 @@ describe("ingest/service pipeline routing", () => {
 
     expect(result.ignoredCount).toBe(1);
     expect(result.entries.map((e) => e.description)).toEqual(["Marco 1", "Marco 2"]);
+  });
+});
+
+describe("ingest/service predominantMonth (competência-container p/ extrato keepAllEntries)", () => {
+  it("retorna null para lista vazia", () => {
+    expect(predominantMonth([])).toBeNull();
+  });
+
+  it("retorna o único mês quando todos os lançamentos são da mesma competência", () => {
+    expect(predominantMonth([entry({ date: "2026-05-01" }), entry({ date: "2026-05-28" })])).toBe("2026-05");
+  });
+
+  it("escolhe o mês com mais lançamentos quando o extrato cruza meses", () => {
+    expect(predominantMonth([
+      entry({ date: "2026-03-15" }),
+      entry({ date: "2026-05-01" }),
+      entry({ date: "2026-05-10" }),
+      entry({ date: "2026-05-20" }),
+    ])).toBe("2026-05");
+  });
+
+  it("desempata pelo primeiro mês visto", () => {
+    expect(predominantMonth([
+      entry({ date: "2026-03-15" }),
+      entry({ date: "2026-04-15" }),
+    ])).toBe("2026-03");
   });
 });
