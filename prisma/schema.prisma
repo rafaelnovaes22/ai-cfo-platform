@@ -16,27 +16,32 @@ datasource db {
 // ===== TENANT (empresa cliente) =====
 
 model Tenant {
-  id              String   @id @default(uuid())
+  id              String  @id @default(uuid())
   name            String
-  cnpj            String?  @unique
-  industrySegment String   @default("geral") // agencia | industria-leve | servicos-b2b | saas | varejo | geral
-  taxRegime       String   @default("simples") // simples | lucro-presumido | lucro-real
+  cnpj            String? @unique
+  industrySegment String  @default("geral") // agencia | industria-leve | servicos-b2b | saas | varejo | geral
+  taxRegime       String  @default("simples") // simples | lucro-presumido | lucro-real
 
   // Configuração por tenant via JSONB (C8 — sem branches por cliente)
   // Estrutura: { monthlyAnalysis: { toneOfVoice, ...}, ... }
-  productConfig   Json     @default("{}")
+  productConfig Json @default("{}")
 
   learningAutonomyState Json @default("{\"classification\":\"needs_review\",\"narrative\":\"needs_review\",\"action\":\"needs_review\"}")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // Canal WhatsApp (LGPD Art. 7 — opt-in explícito obrigatório)
+  whatsappPhone     String?   // número E.164 vinculado ao canal WhatsApp
+  whatsappOptInAt   DateTime? // timestamp do opt-in explícito (LGPD Art. 7)
+  whatsappEnabled   Boolean   @default(false)
 
-  users            User[]
-  subscriptions    Subscription[]
-  ledgerEntries    LedgerEntry[]
-  monthlyAnalyses  MonthlyAnalysis[]
-  apiTokens        ApiToken[]
-  memoryItems      TenantMemoryItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  subscriptions     Subscription[]
+  ledgerEntries     LedgerEntry[]
+  monthlyAnalyses   MonthlyAnalysis[]
+  apiTokens         ApiToken[]
+  memoryItems       TenantMemoryItem[]
   validationMetrics ValidationMetric[]
 
   @@index([industrySegment])
@@ -51,22 +56,22 @@ enum UserRole {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  email         String   @unique
-  passwordHash  String
-  name          String
-  role          UserRole @default(editor)
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(editor)
 
-  emailVerified Boolean  @default(false)
+  emailVerified Boolean @default(false)
 
-  lastLoginAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  sessions      Session[]
+  sessions            Session[]
   passwordResetTokens PasswordResetToken[]
 
   @@index([tenantId])
@@ -75,15 +80,15 @@ model User {
 // ===== PASSWORD RESET (Wave 2 — Onda 0 extension) =====
 
 model PasswordResetToken {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  tokenHash  String   @unique  // SHA-256 — token bruto entregue só por email
-  expiresAt  DateTime           // TTL 1h
-  usedAt     DateTime?          // single-use; null = ainda válido
+  tokenHash String    @unique // SHA-256 — token bruto entregue só por email
+  expiresAt DateTime // TTL 1h
+  usedAt    DateTime? // single-use; null = ainda válido
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -92,17 +97,17 @@ model PasswordResetToken {
 // ===== SESSION (refresh tokens) =====
 
 model Session {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  refreshTokenHash String  @unique
-  userAgent       String?
-  ipAddress       String?
-  expiresAt       DateTime
-  revokedAt       DateTime?
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -111,6 +116,7 @@ model Session {
 // ===== SUBSCRIPTION (plano + modo SHADOW/ASSISTED/AUTONOMOUS) =====
 
 enum SubscriptionPlan {
+  student  // free tier para estudantes — cashflow summary only
   trial
   lite
   pro
@@ -118,9 +124,9 @@ enum SubscriptionPlan {
 }
 
 enum SubscriptionMode {
-  shadow      // C4 — análise gerada mas não entregue
-  assisted    // C4 — entregue com revisão humana
-  autonomous  // C4 — entregue diretamente
+  shadow // C4 — análise gerada mas não entregue
+  assisted // C4 — entregue com revisão humana
+  autonomous // C4 — entregue diretamente
 }
 
 enum SubscriptionStatus {
@@ -131,28 +137,28 @@ enum SubscriptionStatus {
 }
 
 model Subscription {
-  id                    String             @id @default(uuid())
-  tenantId              String             @unique
-  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  plan                  SubscriptionPlan   @default(trial)
-  mode                  SubscriptionMode   @default(assisted)
-  status                SubscriptionStatus @default(active)
+  plan   SubscriptionPlan   @default(trial)
+  mode   SubscriptionMode   @default(assisted)
+  status SubscriptionStatus @default(active)
 
   // Stripe (billing — Onda 0)
-  stripeCustomerId      String?            @unique
-  stripeSubscriptionId  String?            @unique
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
 
-  trialEndsAt           DateTime?
-  currentPeriodStart    DateTime?
-  currentPeriodEnd      DateTime?
-  canceledAt            DateTime?
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  canceledAt         DateTime?
 
   // Mode promotion log (C4) — JSONB array de { from, to, at, approvedBy }
-  modeHistory           Json               @default("[]")
+  modeHistory Json @default("[]")
 
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([mode])
@@ -161,19 +167,19 @@ model Subscription {
 // ===== API TOKENS (tenant-config — Onda 0) =====
 
 model ApiToken {
-  id          String    @id @default(uuid())
-  tenantId    String
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  name        String
-  tokenHash   String    @unique  // SHA-256 — token real retornado uma vez e nunca armazenado
-  scopes      String[]  @default([])  // ex: ["analysis:read", "webhook:write"]
+  name      String
+  tokenHash String   @unique // SHA-256 — token real retornado uma vez e nunca armazenado
+  scopes    String[] @default([]) // ex: ["analysis:read", "webhook:write"]
 
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  revokedAt   DateTime?
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
 }
@@ -181,96 +187,96 @@ model ApiToken {
 // ===== ONDA 1 — monthly-analysis =====
 
 enum LedgerDirection {
-  credit  // entrada
-  debit   // saída
+  credit // entrada
+  debit // saída
 }
 
 enum AnalysisStatus {
-  pending     // aguardando lançamentos suficientes
-  generating  // pipeline rodando
-  ready       // gerado, aguardando entrega (SHADOW: Rafael revisa)
-  delivered   // entregue ao cliente (ASSISTED/AUTONOMOUS)
-  approved    // cliente aprovou (fecha o mês)
+  pending // aguardando lançamentos suficientes
+  generating // pipeline rodando
+  ready // gerado, aguardando entrega (SHADOW: Rafael revisa)
+  delivered // entregue ao cliente (ASSISTED/AUTONOMOUS)
+  approved // cliente aprovou (fecha o mês)
 }
 
 enum CardType {
-  critical_gap  // gargalo crítico
-  attention     // atenção
-  healthy       // saudável
+  critical_gap // gargalo crítico
+  attention // atenção
+  healthy // saudável
 }
 
 enum PlanHorizon {
-  short   // curto prazo (até 30 dias)
-  medium  // médio prazo (30-90 dias)
-  long    // longo prazo (90+ dias)
+  short // curto prazo (até 30 dias)
+  medium // médio prazo (30-90 dias)
+  long // longo prazo (90+ dias)
 }
 
 model LedgerEntry {
-  id          String         @id @default(uuid())
-  tenantId    String
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  analysisId  String?
-  analysis    MonthlyAnalysis? @relation(fields: [analysisId], references: [id])
+  id         String           @id @default(uuid())
+  tenantId   String
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  analysisId String?
+  analysis   MonthlyAnalysis? @relation(fields: [analysisId], references: [id])
 
   date        DateTime
   description String
-  amountCents Int            // valores em centavos — nunca Float (evita arredondamento)
+  amountCents Int // valores em centavos — nunca Float (evita arredondamento)
   direction   LedgerDirection
 
   // Flywheel de treinamento — pares rotulados gerados pelo pipeline SHADOW/ASSISTED
-  predictedCategory      String?  // saída do modelo atual
+  predictedCategory        String? // saída do modelo atual
   classificationConfidence Float? // 0.0-1.0; <0.7 → revisão necessária
-  correctedCategory      String?  // correção do humano (Rafael ou cliente)
-  confirmedCategory      String?  // categoria final aceita
-  correctionSource       String?  // "rafael" | "client" | "auto-approved" | "needs_review"
+  correctedCategory        String? // correção do humano (Rafael ou cliente)
+  confirmedCategory        String? // categoria final aceita
+  correctionSource         String? // "rafael" | "client" | "auto-approved" | "needs_review"
 
-  importedAt  DateTime       @default(now())
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  importedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([tenantId])
   @@index([analysisId])
   @@index([date])
-  @@index([tenantId, date])              // cashflow: queries de período por tenant
+  @@index([tenantId, date]) // cashflow: queries de período por tenant
   @@index([tenantId, confirmedCategory]) // acelera extração de dataset de treinamento
 }
 
 model MonthlyAnalysis {
-  id             String           @id @default(uuid())
-  tenantId       String
-  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  referenceMonth String           // "2026-04" — YYYY-MM do mês de fechamento
+  referenceMonth String // "2026-04" — YYYY-MM do mês de fechamento
   status         AnalysisStatus   @default(pending)
   mode           SubscriptionMode // snapshot do modo no momento da geração (C4)
 
-  generatedAt    DateTime?
-  deliveredAt    DateTime?
-  approvedAt     DateTime?
+  generatedAt DateTime?
+  deliveredAt DateTime?
+  approvedAt  DateTime?
 
   // Conteúdo gerado (JSONB — estrutura evolui sem migrations)
-  dreJson        Json?            // DRE classificado estruturado
-  anomaliesJson  Json?            // anomalias detectadas (Anomaly[])
-  narrativeJson  Json?            // resumo dos 3 cards
-  actionPlanJson Json?            // resumo do plano 3-horizontes
+  dreJson        Json? // DRE classificado estruturado
+  anomaliesJson  Json? // anomalias detectadas (Anomaly[])
+  narrativeJson  Json? // resumo dos 3 cards
+  actionPlanJson Json? // resumo do plano 3-horizontes
 
   // Feedback do cliente em ASSISTED
   clientEditedNarrative  String?
   clientEditedActionPlan String?
 
   // Saldo inicial de caixa — informado pelo cliente no momento do import
-  openingBalanceCents Int?        // centavos; null = não informado (runway não calculado)
+  openingBalanceCents Int? // centavos; null = não informado (runway não calculado)
 
   // Rastreabilidade de custo (C3) e telemetria (C6)
-  costCents      Int?             // custo real de inferência em centavos
-  traceId        String?          // ID do trace do provider canônico (LangSmith) para auditoria
+  costCents Int? // custo real de inferência em centavos
+  traceId   String? // ID do trace do provider canônico (LangSmith) para auditoria
 
   ledgerEntries  LedgerEntry[]
   narrativeCards NarrativeCard[]
   actionItems    ActionPlanItem[]
 
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, referenceMonth]) // 1 análise por empresa por mês
   @@index([tenantId])
@@ -282,44 +288,44 @@ model NarrativeCard {
   analysisId String
   analysis   MonthlyAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 
-  cardType   CardType
-  title      String
-  body       String
-  evidence   Json            // [{ metric: string, value: number, unit: string }]
+  cardType CardType
+  title    String
+  body     String
+  evidence Json // [{ metric: string, value: number, unit: string }]
 
   // Feedback ASSISTED
   clientApproved Boolean?
   clientComment  String?
 
-  createdAt  DateTime        @default(now())
+  createdAt DateTime @default(now())
 
   @@index([analysisId])
 }
 
 model ActionPlanItem {
-  id           String          @id @default(uuid())
-  analysisId   String
-  analysis     MonthlyAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  id         String          @id @default(uuid())
+  analysisId String
+  analysis   MonthlyAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 
   horizon      PlanHorizon
   title        String
   description  String
-  effortLevel  String          // "low" | "medium" | "high"
-  riskLevel    String          // "low" | "medium" | "high"
-  impactCents  Int             // estimativa de impacto financeiro em centavos
+  effortLevel  String // "low" | "medium" | "high"
+  riskLevel    String // "low" | "medium" | "high"
+  impactCents  Int // estimativa de impacto financeiro em centavos
   deadlineDays Int?
-  doneWhen     String?         // critério mensurável de conclusão ("feita quando...")
+  doneWhen     String? // critério mensurável de conclusão ("feita quando...")
 
   // Feedback ASSISTED
   clientApproved Boolean?
   clientComment  String?
 
   // Lifecycle de execução — sinal de validação para self-harness (ADR-011 Etapa 2)
-  status               String    @default("pending") // "pending" | "in_progress" | "blocked" | "done" | "abandoned"
-  statusReason         String?
-  lastStatusUpdatedAt  DateTime?
+  status              String    @default("pending") // "pending" | "in_progress" | "blocked" | "done" | "abandoned"
+  statusReason        String?
+  lastStatusUpdatedAt DateTime?
 
-  createdAt    DateTime        @default(now())
+  createdAt DateTime @default(now())
 
   @@index([analysisId])
 }
@@ -327,69 +333,69 @@ model ActionPlanItem {
 // ===== ONDA 1 — learning / memória per-tenant (ADR-011 Etapa 3) =====
 
 model TenantMemoryItem {
-  id          String   @id @default(uuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  kind        String   // "fact" | "preference" | "pattern" | "interpretation"
-  content     Json
-  confidence  Float    @default(1.0)
-  evidenceRefs Json    @default("[]")
+  kind         String // "fact" | "preference" | "pattern" | "interpretation"
+  content      Json
+  confidence   Float  @default(1.0)
+  evidenceRefs Json   @default("[]")
 
-  clientEdited      Boolean   @default(false)
-  dismissedAt       DateTime?
-  dismissalReason   String?
+  clientEdited    Boolean   @default(false)
+  dismissedAt     DateTime?
+  dismissalReason String?
 
-  contributesToGlobal Boolean  @default(false)
+  contributesToGlobal Boolean @default(false)
   globalSignalId      String?
 
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([tenantId, kind])
   @@index([globalSignalId])
 }
 
 model GlobalSignal {
-  id               String   @id @default(uuid())
+  id               String @id @default(uuid())
   segment          String
-  kind             String   // "fact" | "pattern"
+  kind             String // "fact" | "pattern"
   content          Json
-  contributorCount Int      @default(0)
+  contributorCount Int    @default(0)
 
-  promotedAt  DateTime  @default(now())
-  retiredAt   DateTime?
+  promotedAt DateTime  @default(now())
+  retiredAt  DateTime?
 
   @@index([segment, kind])
 }
 
 model ValidationMetric {
-  id             String   @id @default(uuid())
-  tenantId       String
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  agentName      String   // "classification" | "narrative-synthesis" | "action-planning"
-  confidenceBand String?  // "easy" | "hard" | null
-  signal         String   // "positive" | "negative"
-  refType        String   // "ledger_entry" | "narrative_card" | "action_item"
+  agentName      String // "classification" | "narrative-synthesis" | "action-planning"
+  confidenceBand String? // "easy" | "hard" | null
+  signal         String // "positive" | "negative"
+  refType        String // "ledger_entry" | "narrative_card" | "action_item"
   refId          String
 
-  observedAt  DateTime  @default(now())
+  observedAt DateTime @default(now())
 
   @@index([tenantId, agentName, observedAt])
 }
 
 model LegalRetention {
-  id                String   @id @default(uuid())
-  originalTenantId  String
-  cnpj              String?
+  id               String  @id @default(uuid())
+  originalTenantId String
+  cnpj             String?
 
-  retainedData      Json
-  retentionUntil    DateTime
+  retainedData   Json
+  retentionUntil DateTime
 
-  forgottenAt       DateTime @default(now())
-  termAcceptedHash  String
+  forgottenAt      DateTime @default(now())
+  termAcceptedHash String
 
   @@index([retentionUntil])
 }

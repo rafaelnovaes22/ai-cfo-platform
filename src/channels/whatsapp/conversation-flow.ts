@@ -1,0 +1,488 @@
+// conversation-flow.ts — whatsapp-channel
+// State machine: processa cada mensagem recebida e executa a resposta via adapter.
+// C7 — depende somente de IWhatsAppAdapter e IWhatsAppSessionStore (abstrações); provider é injetado.
+// C8 — tenantId sempre resolvido da sessão Redis; nunca hardcoded.
+
+import { randomUUID } from "node:crypto"
+import { SignJWT } from "jose"
+
+import { logger } from "@/observability/logger.js"
+import { getPrisma } from "@/persistence/prisma.js"
+import { getCashflowSummaryDay, getCashflow } from "@/cashflow/service.js"
+import {
+  formatCashflowSummary,
+  formatCashflowPeriod,
+  formatCashflowStatement,
+  formatWelcomeMenu,
+  formatError,
+  formatIngestReceived,
+} from "./response-formatter.js"
+import { classifyCommand, isSupportedDocument } from "./message-parser.js"
+import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
+import type { WaIncomingMessage, WaSession, WaSessionStep, IWhatsAppSessionStore, IWhatsAppAdapter } from "./types.js"
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Retorna hoje em YYYY-MM-DD no timezone de São Paulo. */
+function todayBRT(): string {
+  return new Date()
+    .toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+    .split("/")
+    .reverse()
+    .join("-") // dd/mm/yyyy → yyyy-mm-dd
+}
+
+/**
+ * Retorna { startDate, endDate } para os últimos N dias (inclusive hoje).
+ * Datas em YYYY-MM-DD no timezone de São Paulo.
+ */
+function lastNDaysBRT(n: number): { startDate: string; endDate: string } {
+  const tz = "America/Sao_Paulo"
+  const endDate = new Date().toLocaleDateString("pt-BR", { timeZone: tz }).split("/").reverse().join("-")
+  const startMs = Date.now() - (n - 1) * 24 * 60 * 60 * 1000
+  const startDate = new Date(startMs).toLocaleDateString("pt-BR", { timeZone: tz }).split("/").reverse().join("-")
+  return { startDate, endDate }
+}
+
+/** Gera um token JWT temporário (1h) para vinculação WhatsApp. */
+async function signWhatsAppLinkToken(phone: string): Promise<string> {
+  const secret = process.env["JWT_SECRET"]
+  if (!secret) throw new Error("JWT_SECRET não configurado")
+  const key = new TextEncoder().encode(secret)
+  return new SignJWT({ whatsappPhone: phone, purpose: "whatsapp_link" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(key)
+}
+
+/**
+ * Busca tenant pelo número E.164 e retorna apenas os campos necessários.
+ * Retorna null se não encontrado ou se whatsappEnabled=false.
+ */
+async function findTenantByPhone(phone: string): Promise<{
+  id: string
+  name: string
+  plan: string
+} | null> {
+  const prisma = getPrisma()
+  const tenant = await prisma.tenant.findFirst({
+    where: { whatsappPhone: phone, whatsappEnabled: true },
+    select: {
+      id: true,
+      name: true,
+      subscriptions: {
+        select: { plan: true },
+        take: 1,
+      },
+    },
+  })
+  if (!tenant) return null
+  return {
+    id: tenant.id,
+    name: tenant.name,
+    plan: tenant.subscriptions[0]?.plan ?? "trial",
+  }
+}
+
+/** Constrói uma sessão nova (ou IDLE) para o número dado. */
+function buildFreshSession(phone: string): WaSession {
+  const now = new Date().toISOString()
+  return {
+    phoneE164: phone,
+    tenantId: null,
+    step: "IDLE",
+    context: {},
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+/** Atualiza o step da sessão e persiste. */
+async function transitionTo(
+  session: WaSession,
+  nextStep: WaSessionStep,
+  store: IWhatsAppSessionStore,
+  extra?: Partial<WaSession>,
+): Promise<WaSession> {
+  const updated: WaSession = {
+    ...session,
+    ...extra,
+    step: nextStep,
+    updatedAt: new Date().toISOString(),
+  }
+  await store.set(updated)
+  logger.info(
+    { from: session.phoneE164, step: nextStep, prevStep: session.step },
+    "whatsapp:flow — step transition",
+  )
+  return updated
+}
+
+/**
+ * Calcula e envia o fluxo de caixa do período exato do extrato recém-ingerido.
+ * O range vem das datas reais dos lançamentos (min/max), não de um mês fixo —
+ * é o "conforme o extrato enviado". Sem LLM: pura agregação determinística.
+ */
+async function sendStatementCashflow(
+  phone: string,
+  tenantId: string,
+  analysisId: string,
+  adapter: IWhatsAppAdapter,
+): Promise<void> {
+  const prisma = getPrisma()
+  const range = await prisma.ledgerEntry.aggregate({
+    where: { analysisId },
+    _min: { date: true },
+    _max: { date: true },
+  })
+  const min = range._min.date
+  const max = range._max.date
+  if (!min || !max) {
+    logger.warn({ tenantId, analysisId }, "whatsapp:ingest — sem range de datas; não há caixa a enviar")
+    return
+  }
+
+  const requestId = randomUUID()
+  const cashflow = await getCashflow({
+    tenantId,
+    startDate: min.toISOString().slice(0, 10),
+    endDate: max.toISOString().slice(0, 10),
+    granularity: "daily",
+    requestId,
+  })
+  await adapter.sendText(phone, formatCashflowStatement(cashflow))
+}
+
+/**
+ * Executa o ingest em background sem bloquear a resposta ao usuário.
+ * Quando keepAllEntries=true (fluxo do aluno), já devolve o fluxo de caixa do
+ * extrato automaticamente — o aluno não precisa pedir.
+ */
+function ingestDocumentBackground(
+  msg: WaIncomingMessage,
+  tenantId: string,
+  adapter: IWhatsAppAdapter,
+  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean },
+): void {
+  ingestDoc(msg, tenantId, adapter, opts).then(async (result) => {
+    if ("error" in result) {
+      logger.error({ tenantId, error: result.error }, "whatsapp:ingest — background ingest falhou")
+      await adapter.sendText(msg.from, result.error).catch((sendErr) => {
+        logger.error({ tenantId, sendErr }, "whatsapp:ingest — falha ao avisar erro de ingest ao usuário")
+      })
+      return
+    }
+    logger.info({ tenantId, analysisId: result.analysisId, entryCount: result.entryCount }, "whatsapp:ingest — concluído")
+    if (opts.keepAllEntries && result.entryCount > 0) {
+      await sendStatementCashflow(msg.from, tenantId, result.analysisId, adapter)
+    }
+  }).catch((err) => {
+    logger.error({ tenantId, err }, "whatsapp:ingest — exceção no background ingest")
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Handlers por step
+// ---------------------------------------------------------------------------
+
+async function handleIdleOrOnboarding(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const tenant = await findTenantByPhone(msg.from)
+
+  if (tenant) {
+    // Tenant encontrado e habilitado → entrar direto no menu
+    await transitionTo(session, "MENU", deps.store, { tenantId: tenant.id })
+    const menuText = formatWelcomeMenu(tenant.name, tenant.plan)
+    await deps.adapter.sendText(msg.from, menuText)
+    return
+  }
+
+  // Tenant não encontrado ou whatsappEnabled=false → enviar magic link
+  const token = await signWhatsAppLinkToken(msg.from)
+  const link = `https://app.aicfo.com.br/whatsapp/auth?token=${token}`
+  const text =
+    `Olá! 👋 Para usar o Aicfo pelo WhatsApp, vincule seu número à sua conta:\n\n` +
+    `🔗 ${link}\n\n` +
+    `_O link expira em 1 hora._`
+
+  await deps.adapter.sendText(msg.from, text)
+  await transitionTo(session, "AWAITING_AUTH", deps.store)
+}
+
+async function handleAwaitingAuth(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  // Verificar se o tenant foi vinculado desde a última mensagem
+  const tenant = await findTenantByPhone(msg.from)
+
+  if (tenant) {
+    await transitionTo(session, "MENU", deps.store, { tenantId: tenant.id })
+    const menuText = formatWelcomeMenu(tenant.name, tenant.plan)
+    await deps.adapter.sendText(msg.from, menuText)
+    return
+  }
+
+  // Ainda sem vínculo — reenviar link
+  const token = await signWhatsAppLinkToken(msg.from)
+  const link = `https://app.aicfo.com.br/whatsapp/auth?token=${token}`
+  const text =
+    `⏳ Seu número ainda não está vinculado a nenhuma conta Aicfo.\n\n` +
+    `Use o link para vincular:\n🔗 ${link}\n\n` +
+    `_O link expira em 1 hora._`
+
+  await deps.adapter.sendText(msg.from, text)
+  // Manter step em AWAITING_AUTH (sem transição)
+}
+
+async function handleCashflowQuery(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  // tenantId garantido pela transição para CASHFLOW_QUERY somente quando session.tenantId != null
+  const tenantId = session.tenantId as string
+  const requestId = randomUUID()
+  const date = todayBRT()
+
+  const summaryDay = await getCashflowSummaryDay({ tenantId, date, requestId })
+  const text = formatCashflowSummary(summaryDay)
+  await deps.adapter.sendText(msg.from, text)
+  await transitionTo(session, "MENU", deps.store)
+}
+
+async function handleCashflowWeek(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const tenantId = session.tenantId as string
+  const requestId = randomUUID()
+  const { startDate, endDate } = lastNDaysBRT(7)
+
+  const cashflowData = await getCashflow({
+    tenantId,
+    startDate,
+    endDate,
+    granularity: "daily",
+    requestId,
+  })
+
+  const text = formatCashflowPeriod(cashflowData)
+  await deps.adapter.sendText(msg.from, text)
+  await transitionTo(session, "MENU", deps.store)
+}
+
+async function handleIngestDocument(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+  plan: string,
+): Promise<void> {
+  const filename = msg.document?.filename ?? "arquivo"
+  const isStudent = plan === "student"
+  // Confirma recebimento imediatamente
+  await deps.adapter.sendText(msg.from, formatIngestReceived(filename, isStudent))
+  await transitionTo(session, "INGEST_FLOW", deps.store, {
+    context: { mediaId: msg.document?.id, filename },
+  })
+  // Dispara ingest em background — student: parse+store (zero LLM) + caixa do extrato;
+  // pago: pipeline completo (classificação → DRE → plano de ação).
+  if (msg.document?.id && session.tenantId) {
+    ingestDocumentBackground(msg, session.tenantId, deps.adapter, {
+      skipAnalysis: isStudent,
+      keepAllEntries: isStudent,
+    })
+  }
+}
+
+/**
+ * Busca o plano da subscription do tenant.
+ * Retorna "trial" como fallback se não encontrado.
+ */
+async function getTenantPlan(tenantId: string): Promise<string> {
+  const prisma = getPrisma()
+  const subscription = await prisma.subscription.findUnique({
+    where: { tenantId },
+    select: { plan: true },
+  })
+  return subscription?.plan ?? "trial"
+}
+
+async function handleMenu(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const tenantId = session.tenantId as string
+
+  // Documento recebido → ingest permitido para todos os planos.
+  // Plano student: skipAnalysis=true (parse+store apenas, sem LLM).
+  // Planos pagos: pipeline completo (classificação → DRE → plano de ação).
+  if (isSupportedDocument(msg)) {
+    const plan = await getTenantPlan(tenantId)
+    await handleIngestDocument(msg, session, deps, plan)
+    return
+  }
+
+  // Classificar comando a partir do texto (ou button_reply)
+  const rawText = msg.type === "button_reply"
+    ? (msg.buttonReply?.title ?? "")
+    : (msg.text ?? "")
+
+  const command = classifyCommand(rawText)
+
+  logger.info(
+    { from: msg.from, step: session.step, command },
+    "whatsapp:flow — command dispatched",
+  )
+
+  switch (command) {
+    case "MENU": {
+      const plan = await getTenantPlan(tenantId)
+      const prisma = getPrisma()
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
+      const menuText = formatWelcomeMenu(tenant?.name ?? "", plan)
+      await deps.adapter.sendText(msg.from, menuText)
+      break
+    }
+
+    case "CAIXA": {
+      await transitionTo(session, "CASHFLOW_QUERY", deps.store)
+      await handleCashflowQuery(msg, { ...session, step: "CASHFLOW_QUERY" }, deps)
+      break
+    }
+
+    case "SEMANA": {
+      await handleCashflowWeek(msg, session, deps)
+      break
+    }
+
+    case "ANALISE": {
+      // Verificar plano — student não acessa análise
+      const plan = await getTenantPlan(tenantId)
+      if (plan === "student") {
+        await deps.adapter.sendText(msg.from, formatError("PLAN_LIMIT"))
+        return
+      }
+      // Redirecionar ao app para análise completa
+      const text =
+        `📊 *Análise financeira mensal*\n\n` +
+        `Acesse o app para ver sua análise completa:\n` +
+        `🔗 https://app.aicfo.com.br/hub\n\n` +
+        `_Aicfo · CFO-IA_`
+      await deps.adapter.sendText(msg.from, text)
+      break
+    }
+
+    case "STATUS": {
+      const plan = await getTenantPlan(tenantId)
+      const text =
+        `ℹ️ *Status da sua conta*\n\n` +
+        `Plano: *${plan}*\n` +
+        `Canal WhatsApp: ✅ Ativo\n\n` +
+        `_Aicfo · CFO-IA_`
+      await deps.adapter.sendText(msg.from, text)
+      break
+    }
+
+    case "UNKNOWN":
+    default: {
+      // Texto não reconhecido → reenviar menu de ajuda
+      const plan = await getTenantPlan(tenantId)
+      const prisma = getPrisma()
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
+      const helpText = formatWelcomeMenu(tenant?.name ?? "", plan)
+      await deps.adapter.sendText(msg.from, helpText)
+      break
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entrypoint público
+// ---------------------------------------------------------------------------
+
+/**
+ * Processa uma mensagem recebida do WhatsApp e executa a resposta via adapter.
+ * Garante que o usuário sempre recebe uma resposta — em caso de erro inesperado,
+ * envia formatError("GENERIC") e retorna o step para MENU.
+ *
+ * C8 — tenantId sempre vem da sessão Redis; nunca hardcoded.
+ */
+export async function processMessage(
+  msg: WaIncomingMessage,
+  deps: {
+    sessionStore: IWhatsAppSessionStore
+    adapter: IWhatsAppAdapter
+  },
+): Promise<void> {
+  const { sessionStore, adapter } = deps
+
+  // Carregar ou inicializar sessão
+  let session = await sessionStore.get(msg.from) ?? buildFreshSession(msg.from)
+
+  logger.info(
+    { from: msg.from, step: session.step, messageId: msg.messageId, type: msg.type },
+    "whatsapp:flow — message received",
+  )
+
+  try {
+    switch (session.step) {
+      case "IDLE":
+      case "ONBOARDING":
+        await handleIdleOrOnboarding(msg, session, { store: sessionStore, adapter })
+        break
+
+      case "AWAITING_AUTH":
+        await handleAwaitingAuth(msg, session, { store: sessionStore, adapter })
+        break
+
+      case "MENU":
+        await handleMenu(msg, session, { store: sessionStore, adapter })
+        break
+
+      case "CASHFLOW_QUERY":
+        // Pode chegar nova mensagem enquanto query está em andamento — tratar como MENU
+        await handleMenu(msg, session, { store: sessionStore, adapter })
+        break
+
+      case "INGEST_FLOW":
+        // Documento adicional ou mensagem de texto durante ingest → retornar ao menu
+        await transitionTo(session, "MENU", sessionStore)
+        await handleMenu(msg, { ...session, step: "MENU" }, { store: sessionStore, adapter })
+        break
+
+      default: {
+        // Step desconhecido — resetar para MENU como salvaguarda
+        const _exhaustive: never = session.step
+        logger.warn({ from: msg.from, step: _exhaustive }, "whatsapp:flow — step desconhecido, resetando para MENU")
+        session = await transitionTo(session, "MENU", sessionStore, { tenantId: session.tenantId })
+        await handleMenu(msg, session, { store: sessionStore, adapter })
+      }
+    }
+  } catch (err) {
+    logger.error(
+      { from: msg.from, step: session.step, err },
+      "whatsapp:flow — erro inesperado; enviando GENERIC",
+    )
+    try {
+      await adapter.sendText(msg.from, formatError("GENERIC"))
+    } catch (sendErr) {
+      logger.error({ from: msg.from, sendErr }, "whatsapp:flow — falha ao enviar mensagem de erro fallback")
+    }
+    // Tentar resetar step para MENU para não travar a sessão
+    try {
+      await transitionTo(session, "MENU", sessionStore)
+    } catch (resetErr) {
+      logger.error({ from: msg.from, resetErr }, "whatsapp:flow — falha ao resetar step para MENU")
+    }
+  }
+}
