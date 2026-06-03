@@ -1,4 +1,5 @@
 import { runClarityJudgeAgentWithTelemetry } from "@/monthly-analysis/agents/classification.js";
+import { runChunkedWithTelemetry } from "@/monthly-analysis/agents/chunk-runner.js";
 import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { JudgeInput } from "@/classification/judge.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
@@ -11,10 +12,12 @@ export async function clarityJudgeNode(
     description: entry.normalizedDescription,
   }));
 
-  const { data, response, latencyMs } = await runClarityJudgeAgentWithTelemetry(inputs, {
-    tenantId: state.tenantId,
-    traceId: state.traceId,
-  });
+  // Lotes paralelos: avaliação de clareza é por-lançamento (ver chunk-runner.ts).
+  const { data, response, latencyMs } = await runChunkedWithTelemetry(
+    inputs,
+    { tenantId: state.tenantId, traceId: state.traceId },
+    runClarityJudgeAgentWithTelemetry,
+  );
 
   const { costs, traces } = buildAgentTelemetry({
     agent: "clarity-judge",

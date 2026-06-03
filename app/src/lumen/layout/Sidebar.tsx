@@ -8,6 +8,7 @@ import { routes } from "./Topbar.tsx";
 import { NavLink } from "react-router-dom";
 import { api } from "@/lib/api/index.js";
 import { AnalysisPicker } from "../components/AnalysisPicker.tsx";
+import NotificationButton from "@/components/NotificationButton.tsx";
 
 const map: Record<string, string> = {
   "/": "Hub de análise",
@@ -191,6 +192,7 @@ export function Sidebar() {
               }`}
             ></span>
           </div>
+          <NotificationButton />
           <div className="relative" ref={ref}>
             <button
               onClick={() => setOpen((v) => !v)}
