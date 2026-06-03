@@ -316,12 +316,20 @@ function parseHumanNumber(raw: string): number {
 function isDoneWhenMeasurable(doneWhen: string): boolean {
   const text = doneWhen.trim().toLowerCase();
   if (text.length < 8) return false;
+  // Frases-clichê sem nenhum número/prazo continuam reprovadas.
   if (/cliente satisfeito|feito|ok|concluido|acompanhar|melhorar/.test(text) && !/\d|r\$|%|>=|<=/.test(text)) {
     return false;
   }
   const hasNumberOrDeadline = /\d|r\$|%|>=|<=/.test(text);
-  const hasVerification = /assinado|registrad|medid|publicad|reduzid|abaixo|acima|até|ate|conclu|homologad|aprovad|comparad|cai|recuperad|recebimento/.test(text);
-  return hasNumberOrDeadline && hasVerification;
+  // Verbo de resultado observável — família ampla por radical ("reduz" cobre
+  // redução/reduzido/reduzindo; "implant" cobre implantado/implantação etc.).
+  const hasResultVerb =
+    /assinad|registrad|medid|public|reduz|aplicad|implement|implant|renegoci|revisad|homologad|aprovad|comparad|recuperad|recebiment|economi|cancelad|cortad|atingid|alcanc|alcanç|abaixo|acima|excede|saldo|confirmad|vis[íi]vel/.test(text);
+  // Âncora temporal/documento concreta — torna a meta verificável no tempo,
+  // mesmo quando o verbo não estiver na lista (ex.: "...na próxima fatura").
+  const hasTemporalAnchor =
+    /m[êe]s|meses|fatura|folha|fechamento|pr[óo]xim|trimestre|semana|\bdias?\b|balanc|extrato|demonstrativ|contrato|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{4}-\d{2}/.test(text);
+  return hasNumberOrDeadline && (hasResultVerb || hasTemporalAnchor);
 }
 
 function isImpactImplausible(action: ActionPlanItemDraft, receitaBruta: number): boolean {
