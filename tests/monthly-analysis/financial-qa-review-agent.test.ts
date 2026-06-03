@@ -215,7 +215,7 @@ describe("runFinancialQaReviewAgent", () => {
     actionPlan: coherentPlan(),
   };
 
-  it("retorna blocker quando narrativa cita número errado da DRE (NUMBER_MISMATCH)", async () => {
+  it("rebaixa NUMBER_MISMATCH do LLM a warning — LLM é advisory, não bloqueia", async () => {
     const mockReview: QaReview = {
       publishable: false,
       issues: [
@@ -247,11 +247,13 @@ describe("runFinancialQaReviewAgent", () => {
       taxRegime: "simples",
     });
 
-    expect(result.publishable).toBe(false);
+    // Determinístico aprovou (baseState é coerente) → LLM roda só como advisory:
+    // o blocker do LLM vira warning, publishable=true, sem retry.
+    expect(result.publishable).toBe(true);
     expect(result.issues).toHaveLength(1);
-    expect(result.issues[0]?.severity).toBe("blocker");
+    expect(result.issues[0]?.severity).toBe("warning");
     expect(result.issues[0]?.code).toBe("NUMBER_MISMATCH");
-    expect(result.retryTargets).toEqual(["narrative-synthesis"]);
+    expect(result.retryTargets).toEqual([]);
 
     expect(callLlmMock).toHaveBeenCalledWith(expect.objectContaining({
       task: "financial-qa-review",
@@ -261,7 +263,7 @@ describe("runFinancialQaReviewAgent", () => {
     }));
   });
 
-  it("retorna blocker quando ação não tem doneWhen mensurável (MISSING_DONEWHEN)", async () => {
+  it("rebaixa MISSING_DONEWHEN do LLM a warning — advisory não dispara retry", async () => {
     const mockReview: QaReview = {
       publishable: false,
       issues: [
@@ -287,9 +289,10 @@ describe("runFinancialQaReviewAgent", () => {
 
     const result = await runFinancialQaReviewAgent(baseState, { tenantId: "tenant-1" });
 
-    expect(result.publishable).toBe(false);
+    expect(result.publishable).toBe(true);
+    expect(result.issues[0]?.severity).toBe("warning");
     expect(result.issues[0]?.code).toBe("MISSING_DONEWHEN");
-    expect(result.retryTargets).toEqual(["action-planning"]);
+    expect(result.retryTargets).toEqual([]);
   });
 
   it("retorna publishable=true quando análise está coerente", async () => {

@@ -37,8 +37,10 @@ export async function runFinancialQaReviewAgent(
 }
 
 /**
- * Variante com telemetria. Quando o pré-checador determinístico já reprova,
- * o LLM não é chamado e retornamos NOOP_LLM_RESPONSE — o nó ainda emite trace.
+ * Variante com telemetria. O pré-checador determinístico é a ÚNICA fonte de
+ * bloqueio: se ele reprova, o LLM nem é chamado (retorna NOOP). Se ele aprova,
+ * o LLM roda apenas como ADVISORY — seus issues viram `warning` e não reprovam
+ * a publicação nem disparam retry.
  */
 export async function runFinancialQaReviewAgentWithTelemetry(
   state: Pick<
@@ -87,8 +89,19 @@ export async function runFinancialQaReviewAgentWithTelemetry(
     jsonMode: true,
   });
 
-  const data = parseAgentJson(response.content, QaReviewSchema);
-  return { data, response, latencyMs: Date.now() - start };
+  // LLM revisor é ADVISORY (decisão 2026-06-03): o pré-checador determinístico
+  // acima é a ÚNICA fonte de bloqueio. Os issues do LLM entram como `warning`
+  // (telemetria/auditoria) e não reprovam a publicação nem disparam retry — caso
+  // contrário, falsos-positivos do LLM (ex.: CONTRADICTION em empresa saudável)
+  // prendem análises coerentes em needsReview. Como o determinístico já aprovou
+  // neste ponto, publishable=true e retryTargets=[].
+  const llmReview = parseAgentJson(response.content, QaReviewSchema);
+  const advisory: QaReview = {
+    publishable: true,
+    issues: llmReview.issues.map((issue) => ({ ...issue, severity: "warning" as const })),
+    retryTargets: [],
+  };
+  return { data: advisory, response, latencyMs: Date.now() - start };
 }
 
 type QaIssue = QaReview["issues"][number];
