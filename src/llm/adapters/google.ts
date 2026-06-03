@@ -54,7 +54,7 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
+export async function callGoogle(config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   const client = getClient();
   let lastErr: unknown;
 
@@ -73,6 +73,7 @@ export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<
           ...(config.thinkingBudget
             ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
             : {}),
+          ...(signal ? { abortSignal: signal } : {}),
         },
       });
 

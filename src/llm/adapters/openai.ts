@@ -21,7 +21,7 @@ function stripJsonFences(text: string): string {
   return (match[1] ?? "").trim();
 }
 
-export async function callOpenAI(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
+export async function callOpenAI(config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   const client = getClient();
 
   // Nota: NÃO usamos response_format: "json_object" porque a API exige JSON
@@ -34,7 +34,7 @@ export async function callOpenAI(config: RouteConfig, req: LlmRequest): Promise<
       { role: "user", content: req.userPrompt },
     ],
     store: false, // LGPD: não armazenar inputs/outputs nos servidores da OpenAI
-  });
+  }, { signal });
 
   const rawContent = completion.choices[0]?.message?.content ?? "";
   const content = req.jsonMode ? stripJsonFences(rawContent) : rawContent;
