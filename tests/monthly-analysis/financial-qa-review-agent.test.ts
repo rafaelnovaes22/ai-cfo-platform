@@ -475,3 +475,68 @@ describe("STAGE_MISMATCH — turnaround + expansão", () => {
     expect(result.issues.filter((i) => i.code === "STAGE_MISMATCH")).toHaveLength(0);
   });
 });
+
+describe("MISSING_DONEWHEN — regressão: doneWhen mensuráveis reais não reprovam", () => {
+  const cleanDiagnosis: MarginDiagnosis = {
+    grossMarginStatus: "healthy",
+    operatingMarginStatus: "healthy",
+    mainDrivers: [{ driver: "margens estáveis", evidenceMetric: "dre:margemBruta", impactCents: 0, severity: "low" }],
+  };
+  const cleanCashflow: CashflowRisk = { status: "healthy", reasons: ["folga positiva"], limitations: [] };
+  const neutralCards: NarrativeCardDraft[] = [
+    {
+      type: "attention",
+      title: "Despesas comerciais elevadas",
+      body: "Despesas comerciais acima do esperado no período; revisar contratos de marketing.",
+      evidenceRefs: ["despesasComerciais"],
+    },
+  ];
+
+  function stateWithDoneWhen(doneWhens: string[]) {
+    return {
+      dre: makeDre(),
+      anomalies: [] as Anomaly[],
+      marginDiagnosis: cleanDiagnosis,
+      cashflowRisk: cleanCashflow,
+      narrativeCards: neutralCards,
+      actionPlan: {
+        actions: doneWhens.map((dw, i) =>
+          makeAction({
+            horizon: "short",
+            title: `Reduza despesa item ${i + 1}`,
+            description: "Revise contratos e corte itens supérfluos com meta de 10% em 30 dias.",
+            impactCents: 100_00,
+            evidenceRefs: ["despesasComerciais"],
+            doneWhen: dw,
+          }),
+        ),
+      },
+    };
+  }
+
+  // doneWhen reais que a versão antiga do regex reprovava por falso-positivo
+  // (capturados de execuções de produção no LangSmith, 2026-06-03).
+  const realMeasurable = [
+    "Redução visível de pelo menos R$ 10.560 nas despesas comerciais nas faturas do próximo mês.",
+    "Redução de despesas de pessoal e pró-labore totalizando ao menos 35% da receita líquida visível na folha de pagamento do próximo mês.",
+    "Economia confirmada de pelo menos R$ 3.000 em folha ou despesas correlatas nas próximas duas folhas.",
+    "Contratos revisados e economias contratuais de pelo menos 15% aplicadas nas próximas faturas.",
+    "Programa implantado com indicadores de redução de custos de pessoal em pelo menos 10% após 6 meses.",
+    "DespesasPessoal + PróLabore não excedem R$ 69.200 no fechamento do mês seguinte",
+  ];
+
+  it("não emite MISSING_DONEWHEN para doneWhen mensuráveis reais", () => {
+    const result = runDeterministicFinancialQaReview(stateWithDoneWhen(realMeasurable));
+    expect(result.issues.filter((i) => i.code === "MISSING_DONEWHEN")).toHaveLength(0);
+    expect(result.publishable).toBe(true);
+  });
+
+  it("ainda reprova doneWhen vagos sem número/critério verificável", () => {
+    const result = runDeterministicFinancialQaReview(
+      stateWithDoneWhen(["Reduzir custos", "cliente satisfeito", "Renegociar fornecedor"]),
+    );
+    expect(result.issues.filter((i) => i.code === "MISSING_DONEWHEN")).toHaveLength(3);
+    expect(result.publishable).toBe(false);
+    expect(result.retryTargets).toContain("action-planning");
+  });
+});

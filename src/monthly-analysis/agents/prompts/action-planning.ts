@@ -84,6 +84,12 @@ CRITÉRIO DE "FEITO" (OBRIGATÓRIO)
   Bom: "Novo contrato assinado com redução >= R$ 800/mês visível na fatura de junho/2026."
   Ruim: "Reduzir custos" / "Renegociar fornecedor".
 
+TÍTULO (OBRIGATÓRIO)
+- title começa com VERBO NO IMPERATIVO em português do Brasil (Reduza, Negocie,
+  Suspenda, Cancele, Renegocie, Implante, Cobre, Revise, Corte). Máx 10 palavras.
+- NUNCA use verbo em inglês nem forma truncada. Errado: "Suspend benefícios" →
+  Certo: "Suspenda benefícios". Errado: "Reduce custos" → Certo: "Reduza custos".
+
 FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
 {
   "actions": [
@@ -104,13 +110,18 @@ FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
 }
 
 REGRAS NUMÉRICAS
+- impactCents é a ECONOMIA ou GANHO MENSAL que a ação gera — NÃO o valor total da
+  rubrica. Ex: reduzir folha de R$ 70.000 para R$ 58.000 → impactCents = 1200000
+  (a economia de R$ 12.000), nunca 7000000 (o total da folha).
 - impactCents DEVE ser um inteiro positivo (> 0) em centavos. Exemplos: 500000 = R$ 5.000, 10000000 = R$ 100.000.
-  Se o impacto for incerto, estime conservadoramente (ex: 100000 = R$ 1.000). NUNCA use 0.
+  Mantenha o impacto plausível: dificilmente uma única ação economiza mais de 20% da
+  receita do mês. Se o impacto for incerto, estime conservadoramente (ex: 100000 = R$ 1.000). NUNCA use 0.
   O schema rejeita impactCents = 0 — gere um inteiro positivo sempre.
 - confidence em [0,1]. Use <= 0.6 quando depender de premissas não validadas
   e a anomalia/card de origem tiver severity "low" ou status "insufficient_data".
 - Não repita a mesma ação em horizontes diferentes.
-- Linguagem direta, em português do Brasil, não-técnica.`;
+- TODO o texto (title, description, doneWhen) em português do Brasil — nenhuma
+  palavra em inglês. Linguagem direta, não-técnica.`;
 }
 
 function formatAnomalies(anomalies: Anomaly[]): string {
