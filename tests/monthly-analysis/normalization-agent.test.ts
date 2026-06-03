@@ -114,14 +114,14 @@ describe("runNormalizationAgent", () => {
     ).rejects.toThrow();
   });
 
-  it("detects when LLM tries to alter amountCents and throws naming the entryId", async () => {
+  it("re-estampa amountCents do original quando o LLM altera (não falha a análise)", async () => {
     callLlmMock.mockResolvedValue(llmResponse([
       {
         entryId: "e1",
         date: "2026-04-10",
         description: "NF 123 CLIENTE ABC LTDA",
         normalizedDescription: "NF 123 - Cliente ABC Ltda",
-        amountCents: 999999, // alterado
+        amountCents: 999999, // alterado pelo LLM
         direction: "in",
         documentType: "nf",
         features: [],
@@ -129,16 +129,19 @@ describe("runNormalizationAgent", () => {
       },
     ]));
 
-    await expect(
-      runNormalizationAgent([rawEntries[0]!], { tenantId: "tenant-1" }),
-    ).rejects.toThrow(/alterou amountCents.*e1/);
+    const result = await runNormalizationAgent([rawEntries[0]!], { tenantId: "tenant-1" });
+
+    // amountCents volta ao valor original (fonte da verdade), sem lançar erro.
+    expect(result).toHaveLength(1);
+    expect(result[0]?.amountCents).toBe(100000);
+    expect(result[0]?.entryId).toBe("e1");
   });
 
-  it("detects when LLM tries to alter date and throws naming the entryId", async () => {
+  it("re-estampa date do original quando o LLM altera o ano (ex: 2026→2024)", async () => {
     callLlmMock.mockResolvedValue(llmResponse([
       {
         entryId: "e1",
-        date: "2026-04-15", // alterada
+        date: "2024-04-10", // LLM "corrigiu" o ano futuro
         description: "NF 123 CLIENTE ABC LTDA",
         normalizedDescription: "NF 123 - Cliente ABC Ltda",
         amountCents: 100000,
@@ -149,9 +152,12 @@ describe("runNormalizationAgent", () => {
       },
     ]));
 
-    await expect(
-      runNormalizationAgent([rawEntries[0]!], { tenantId: "tenant-1" }),
-    ).rejects.toThrow(/alterou date.*e1/);
+    const result = await runNormalizationAgent([rawEntries[0]!], { tenantId: "tenant-1" });
+
+    // date volta ao valor original, sem lançar erro.
+    expect(result).toHaveLength(1);
+    expect(result[0]?.date).toBe("2026-04-10");
+    expect(result[0]?.entryId).toBe("e1");
   });
 
   it("recovers when LLM hallucinates a new entryId but amountCents+date match by position", async () => {

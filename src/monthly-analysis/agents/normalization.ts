@@ -79,13 +79,15 @@ export async function runNormalizationAgentWithTelemetry(
 
 
 /**
- * Guard que valida que o LLM não tocou em `amountCents` nem `date`.
- * Esses campos vêm do extrato/planilha do cliente e não podem ser inventados
- * pelo modelo — qualquer divergência é tratada como erro fatal.
+ * Garante que `amountCents` e `date` venham SEMPRE do extrato (fonte da verdade),
+ * nunca do LLM. A normalização só deve produzir descrição/documentType/flags.
  *
- * Recuperação de entryId: quando o LLM alucina um UUID novo mas os campos
- * imutáveis (amountCents + date) batem por posição, re-estampamos o entryId
- * correto e logamos aviso — sem lançar erro.
+ * - Recuperação de entryId: quando o LLM alucina um UUID novo mas amountCents+date
+ *   batem por posição, re-estampamos o entryId correto.
+ * - Campos imutáveis: quando o entryId é conhecido e o LLM alterou amountCents/date
+ *   (alucinação, ex.: "corrigir" 2026→2024), RE-ESTAMPAMOS o valor original em vez
+ *   de falhar a análise inteira. Não inventa nada — usa a fonte da verdade e loga.
+ * - Só lança quando o entryId é desconhecido E a posição não casa (irrecuperável).
  */
 function assertImmutableFinancialFields(
   rawEntries: RawLedgerEntry[],
@@ -105,7 +107,7 @@ function assertImmutableFinancialFields(
       if (entry.amountCents === positional.amountCents && entry.date === positional.date) {
         logger.warn(
           { hallucinatedEntryId: entry.entryId, correctEntryId: positional.entryId, idx: i },
-          "normalization: LLM alucinoui entryId — corrigido por posição",
+          "normalization: LLM alucinou entryId — corrigido por posição",
         );
         entry = { ...entry, entryId: positional.entryId };
         original = positional;
@@ -118,18 +120,18 @@ function assertImmutableFinancialFields(
       );
     }
 
-    if (entry.amountCents !== original.amountCents) {
-      throw new Error(
-        `normalization: LLM alterou amountCents do entryId "${entry.entryId}" ` +
-          `(original=${original.amountCents}, recebido=${entry.amountCents})`,
+    // amountCents e date são lei contábil — vêm do extrato, não do LLM. Se o modelo
+    // os alterou, re-estampamos o valor ORIGINAL (não falha a análise por causa disso).
+    if (entry.amountCents !== original.amountCents || entry.date !== original.date) {
+      logger.warn(
+        {
+          entryId: original.entryId,
+          recebidoAmount: entry.amountCents, originalAmount: original.amountCents,
+          recebidoDate: entry.date, originalDate: original.date,
+        },
+        "normalization: LLM alterou campo imutável (amountCents/date) — re-estampando valor original",
       );
-    }
-
-    if (entry.date !== original.date) {
-      throw new Error(
-        `normalization: LLM alterou date do entryId "${entry.entryId}" ` +
-          `(original="${original.date}", recebido="${entry.date}")`,
-      );
+      entry = { ...entry, amountCents: original.amountCents, date: original.date };
     }
 
     corrected.push(entry);
