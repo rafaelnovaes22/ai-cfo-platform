@@ -1,13 +1,13 @@
 ---
 decision: "D5 — Unit economics do SKU piloto monthly-analysis"
-status: "recalculado 2026-05-14 — classification migrado para gemini-2.5-flash-lite (2.0-flash descontinuado)"
+status: "recalculado 2026-06-03 — custo real medido no pipeline LangGraph + chunking (R$ 0,060/análise, C3 ~0,06%)"
 approved_by: "CEO Acme"
 approved_at: "2026-05-08"
-recalc_at: "2026-05-14"
+recalc_at: "2026-06-03"
 constitution_version: "0.3.0"
 linked_principle: "C3"
 created_at: "2026-05-08"
-last_updated: "2026-05-14"
+last_updated: "2026-06-03"
 linked_spec: "src/skus/monthly-analysis/spec.md"
 linked_adrs: ["002-llm-model-strategy"]
 ---
@@ -353,3 +353,57 @@ Relatório: [`evals/classification/runs/2026-05-14-eval-68d38d39-gpt-4-1-mini.md
 - [ ] Verificar política OpenAI ZDR antes de SHADOW com cliente real (LGPD)
 
 **Recálculo registrado por**: Claude Code em 2026-05-14, pendente ratificação CEO + verificação ZDR
+
+---
+
+## Recálculo 2026-06-03 — pipeline LangGraph (agentic) + chunking paralelo, custo REAL medido
+
+**Motivação**: o pipeline em produção migrou para o grafo agentic LangGraph (nós `normalize` → `clarity_judge` → `dre_classifier` → `aggregate_dre` → [anomaly ‖ margin ‖ cashflow] → `narrative_synthesis` → `action_planning` → `qa_review`), e a etapa de classificação voltou a `gemini-2.5-flash-lite` (não `gpt-4.1-mini` como na seção anterior — divergência do doc corrigida aqui). Além disso, os 3 nós "lite" passaram a processar os lançamentos em **lotes paralelos** (chunking, `MONTHLY_ANALYSIS_CHUNK_SIZE=15`) para cortar latência — o que reenvia o system prompt por lote e **aumenta o input**. Esta seção mede o custo real (LangSmith) e valida C3.
+
+### Modelos em uso (pipeline agentic)
+
+| Nó | Modelo | Input ($/MTok) | Output ($/MTok) |
+|---|---|---|---|
+| normalize, clarity_judge, dre_classifier, anomaly/margin/cashflow | `gemini-2.5-flash-lite` | $0,10 | $0,40 |
+| narrative_synthesis, action_planning, financial-qa-review | `gemini-2.5-flash` | $0,15 | $0,60 |
+
+Fallback: `gpt-4.1-mini` (OpenAI). Câmbio [cost.ts](../../src/llm/cost.ts): **R$ 5,70/USD**.
+
+### Custo real medido (LangSmith, análises de ~55 lançamentos, 2026-06-03)
+
+| Estado | Chamadas LLM | Input | Output | Custo/análise |
+|---|---|---|---|---|
+| Pré-chunking (1 chamada por nó) | 6 | ~22,3k tok | ~14,4k tok | **R$ 0,050** |
+| Pós-chunking (4 lotes por nó lite) | 16 | ~36,4k tok | ~14,6k tok | **R$ 0,060** |
+
+Breakdown pós-chunking (análise de referência): normalization R$ 0,018 · dre-classification R$ 0,014 · action-planning R$ 0,011 · clarity-judge R$ 0,010 · narrative R$ 0,004 · qa-review R$ 0,003.
+
+### Impacto do chunking (C3)
+
+- **Input +63%** (system prompt reenviado por lote), **output ~igual** (mesma quantidade de tokens gerados, só fragmentada).
+- **Custo total +20% (~+R$ 0,01/análise)** — pequeno porque o input é o lado barato (flash-lite $0,10/MTok) e o output, que domina o custo, não mudou.
+- A estimativa preliminar de "~2× custo" (registrada no PR do chunking) **não se confirmou** na medição.
+
+### Razão custo/preço — C3 muito verde
+
+| Plano | Custo p50/mês | ARPU | Razão | Status C3 |
+|---|---|---|---|---|
+| Lite (1 análise) | R$ 0,060 | R$ 99 | **0,06%** | ✅ folga >400× |
+| Pro (3 análises) | R$ 0,18 | R$ 249 | **0,07%** | ✅ |
+| Business (10 análises) | R$ 0,60 | R$ 599 | **0,10%** | ✅ |
+
+**p95 (cliente com ~500 lançamentos)**: custo escala ~linearmente com o nº de lançamentos (mais lotes) → estimativa ~R$ 0,50-0,60/análise; ainda < 1% do ARPU Lite. C3 não entra em risco.
+
+### Observações
+
+- O custo real (R$ 0,060) é **menor** que o R$ 0,222 projetado na seção anterior — porque o pipeline usa `gemini-2.5-flash-lite`, não `gpt-4.1-mini`.
+- O retry do `qa_gate` adiciona custo marginal (R$ 0,074 numa análise com retries extras do LLM, antes do fix advisory de 2026-06-03 que eliminou os retries espúrios — ver PR #124).
+- Auditável via `scripts/measure-cost.mjs` (tokens reais × tabela de preços).
+
+### Aprovação do recálculo
+
+- [x] C3 verificado: razão segue <0,1% em todos os planos (folga >400×); chunking não ameaça C3
+- [ ] CEO ciente de que o custo real (R$ 0,060) está muito abaixo do projetado — folga preservada
+- [ ] Atualizar a seção anterior / `cost.ts` se o modelo de classificação for reconfirmado como flash-lite (divergência doc × pipeline)
+
+**Recálculo registrado por**: Claude Code em 2026-06-03, pendente ratificação CEO
