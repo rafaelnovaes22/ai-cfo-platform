@@ -2,6 +2,7 @@ import {
   applyClarityCaps,
   runDreClassificationAgentWithTelemetry,
 } from "@/monthly-analysis/agents/classification.js";
+import { runChunkedWithTelemetry } from "@/monthly-analysis/agents/chunk-runner.js";
 import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { EntryForClassification } from "@/classification/prompts.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
@@ -28,13 +29,18 @@ export async function dreClassifierNode(
       category: (f.content as { description: string; category: string }).category,
     }));
 
-  const { data: classifications, response, latencyMs } =
-    await runDreClassificationAgentWithTelemetry(inputs, {
+  // Lotes paralelos: tenantFacts + segment vão a todos os lotes para manter a
+  // consistência de categoria entre eles (ver chunk-runner.ts).
+  const { data: classifications, response, latencyMs } = await runChunkedWithTelemetry(
+    inputs,
+    {
       tenantId: state.tenantId,
       traceId: state.traceId,
       segment: state.segment,
       tenantFacts,
-    });
+    },
+    runDreClassificationAgentWithTelemetry,
+  );
   const finalClassifications =
     state.clarityResults && state.clarityResults.length > 0
       ? applyClarityCaps(classifications, state.clarityResults)
