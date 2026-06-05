@@ -1,0 +1,198 @@
+openapi: 3.1.0
+info:
+  title: Aicfo — WhatsApp Channel (config + messages)
+  description: >
+    Contrato do canal WhatsApp para o front. Duas frentes:
+    (A) Configuração do canal — IMPLEMENTADO (GET/PATCH /config/whatsapp).
+    (B) Listagem de mensagens — PLANEJADO (ADR-017); contrato publicado para
+    integração contra mock antes do backend existir.
+    Auth: Bearer JWT em Authorization. Mutação exige role admin.
+  version: "0.3.0"
+servers:
+  - url: http://localhost:3000
+    description: dev
+tags:
+  - name: whatsapp-config
+    description: Configuração do canal (implementado)
+  - name: whatsapp-messages
+    description: Listagem de mensagens (planejado — ADR-017)
+paths:
+  /config/whatsapp:
+    get:
+      tags: [whatsapp-config]
+      summary: Lê a configuração do canal WhatsApp do tenant autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configuração atual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappConfig"
+        "401":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [whatsapp-config]
+      summary: Atualiza destinatário e/ou liga-desliga o envio (admin)
+      description: >
+        Atualização parcial. Habilitar (enabled=true) sem phone configurado nem
+        informado retorna 400. Habilitar carimba o opt-in LGPD (optInAt).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsappConfigPatch"
+      responses:
+        "200":
+          description: Configuração atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappConfig"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /whatsapp/messages:
+    get:
+      tags: [whatsapp-messages]
+      summary: "(PLANEJADO — ADR-017) Lista mensagens enviadas/suprimidas do tenant"
+      description: >
+        Paginado, ordenado por createdAt desc, escopo do tenant. Inclui mensagens
+        suprimidas por opt-out (status skipped_disabled). Somente admin.
+        Backend depende do model WhatsappMessage (ADR-017) — ainda não implementado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/WhatsappMessageStatus"
+        - in: query
+          name: direction
+          schema:
+            $ref: "#/components/schemas/WhatsappMessageDirection"
+        - in: query
+          name: from
+          description: ISO date (inclusive)
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          description: ISO date (inclusive)
+          schema: { type: string, format: date-time }
+        - in: query
+          name: cursor
+          description: Cursor de paginação (id da última linha da página anterior)
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Página de mensagens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappMessagePage"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Problem:
+      description: Erro (RFC 7807)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+  schemas:
+    WhatsappConfig:
+      type: object
+      required: [phone, enabled, optInAt]
+      properties:
+        phone:
+          type: [string, "null"]
+          description: >
+            Número destinatário E.164. Pode vir pré-preenchido pelo /register
+            (campo phone opcional). null = não configurado.
+          example: "+5511999998888"
+        enabled:
+          type: boolean
+        optInAt:
+          type: [string, "null"]
+          format: date-time
+          description: Timestamp do opt-in explícito (LGPD). null = nunca consentido.
+    WhatsappConfigPatch:
+      type: object
+      minProperties: 1
+      properties:
+        phone:
+          type: [string, "null"]
+          pattern: "^\\+[1-9]\\d{7,14}$"
+          description: E.164. null limpa o destinatário.
+          example: "+5511999998888"
+        enabled:
+          type: boolean
+    WhatsappMessageStatus:
+      type: string
+      enum: [sent, delivered, read, failed, skipped_disabled]
+    WhatsappMessageDirection:
+      type: string
+      enum: [outbound, inbound]
+    WhatsappMessageKind:
+      type: string
+      enum: [daily_cashflow, analysis_ready, reply, other]
+    WhatsappMessage:
+      type: object
+      required: [id, direction, kind, body, status, createdAt]
+      properties:
+        id: { type: string }
+        direction:
+          $ref: "#/components/schemas/WhatsappMessageDirection"
+        kind:
+          $ref: "#/components/schemas/WhatsappMessageKind"
+        body:
+          type: string
+          description: Contexto + link (sem dado financeiro, por ADR-016).
+        status:
+          $ref: "#/components/schemas/WhatsappMessageStatus"
+        providerMessageId:
+          type: [string, "null"]
+        error:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+    WhatsappMessagePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WhatsappMessage"
+        nextCursor:
+          type: [string, "null"]
+          description: Cursor da próxima página. null = última página.
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        requestId: { type: string }

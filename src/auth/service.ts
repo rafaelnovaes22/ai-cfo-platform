@@ -27,6 +27,7 @@ export async function register(data: {
   email: string;
   password: string;
   name: string;
+  phone?: string;
 }): Promise<{ accessToken: string; refreshToken: string }> {
   const db = getPrisma();
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
@@ -34,7 +35,8 @@ export async function register(data: {
   try {
     const { user } = await db.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
-        data: { name: data.tenantName, cnpj: data.cnpj },
+        // phone só pré-preenche o destinatário; canal fica desabilitado até opt-in.
+        data: { name: data.tenantName, cnpj: data.cnpj, whatsappPhone: data.phone },
       });
 
       const user = await tx.user.create({
