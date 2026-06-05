@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from "fastify"
 import { ZodTypeProvider } from "fastify-type-provider-zod"
 import { requireAuth, requireRole } from "@/auth/middleware.js"
-import { defaultErrorResponses } from "@/http/problem-detail.js"
 import { getWhatsappConfig, updateWhatsappConfig } from "./config-service.js"
 import { WhatsappConfigResponse, WhatsappConfigPatch } from "./config-schema.js"
 
@@ -13,7 +12,10 @@ export const whatsappConfigRoutes: FastifyPluginAsync = async (app) => {
 
   f.get("/config/whatsapp", {
     schema: {
-      response: { 200: WhatsappConfigResponse, ...defaultErrorResponses },
+      // Sem schema de erro declarado: requireAuth/requireRole respondem { message }
+      // e o errorHandler global serializa erros como ProblemDetail. Declarar
+      // 401/403 como ProblemDetail aqui quebraria a serialização do { message }.
+      response: { 200: WhatsappConfigResponse },
     },
     preHandler: [requireAuth],
     handler: async (req, reply) => {
@@ -24,7 +26,7 @@ export const whatsappConfigRoutes: FastifyPluginAsync = async (app) => {
   f.patch("/config/whatsapp", {
     schema: {
       body: WhatsappConfigPatch,
-      response: { 200: WhatsappConfigResponse, ...defaultErrorResponses },
+      response: { 200: WhatsappConfigResponse },
     },
     preHandler: [requireAuth, requireRole("admin")],
     handler: async (req, reply) => {

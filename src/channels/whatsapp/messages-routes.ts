@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify"
 import { ZodTypeProvider } from "fastify-type-provider-zod"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/auth/middleware.js"
-import { defaultErrorResponses } from "@/http/problem-detail.js"
 import { listMessages } from "./message-log.js"
 
 const StatusEnum = z.enum(["sent", "delivered", "read", "failed", "skipped_disabled"])
@@ -42,8 +41,10 @@ export const whatsappMessagesRoutes: FastifyPluginAsync = async (app) => {
 
   f.get("/whatsapp/messages", {
     schema: {
+      // Sem schema de erro declarado — requireAuth/requireRole respondem { message };
+      // o errorHandler global serializa erros como ProblemDetail.
       querystring: MessagesQuery,
-      response: { 200: MessagesPage, ...defaultErrorResponses },
+      response: { 200: MessagesPage },
     },
     preHandler: [requireAuth, requireRole("admin")],
     handler: async (req, reply) => {
