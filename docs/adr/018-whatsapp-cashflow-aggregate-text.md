@@ -4,7 +4,8 @@ title: "Exceção à ADR-016 — resumo agregado de fluxo de caixa em texto no W
 status: "aceita"
 date: "2026-06-05"
 deciders: ["Rafael Novaes"]
-recommended_ratification: ["the CEO (CEO)", "DPO/jurídico"]
+ratified_by: "the CEO (CEO) — aprovação verbal/informal, 2026-06-05 (sem documento assinado)"
+pending_review: ["DPO/jurídico"]
 constitution_principles: ["C2", "C4", "C6"]
 supersedes: null
 amends: "ADR-016 (Regra 1, parcialmente)"
@@ -13,9 +14,8 @@ related: ["ADR-014", "ADR-016", "ADR-017"]
 
 # ADR-018 — Exceção à ADR-016: resumo agregado de fluxo de caixa em texto no WhatsApp
 
-> **Aprovação:** aceita pelo operador (Rafael Novaes) em 2026-06-05. Ratificação formal por
-> CEO (the CEO) e revisão DPO/jurídico permanecem **recomendadas** antes de tratar o tema
-> como definitivamente fechado para fins regulatórios.
+> **Aprovação:** aceita pelo operador (Rafael Novaes) em 2026-06-05 e ratificada pela CEO
+> (verbal/informal) na mesma data. Revisão DPO/jurídico permanece **pendente** (ver §Aprovação).
 
 ## Contexto
 
@@ -107,7 +107,8 @@ A ADR-017 deve ser ajustada para refletir essa regra de redação antes de sua i
 ### Negativas / Trade-offs aceitos
 - Resumo agregado de caixa fica exposto no histórico do device/backup/screenshot — risco aceito.
 - Aviso de opt-in fica mais longo (precisa descrever o que vai em texto).
-- Exige sign-off de CEO e revisão DPO/jurídico antes de `aceita` (status atual: `proposta`).
+- Ratificação CEO obtida de forma verbal/informal (sem documento assinado); revisão DPO/jurídico
+  segue pendente — risco residual assumido conscientemente até a revisão (ver §Aprovação).
 - Cria uma distinção "agregado vs detalhado" que o código precisa respeitar em qualquer
   formatter futuro de caixa (não voltar a listar lançamentos em texto).
 
@@ -119,3 +120,22 @@ A ADR-017 deve ser ajustada para refletir essa regra de redação antes de sua i
 | Manter o status quo sem ADR | Deixa a implementação em violação não-registrada de ADR assinada (drift); reviewer DeepAgent penaliza. |
 | Permitir também lançamentos individuais em texto | Alta granularidade + contraparte = risco Art. 46 desproporcional; mantido proibido. |
 | Persistir os valores no log (ADR-017) | Amplia a superfície de retenção de dado financeiro sem ganho ao caso de uso do operador. |
+
+## Aprovação
+
+**Aprovado por**: the CEO (CEO) — ratificação **verbal/informal** em 2026-06-05.
+**Proposto por**: Rafael Novaes (operador), aceito em 2026-06-05.
+
+Registro fiel do estado do sign-off (artefato auditado pelo reviewer externo):
+
+| Papel | Estado | Data | Observação |
+|---|---|---|---|
+| Operador (Rafael Novaes) | aceito | 2026-06-05 | Decisão de produto/risco. |
+| CEO (the CEO) | ratificado — **verbal/informal** | 2026-06-05 | Sem documento assinado; concordância verbal registrada aqui. |
+| DPO / jurídico | **pendente** | — | Revisão do aceite de risco (LGPD Art. 46) ainda não realizada. |
+
+**Risco residual aceito**: o canal opera com a exceção (resumo agregado de caixa em texto)
+enquanto a revisão DPO/jurídico não ocorre. Caso essa revisão futura exija mudança material,
+o caminho é uma **nova ADR** que supersede esta (ADR assinada não se edita). Recomenda-se
+concluir a revisão DPO/jurídico antes de promover o canal a AUTONOMOUS ou de ampliar a base
+além do piloto/free tier.
