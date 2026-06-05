@@ -4,8 +4,8 @@ info:
   description: >
     Contrato do canal WhatsApp para o front. Duas frentes:
     (A) Configuração do canal — IMPLEMENTADO (GET/PATCH /config/whatsapp).
-    (B) Listagem de mensagens — PLANEJADO (ADR-017); contrato publicado para
-    integração contra mock antes do backend existir.
+    (B) Listagem de mensagens — IMPLEMENTADO (ADR-017): inclui mensagens
+    suprimidas por opt-out (status skipped_disabled).
     Auth: Bearer JWT em Authorization. Mutação exige role admin.
   version: "0.3.0"
 servers:
@@ -62,11 +62,10 @@ paths:
   /whatsapp/messages:
     get:
       tags: [whatsapp-messages]
-      summary: "(PLANEJADO — ADR-017) Lista mensagens enviadas/suprimidas do tenant"
+      summary: "Lista mensagens enviadas/suprimidas do tenant (ADR-017)"
       description: >
-        Paginado, ordenado por createdAt desc, escopo do tenant. Inclui mensagens
-        suprimidas por opt-out (status skipped_disabled). Somente admin.
-        Backend depende do model WhatsappMessage (ADR-017) — ainda não implementado.
+        Paginado por cursor, ordenado por createdAt desc, escopo do tenant. Inclui
+        mensagens suprimidas por opt-out (status skipped_disabled). Somente admin.
       security:
         - bearerAuth: []
       parameters:
@@ -153,7 +152,7 @@ components:
       enum: [outbound, inbound]
     WhatsappMessageKind:
       type: string
-      enum: [daily_cashflow, analysis_ready, reply, other]
+      enum: [daily_cashflow, cashflow_from_statement, analysis_ready, reply, other]
     WhatsappMessage:
       type: object
       required: [id, direction, kind, body, status, createdAt]

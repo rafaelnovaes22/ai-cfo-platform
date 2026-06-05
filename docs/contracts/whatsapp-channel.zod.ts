@@ -1,7 +1,7 @@
 // Contrato Zod do canal WhatsApp — consumido pelo front.
 // Espelha docs/contracts/whatsapp-channel.openapi.yml.
 //   • Config (/config/whatsapp)        → IMPLEMENTADO no backend
-//   • Messages (/whatsapp/messages)    → PLANEJADO (ADR-017); use para mock
+//   • Messages (/whatsapp/messages)    → IMPLEMENTADO (ADR-017)
 import { z } from "zod"
 
 // E.164: '+' + 8–15 dígitos, primeiro do país != 0.
@@ -28,7 +28,7 @@ export const WhatsappConfigPatch = z
   })
 export type WhatsappConfigPatch = z.infer<typeof WhatsappConfigPatch>
 
-// ── Messages (planejado — ADR-017) ──────────────────────────────────────────
+// ── Messages (implementado — ADR-017) ───────────────────────────────────────
 
 export const WhatsappMessageStatus = z.enum([
   "sent",
@@ -40,6 +40,7 @@ export const WhatsappMessageStatus = z.enum([
 export const WhatsappMessageDirection = z.enum(["outbound", "inbound"])
 export const WhatsappMessageKind = z.enum([
   "daily_cashflow",
+  "cashflow_from_statement",
   "analysis_ready",
   "reply",
   "other",

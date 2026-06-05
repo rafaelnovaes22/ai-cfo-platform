@@ -8,6 +8,7 @@
 import { getPrisma } from "@/persistence/prisma.js"
 import { getCashflowSummaryDay } from "@/cashflow/service.js"
 import { formatCashflowSummary, formatAnalysisReady } from "./response-formatter.js"
+import { logOutbound, logSkipped } from "./message-log.js"
 import { logger } from "@/observability/logger.js"
 import type { IWhatsAppAdapter } from "./types.js"
 import { randomUUID } from "node:crypto"
@@ -82,6 +83,7 @@ export async function sendDailyCashflowSummary(
       { tenantId, whatsappEnabled: tenant.whatsappEnabled },
       "whatsapp:notification — WhatsApp não habilitado para o tenant; ignorando",
     )
+    await logSkipped({ tenantId, kind: "daily_cashflow" })
     return
   }
 
@@ -90,6 +92,7 @@ export async function sendDailyCashflowSummary(
       { tenantId },
       "whatsapp:notification — notificações desabilitadas pelo tenant; ignorando",
     )
+    await logSkipped({ tenantId, kind: "daily_cashflow" })
     return
   }
 
@@ -100,6 +103,7 @@ export async function sendDailyCashflowSummary(
   const text = formatCashflowSummary(summary)
 
   const result = await adapter.sendText(tenant.whatsappPhone, text)
+  await logOutbound({ tenantId, kind: "daily_cashflow", body: text, result })
 
   logger.info(
     { tenantId, date, status: result.status, messageId: result.messageId },
@@ -147,6 +151,7 @@ export async function notifyAnalysisReady(
       { tenantId, whatsappEnabled: tenant.whatsappEnabled },
       "whatsapp:notification — WhatsApp não habilitado; ignorando notifyAnalysisReady",
     )
+    await logSkipped({ tenantId, kind: "analysis_ready" })
     return
   }
 
@@ -155,11 +160,13 @@ export async function notifyAnalysisReady(
       { tenantId },
       "whatsapp:notification — notificações desabilitadas; ignorando notifyAnalysisReady",
     )
+    await logSkipped({ tenantId, kind: "analysis_ready" })
     return
   }
 
   const text = formatAnalysisReady(referenceMonth)
   const result = await adapter.sendText(tenant.whatsappPhone, text)
+  await logOutbound({ tenantId, kind: "analysis_ready", body: text, result })
 
   logger.info(
     { tenantId, referenceMonth, status: result.status, messageId: result.messageId },
@@ -216,6 +223,7 @@ export async function sendDailyCashflowToAll(adapter: IWhatsAppAdapter): Promise
           { tenantId: tenant.id },
           "whatsapp:notification — notificações desabilitadas; pulando",
         )
+        await logSkipped({ tenantId: tenant.id, kind: "daily_cashflow" })
         return
       }
 
@@ -231,6 +239,7 @@ export async function sendDailyCashflowToAll(adapter: IWhatsAppAdapter): Promise
 
         // whatsappPhone nunca é null aqui (filtrado pela query acima)
         const result = await adapter.sendText(tenant.whatsappPhone!, text)
+        await logOutbound({ tenantId: tenant.id, kind: "daily_cashflow", body: text, result })
 
         logger.info(
           { tenantId: tenant.id, date, status: result.status, messageId: result.messageId },
@@ -241,6 +250,12 @@ export async function sendDailyCashflowToAll(adapter: IWhatsAppAdapter): Promise
           { tenantId: tenant.id, date, err },
           "whatsapp:notification — falha ao enviar resumo diário para tenant",
         )
+        await logOutbound({
+          tenantId: tenant.id,
+          kind: "daily_cashflow",
+          body: "",
+          result: { messageId: "", status: "failed", error: (err as Error).message },
+        })
       }
     }),
   )

@@ -157,3 +157,26 @@ export async function enqueueEvalContinuous(): Promise<void> {
     removeOnFail: { count: 5 },
   });
 }
+
+// ── WhatsApp Message Retention (ADR-017) ──────────────────────────────────
+// Job repetível diário que apaga mensagens do log com createdAt < now-180d.
+
+export interface WhatsappRetentionJob {}
+
+let _whatsappRetentionQueue: Queue | null = null;
+
+export function getWhatsappRetentionQueue(): Queue {
+  if (!_whatsappRetentionQueue) {
+    _whatsappRetentionQueue = new Queue("whatsapp-retention", { connection: getRedis() });
+  }
+  return _whatsappRetentionQueue;
+}
+
+export async function scheduleWhatsappRetention(): Promise<void> {
+  await getWhatsappRetentionQueue().add("purge", {}, {
+    repeat: { pattern: "0 4 * * *" }, // diário às 04:00
+    jobId: "whatsapp-retention-singleton",
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}

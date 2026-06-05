@@ -1,12 +1,12 @@
 ---
 adr: "ADR-017"
 title: "Log de mensagens WhatsApp — persistência, retenção e listagem para o operador"
-status: "proposta"
+status: "aceita"
 date: "2026-06-05"
 deciders: ["Rafael Novaes"]
 constitution_principles: ["C2", "C6", "C8"]
 supersedes: null
-related: ["ADR-014", "ADR-016"]
+related: ["ADR-014", "ADR-016", "ADR-018"]
 ---
 
 # ADR-017 — Log de mensagens WhatsApp — persistência, retenção e listagem para o operador
@@ -75,6 +75,11 @@ Filtros opcionais: `status`, `direction`, `from`/`to` (data). Somente `admin`.
   `createdAt < now() - 180d`. Prazo alinhado com a janela de auditoria mensal (Forge).
 - **Conteúdo**: apenas contexto + link (não-sensível por ADR-016). Nenhum valor financeiro,
   CPF/CNPJ ou anexo é persistido no `body`.
+- **Regra de redação (ADR-018 §5)**: mensagens de caixa (`daily_cashflow`,
+  `cashflow_from_statement`) são enviadas ao titular com valores agregados em texto (exceção
+  da ADR-018), mas o `body` **persistido aqui não guarda os valores** — armazena corpo
+  redigido/templatizado + metadados (`kind`, `status`, `createdAt`). O caso de uso do operador
+  (ver o que foi enviado/suprimido) é atendido por `kind` + `status`, mantendo o log não-sensível.
 - O número de telefone do destinatário **não** é duplicado nesta tabela — vive em
   `Tenant.whatsappPhone`. O log referencia o tenant, não o número, minimizando dado pessoal.
 
