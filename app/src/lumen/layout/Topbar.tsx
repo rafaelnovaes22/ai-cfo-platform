@@ -17,7 +17,9 @@ const workspace = [
   { to: "/caixa", label: "Caixa", icon: ArrowDownUp, soon: true },
   { to: "/credito", label: "Crédito", icon: CircleDollarSign, soon: true },
 ];
-const dados = [{ to: "/importar", label: "Importar", icon: Upload }];
+const dados = [
+  { to: "/importar", label: "Importar", icon: Upload, soon: false },
+];
 
 export const routes = [...workspace];
 

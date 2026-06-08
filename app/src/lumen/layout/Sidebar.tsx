@@ -1,11 +1,21 @@
-import { Download, Loader2, LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import {
+  Bell,
+  Download,
+  Loader2,
+  LogOut,
+  Menu,
+  Moon,
+  Sun,
+  User,
+  X,
+} from "lucide-react";
 import { LumenLogo } from "../components/Logo.tsx";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useState, useRef, useEffect } from "react";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import { toast } from "sonner";
 import { routes } from "./Topbar.tsx";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { api } from "@/lib/api/index.js";
 import { AnalysisPicker } from "../components/AnalysisPicker.tsx";
 import NotificationButton from "@/components/NotificationButton.tsx";
@@ -17,6 +27,23 @@ const map: Record<string, string> = {
   "/importar": "Importar dados",
   "/lancamentos": "Lançamentos",
 };
+
+const configRoutes = [
+  // {
+  //   to: "/config/usuario",
+  //   label: "Configurações de usuário",
+  //   icon: User,
+  //   end: true,
+  //   soon: false,
+  // },
+  // {
+  //   to: "/config/notificacoes",
+  //   label: "Configurações de notificações",
+  //   icon: Bell,
+  //   end: true,
+  //   soon: false,
+  // },
+];
 
 export function Sidebar() {
   const { user, signOut } = useAuth();
@@ -118,7 +145,7 @@ export function Sidebar() {
         />
         <div className="flex md:hidden flex-col md:h-auto py-6">
           <LumenLogo size={32} className="mb-8 mr-auto ml-4" />
-          {routes.map((route) => (
+          {[...routes, ...configRoutes].map((route) => (
             <NavLink
               key={route.to}
               to={route.to}
@@ -202,7 +229,21 @@ export function Sidebar() {
               {initials || "?"}
             </button>
             {open && (
-              <div className="absolute right-0 mt-2 w-56 bg-card rounded-md shadow-md py-1 z-30">
+              <div className="absolute top-auto bottom-[36px] md:bottom-auto right-auto md:right-0 mt-2 w-56 bg-card dark:bg-[#1a1a40] rounded-md shadow-md py-1 z-30">
+                {configRoutes.map((route) => (
+                  <Link
+                    key={route.to}
+                    to={route.to}
+                    className="hidden group md:flex items-center border-b border-border dark:border-[#15152f] gap-2.5 px-3 py-2 rounded-md text-[12.5px] transition-colors cursor-pointer hover:bg-[#3D24A0]/10 dark:hover:bg-[#245fff]/10"
+                    onClick={() => setOpen(false)}
+                  >
+                    <route.icon
+                      className="h-[14px] w-[14px] shrink-0"
+                      strokeWidth={1.5}
+                    />
+                    <span>{route.label}</span>
+                  </Link>
+                ))}
                 <div className="px-3 py-2">
                   <div className="text-[12.5px] truncate">
                     {user?.role ?? "—"}
