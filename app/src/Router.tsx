@@ -19,6 +19,7 @@ import CashFlow from "./lumen/pages/CashFlow.tsx";
 import Credit from "./lumen/pages/Credit.tsx";
 import UserConfig from "./lumen/pages/UserConfig.tsx";
 import NotificationsConfig from "./lumen/pages/NotificationsConfig.tsx";
+import WhatsappAuth from "./lumen/pages/WhatsappAuth.tsx";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,14 @@ const Router = () => {
     <Routes>
       <Route path="/auth" element={<Auth />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route
+        path="/whatsapp/auth"
+        element={
+          <ProtectedRoute>
+            <WhatsappAuth />
+          </ProtectedRoute>
+        }
+      />
       <Route
         element={
           <ProtectedRoute>
