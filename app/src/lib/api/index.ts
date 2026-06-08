@@ -20,25 +20,49 @@ export interface AnomalyTimelinePoint {
   codes: string[];
 }
 
-type Json<T> = T extends { content: { "application/json": infer R } } ? R : never;
+type Json<T> = T extends { content: { "application/json": infer R } }
+  ? R
+  : never;
 
-type Req200<P extends keyof paths, M extends keyof paths[P]> =
-  paths[P][M] extends { responses: { 200: infer R } } ? Json<R> : never;
-type Req201<P extends keyof paths, M extends keyof paths[P]> =
-  paths[P][M] extends { responses: { 201: infer R } } ? Json<R> : never;
-type Body<P extends keyof paths, M extends keyof paths[P]> =
-  paths[P][M] extends { requestBody: { content: { "application/json": infer B } } } ? B : never;
+type Req200<
+  P extends keyof paths,
+  M extends keyof paths[P],
+> = paths[P][M] extends { responses: { 200: infer R } } ? Json<R> : never;
+type Req201<
+  P extends keyof paths,
+  M extends keyof paths[P],
+> = paths[P][M] extends { responses: { 201: infer R } } ? Json<R> : never;
+type Body<
+  P extends keyof paths,
+  M extends keyof paths[P],
+> = paths[P][M] extends {
+  requestBody: { content: { "application/json": infer B } };
+}
+  ? B
+  : never;
 
 export type TokenResponse = Req200<"/auth/login", "post">;
 export type MeResponse = Req200<"/auth/me", "get">;
 export type HubResponse = Req200<"/hub", "get">;
 export type AnalysesResponse = Req200<"/analyses", "get">;
 export type DreResponse = Req200<"/analysis/{analysisId}/dre", "get">;
-export type NarrativeResponse = Req200<"/analysis/{analysisId}/narrative", "get">;
-export type ActionPlanResponse = Req200<"/analysis/{analysisId}/action-plan", "get">;
-export type ClassificationReviewResponse = Req200<"/classification/{analysisId}/review", "get">;
+export type NarrativeResponse = Req200<
+  "/analysis/{analysisId}/narrative",
+  "get"
+>;
+export type ActionPlanResponse = Req200<
+  "/analysis/{analysisId}/action-plan",
+  "get"
+>;
+export type ClassificationReviewResponse = Req200<
+  "/classification/{analysisId}/review",
+  "get"
+>;
 export type WorkspaceProfileResponse = Req200<"/workspace/profile", "get">;
-export type BillingSubscriptionResponse = Req200<"/billing/subscription", "get">;
+export type BillingSubscriptionResponse = Req200<
+  "/billing/subscription",
+  "get"
+>;
 
 export const auth = {
   register: (body: Body<"/auth/register", "post">) =>
@@ -103,7 +127,8 @@ export const workspace = {
 };
 
 export const billing = {
-  getSubscription: () => apiFetch<BillingSubscriptionResponse>("/billing/subscription"),
+  getSubscription: () =>
+    apiFetch<BillingSubscriptionResponse>("/billing/subscription"),
 
   createCheckout: (plan: "lite" | "pro" | "business") =>
     apiFetch<Req200<"/billing/checkout", "post">>("/billing/checkout", {
@@ -112,7 +137,9 @@ export const billing = {
     }),
 
   openPortal: () =>
-    apiFetch<Req200<"/billing/portal", "post">>("/billing/portal", { method: "POST" }),
+    apiFetch<Req200<"/billing/portal", "post">>("/billing/portal", {
+      method: "POST",
+    }),
 };
 
 export const tenantConfig = {
@@ -127,7 +154,7 @@ export const tenantConfig = {
   updateMemberRole: (userId: string, role: "admin" | "editor" | "viewer") =>
     apiFetch<Req200<"/config/members/{userId}/role", "patch">>(
       `/config/members/${userId}/role`,
-      { method: "PATCH", body: JSON.stringify({ role }) },
+      { method: "PATCH", body: JSON.stringify({ role }) }
     ),
 
   listTokens: () => apiFetch<Req200<"/config/tokens", "get">>("/config/tokens"),
@@ -142,13 +169,23 @@ export const tenantConfig = {
     apiFetch<void>(`/config/tokens/${tokenId}`, { method: "DELETE" }),
 };
 
+export const notificationConfig = {
+  get: () => apiFetch<any>("/config/whatsapp"),
+
+  update: (body: Body<"/config/whatsapp", "patch">) =>
+    apiFetch<Record<string, unknown>>("/config/whatsapp", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+};
+
 export const ingest = {
   upload: (file: File, referenceMonth: string) => {
     const form = new FormData();
     form.append("file", file);
     return apiUpload<Req200<"/ingest/upload", "post">>(
       `/ingest/upload?referenceMonth=${encodeURIComponent(referenceMonth)}`,
-      form,
+      form
     );
   },
 
@@ -167,17 +204,23 @@ export const ingest = {
 
 export const classification = {
   review: (analysisId: string) =>
-    apiFetch<ClassificationReviewResponse>(`/classification/${analysisId}/review`),
+    apiFetch<ClassificationReviewResponse>(
+      `/classification/${analysisId}/review`
+    ),
 
-  correct: (entryId: string, body: Body<"/classification/entries/{entryId}/correct", "patch">) =>
+  correct: (
+    entryId: string,
+    body: Body<"/classification/entries/{entryId}/correct", "patch">
+  ) =>
     apiFetch<Req200<"/classification/entries/{entryId}/correct", "patch">>(
       `/classification/entries/${entryId}/correct`,
-      { method: "PATCH", body: JSON.stringify(body) },
+      { method: "PATCH", body: JSON.stringify(body) }
     ),
 };
 
 export const dre = {
-  get: (analysisId: string) => apiFetch<DreResponse>(`/analysis/${analysisId}/dre`),
+  get: (analysisId: string) =>
+    apiFetch<DreResponse>(`/analysis/${analysisId}/dre`),
 
   getNarrative: (analysisId: string) =>
     apiFetch<NarrativeResponse>(`/analysis/${analysisId}/narrative`),
@@ -185,26 +228,31 @@ export const dre = {
   narrativeFeedback: (
     analysisId: string,
     cardId: string,
-    body: Body<"/analysis/{analysisId}/narrative/{cardId}/feedback", "patch">,
+    body: Body<"/analysis/{analysisId}/narrative/{cardId}/feedback", "patch">
   ) =>
-    apiFetch<Req200<"/analysis/{analysisId}/narrative/{cardId}/feedback", "patch">>(
-      `/analysis/${analysisId}/narrative/${cardId}/feedback`,
-      { method: "PATCH", body: JSON.stringify(body) },
-    ),
+    apiFetch<
+      Req200<"/analysis/{analysisId}/narrative/{cardId}/feedback", "patch">
+    >(`/analysis/${analysisId}/narrative/${cardId}/feedback`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 export const actionPlan = {
-  get: (analysisId: string) => apiFetch<ActionPlanResponse>(`/analysis/${analysisId}/action-plan`),
+  get: (analysisId: string) =>
+    apiFetch<ActionPlanResponse>(`/analysis/${analysisId}/action-plan`),
 
   feedback: (
     analysisId: string,
     itemId: string,
-    body: Body<"/analysis/{analysisId}/action-plan/{itemId}/feedback", "patch">,
+    body: Body<"/analysis/{analysisId}/action-plan/{itemId}/feedback", "patch">
   ) =>
-    apiFetch<Req200<"/analysis/{analysisId}/action-plan/{itemId}/feedback", "patch">>(
-      `/analysis/${analysisId}/action-plan/${itemId}/feedback`,
-      { method: "PATCH", body: JSON.stringify(body) },
-    ),
+    apiFetch<
+      Req200<"/analysis/{analysisId}/action-plan/{itemId}/feedback", "patch">
+    >(`/analysis/${analysisId}/action-plan/${itemId}/feedback`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 export const hub = {
@@ -216,12 +264,15 @@ export const analyses = {
 
   trend: () => apiFetch<{ trend: TrendPoint[] }>("/analyses/trend"),
 
-  anomalyTimeline: () => apiFetch<{ timeline: AnomalyTimelinePoint[] }>("/analyses/anomaly-timeline"),
+  anomalyTimeline: () =>
+    apiFetch<{ timeline: AnomalyTimelinePoint[] }>(
+      "/analyses/anomaly-timeline"
+    ),
 
   approve: (analysisId: string) =>
     apiFetch<Req200<"/analysis/{analysisId}/approve", "post">>(
       `/analysis/${analysisId}/approve`,
-      { method: "POST" },
+      { method: "POST" }
     ),
 };
 
@@ -241,5 +292,6 @@ export const api = {
   actionPlan,
   hub,
   analyses,
+  notificationConfig,
   export: exportApi,
 };

@@ -6,6 +6,7 @@ import { LumenLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
 import { ApiProblem } from "@/lib/api/client.js";
 import { PatternFormat } from "react-number-format";
+import { addCountryCode } from "@/lib/utils.ts";
 
 const signUpSchema = z
   .object({
@@ -152,15 +153,6 @@ export default function Auth() {
     setMode("signin");
   };
 
-  const addCountryCode = (phone: string) => {
-    if (!phone) return undefined;
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length === 11) {
-      return "+55" + digits;
-    }
-    return digits;
-  };
-
   return (
     <div className="min-h-screen  bg-[url('https://images.unsplash.com/photo-1635776063043-ab23b4c226f6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-[400px]">
@@ -212,7 +204,7 @@ export default function Auth() {
                     autoComplete="name"
                   />
                 </Field>
-                {/* <Field label="Whatsapp" error={errors.phone}>
+                <Field label="Whatsapp" error={errors.phone}>
                   <PatternFormat
                     type="text"
                     value={form.phone || ""}
@@ -228,7 +220,7 @@ export default function Auth() {
                       } as React.ChangeEvent<HTMLInputElement>)
                     }
                   />
-                </Field> */}
+                </Field>
               </>
             )}
 

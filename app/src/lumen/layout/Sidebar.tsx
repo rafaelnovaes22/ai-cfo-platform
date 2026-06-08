@@ -36,13 +36,13 @@ const configRoutes = [
   //   end: true,
   //   soon: false,
   // },
-  // {
-  //   to: "/config/notificacoes",
-  //   label: "Configurações de notificações",
-  //   icon: Bell,
-  //   end: true,
-  //   soon: false,
-  // },
+  {
+    to: "/config/notificacoes",
+    label: "Configurações de notificações",
+    icon: Bell,
+    end: true,
+    soon: false,
+  },
 ];
 
 export function Sidebar() {
