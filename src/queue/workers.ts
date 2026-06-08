@@ -6,9 +6,11 @@ import { generateActionPlan } from "@/action-plan/generator.js";
 import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
-import type { ClassificationJob, DreNarrativeJob, ActionPlanJob, MonthlyAnalysisGraphJob, EvalContinuousJob } from "@/queue/index.js";
+import type { ClassificationJob, DreNarrativeJob, ActionPlanJob, MonthlyAnalysisGraphJob, EvalContinuousJob, WhatsappRetentionJob } from "@/queue/index.js";
+import { scheduleWhatsappRetention } from "@/queue/index.js";
 import { startSelfHarnessWorker } from "@/learning/self-harness-worker.js";
 import { runEvalContinuous } from "@/learning/eval-continuous.js";
+import { purgeExpiredMessages } from "@/channels/whatsapp/message-log.js";
 
 let _redis: IORedis | null = null;
 
@@ -137,5 +139,23 @@ export function startWorkers(): void {
     logger.error({ jobId: job?.id, err }, "eval-continuous: job falhou");
   });
 
-  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph, self-harness, eval-continuous]");
+  const whatsappRetentionWorker = new Worker<WhatsappRetentionJob>(
+    "whatsapp-retention",
+    async () => {
+      const removed = await purgeExpiredMessages();
+      logger.info({ removed }, "whatsapp-retention: purge concluído");
+    },
+    { connection: getWorkerRedis(), concurrency: 1 },
+  );
+
+  whatsappRetentionWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "whatsapp-retention: job falhou");
+  });
+
+  // Agenda o job repetível (idempotente — jobId singleton).
+  void scheduleWhatsappRetention().catch((err) =>
+    logger.error({ err }, "whatsapp-retention: falha ao agendar job repetível"),
+  );
+
+  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph, self-harness, eval-continuous, whatsapp-retention]");
 }

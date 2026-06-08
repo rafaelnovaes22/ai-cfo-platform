@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { logger } from "@/observability/logger.js";
+import { getPrisma } from "@/persistence/prisma.js";
 import { WaWebhookPayloadSchema, WaVerifyQuerySchema } from "./schema.js";
 import { extractMessages, extractStatuses } from "./message-parser.js";
 import { processMessage } from "./conversation-flow.js";
@@ -10,6 +11,18 @@ import { getSessionStore } from "./session-manager.js";
 import { getWhatsAppAdapter } from "./adapter.js";
 import { verifyMetaSignature } from "./signature.js";
 import { claimMessage, releaseMessage } from "./dedup.js";
+import { logInbound, updateStatusByProviderId } from "./message-log.js";
+
+// Resolve o tenant a partir do número do remetente (E.164 com ou sem '+').
+// Best-effort: número desconhecido → null (não cria linha órfã no log).
+async function resolveTenantIdByPhone(from: string): Promise<string | null> {
+  const candidates = from.startsWith("+") ? [from] : [`+${from}`, from];
+  const tenant = await getPrisma().tenant.findFirst({
+    where: { whatsappPhone: { in: candidates } },
+    select: { id: true },
+  });
+  return tenant?.id ?? null;
+}
 
 export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
@@ -81,6 +94,10 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
           logger.info({ requestId, messageId: msg.messageId }, "whatsapp.webhook.duplicate.skipped");
           continue;
         }
+        // Log inbound best-effort (ADR-017): só registra se o número casa um tenant.
+        void resolveTenantIdByPhone(msg.from).then((tenantId) => {
+          if (tenantId) void logInbound({ tenantId, providerMessageId: msg.messageId });
+        });
         processMessage(msg, { sessionStore, adapter }).catch(async (err) => {
           logger.error({ requestId, from: msg.from, err }, "whatsapp.message.process.error");
           // Libera a dedup-key para permitir reprocesso na reentrega da Meta.
@@ -90,6 +107,8 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
 
       for (const status of statuses) {
         logger.info({ requestId, messageId: status.messageId, status: status.status }, "whatsapp.status.update");
+        // Atualiza o status da mensagem outbound persistida (delivered/read/failed).
+        void updateStatusByProviderId(status.messageId, status.status);
       }
     },
   });

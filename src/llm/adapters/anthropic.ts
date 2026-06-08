@@ -21,7 +21,7 @@ function stripJsonFences(text: string): string {
   return (match[1] ?? "").trim();
 }
 
-export async function callAnthropic(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
+export async function callAnthropic(config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   const client = getClient();
 
   const message = await client.messages.create({
@@ -29,7 +29,7 @@ export async function callAnthropic(config: RouteConfig, req: LlmRequest): Promi
     max_tokens: 4096,
     system: req.systemPrompt,
     messages: [{ role: "user", content: req.userPrompt }],
-  });
+  }, { signal });
 
   const rawContent = message.content
     .filter((b) => b.type === "text")

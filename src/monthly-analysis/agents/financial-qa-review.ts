@@ -37,8 +37,10 @@ export async function runFinancialQaReviewAgent(
 }
 
 /**
- * Variante com telemetria. Quando o pré-checador determinístico já reprova,
- * o LLM não é chamado e retornamos NOOP_LLM_RESPONSE — o nó ainda emite trace.
+ * Variante com telemetria. O pré-checador determinístico é a ÚNICA fonte de
+ * bloqueio: se ele reprova, o LLM nem é chamado (retorna NOOP). Se ele aprova,
+ * o LLM roda apenas como ADVISORY — seus issues viram `warning` e não reprovam
+ * a publicação nem disparam retry.
  */
 export async function runFinancialQaReviewAgentWithTelemetry(
   state: Pick<
@@ -87,8 +89,19 @@ export async function runFinancialQaReviewAgentWithTelemetry(
     jsonMode: true,
   });
 
-  const data = parseAgentJson(response.content, QaReviewSchema);
-  return { data, response, latencyMs: Date.now() - start };
+  // LLM revisor é ADVISORY (decisão 2026-06-03): o pré-checador determinístico
+  // acima é a ÚNICA fonte de bloqueio. Os issues do LLM entram como `warning`
+  // (telemetria/auditoria) e não reprovam a publicação nem disparam retry — caso
+  // contrário, falsos-positivos do LLM (ex.: CONTRADICTION em empresa saudável)
+  // prendem análises coerentes em needsReview. Como o determinístico já aprovou
+  // neste ponto, publishable=true e retryTargets=[].
+  const llmReview = parseAgentJson(response.content, QaReviewSchema);
+  const advisory: QaReview = {
+    publishable: true,
+    issues: llmReview.issues.map((issue) => ({ ...issue, severity: "warning" as const })),
+    retryTargets: [],
+  };
+  return { data: advisory, response, latencyMs: Date.now() - start };
 }
 
 type QaIssue = QaReview["issues"][number];
@@ -316,12 +329,20 @@ function parseHumanNumber(raw: string): number {
 function isDoneWhenMeasurable(doneWhen: string): boolean {
   const text = doneWhen.trim().toLowerCase();
   if (text.length < 8) return false;
+  // Frases-clichê sem nenhum número/prazo continuam reprovadas.
   if (/cliente satisfeito|feito|ok|concluido|acompanhar|melhorar/.test(text) && !/\d|r\$|%|>=|<=/.test(text)) {
     return false;
   }
   const hasNumberOrDeadline = /\d|r\$|%|>=|<=/.test(text);
-  const hasVerification = /assinado|registrad|medid|publicad|reduzid|abaixo|acima|até|ate|conclu|homologad|aprovad|comparad|cai|recuperad|recebimento/.test(text);
-  return hasNumberOrDeadline && hasVerification;
+  // Verbo de resultado observável — família ampla por radical ("reduz" cobre
+  // redução/reduzido/reduzindo; "implant" cobre implantado/implantação etc.).
+  const hasResultVerb =
+    /assinad|registrad|medid|public|reduz|aplicad|implement|implant|renegoci|revisad|homologad|aprovad|comparad|recuperad|recebiment|economi|cancelad|cortad|atingid|alcanc|alcanç|abaixo|acima|excede|saldo|confirmad|vis[íi]vel/.test(text);
+  // Âncora temporal/documento concreta — torna a meta verificável no tempo,
+  // mesmo quando o verbo não estiver na lista (ex.: "...na próxima fatura").
+  const hasTemporalAnchor =
+    /m[êe]s|meses|fatura|folha|fechamento|pr[óo]xim|trimestre|semana|\bdias?\b|balanc|extrato|demonstrativ|contrato|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{4}-\d{2}/.test(text);
+  return hasNumberOrDeadline && (hasResultVerb || hasTemporalAnchor);
 }
 
 function isImpactImplausible(action: ActionPlanItemDraft, receitaBruta: number): boolean {

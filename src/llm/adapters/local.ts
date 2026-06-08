@@ -9,7 +9,7 @@ interface OpenAICompatResponse {
   usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
-export async function callLocal(_config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
+export async function callLocal(_config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   const baseUrl = process.env.LOCAL_LLM_BASE_URL ?? "http://localhost:11434/v1";
   const model = process.env.LOCAL_LLM_MODEL ?? "qwen2.5:3b";
 
@@ -24,6 +24,7 @@ export async function callLocal(_config: RouteConfig, req: LlmRequest): Promise<
       ],
       ...(req.jsonMode ? { response_format: { type: "json_object" } } : {}),
     }),
+    signal,
   });
 
   if (!response.ok) {
