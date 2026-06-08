@@ -63,7 +63,9 @@ export async function dreClassifierNode(
       const results = await Promise.allSettled(
         finalClassifications.map((c) =>
           db.ledgerEntry.updateMany({
-            where: { id: c.entryId, tenantId: state.tenantId },
+            // analysisId escopa o write-back à análise atual: um entryId alucinado
+            // pelo LLM não pode sobrescrever lançamento de outra análise do tenant.
+            where: { id: c.entryId, tenantId: state.tenantId, analysisId: state.analysisId },
             data: {
               predictedCategory: c.category,
               classificationConfidence: c.confidence,

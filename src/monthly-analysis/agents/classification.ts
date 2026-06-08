@@ -32,8 +32,29 @@ export type DreClassificationAgentInput = EntryForClassification;
 
 const DEFAULT_DRE_CATEGORY = "nao_classificado";
 
+// Extrai o bloco JSON de uma resposta de LLM tolerando cercas markdown
+// (```json ... ```) e prosa antes/depois — causas comuns de JSON.parse falhar.
+function extractJsonBlock(content: string): string {
+  const trimmed = content.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = (fenced ? fenced[1]! : trimmed).trim();
+  const start = body.search(/[[{]/);
+  if (start === -1) return body;
+  const end = Math.max(body.lastIndexOf("}"), body.lastIndexOf("]"));
+  return end > start ? body.slice(start, end + 1) : body.slice(start);
+}
+
 export function parseAgentJson<T>(content: string, schema: { parse: (value: unknown) => T }): T {
-  return schema.parse(JSON.parse(content));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJsonBlock(content));
+  } catch (err) {
+    // Erro claro e contextualizado em vez de SyntaxError cru — ajuda o retry/QA gate.
+    throw new Error(
+      `parseAgentJson: resposta do LLM não é JSON válido (${(err as Error).message}). Início: ${content.slice(0, 200)}`,
+    );
+  }
+  return schema.parse(parsed);
 }
 
 export function coerceDreCategory(category: string): string {

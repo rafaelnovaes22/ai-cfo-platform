@@ -50,13 +50,16 @@ function toIso(timestamp: string): string {
   return timestamp
 }
 
-/** Mapeia o type do schema Meta para WaMessageType interno. */
-function mapMessageType(
-  rawType: "text" | "document" | "image" | "audio" | "interactive" | "button" | "unknown",
-): WaMessageType {
+/** Mapeia o type (string livre) do schema Meta para WaMessageType interno. */
+const KNOWN_MESSAGE_TYPES = new Set<WaMessageType>([
+  "text", "document", "image", "audio", "interactive", "unknown",
+])
+function mapMessageType(rawType: string): WaMessageType {
   if (rawType === "button") return "button_reply"
-  return rawType as WaMessageType
+  return KNOWN_MESSAGE_TYPES.has(rawType as WaMessageType) ? (rawType as WaMessageType) : "unknown"
 }
+
+const KNOWN_STATUSES = new Set(["sent", "delivered", "read", "failed"])
 
 // ---------------------------------------------------------------------------
 // API pública
@@ -135,10 +138,12 @@ export function extractStatuses(payload: WaWebhookPayload): WaStatusUpdate[] {
       if (!rawStatuses) continue
 
       for (const raw of rawStatuses) {
+        // Ignora status desconhecidos (schema agora aceita string livre).
+        if (!KNOWN_STATUSES.has(raw.status)) continue
         statuses.push({
           messageId: raw.id,
           from: raw.recipient_id,
-          status: raw.status,
+          status: raw.status as WaStatusUpdate["status"],
           timestamp: toIso(raw.timestamp),
         })
       }
@@ -155,12 +160,24 @@ export function extractStatuses(payload: WaWebhookPayload): WaStatusUpdate[] {
  * para frases multi-palavra verifica se o texto começa com a chave.
  * Retorna UNKNOWN se nenhuma categoria encaixar.
  */
+// Seleção numérica do menu (formatWelcomeMenu). Match exato para não confundir
+// com valores numéricos colados. Mantido em sincronia com a numeração do menu.
+const NUMERIC_MENU: Readonly<Record<string, WaCommand>> = {
+  "1": "CAIXA",
+  "2": "SEMANA",
+  "3": "ANALISE",
+}
+
 export function classifyCommand(text: string): WaCommand {
   const normalized = text
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Mn}/gu, "")
+
+  // Usuário respondeu com o número da opção do menu.
+  const numeric = NUMERIC_MENU[normalized]
+  if (numeric) return numeric
 
   for (const [command, keywords] of COMMAND_MAP) {
     for (const kw of keywords) {

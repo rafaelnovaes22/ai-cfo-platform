@@ -24,6 +24,8 @@ import { hubRoutes } from "@/hub/routes.js";
 import { exportRoutes } from "@/export/routes.js";
 import { cashflowRoutes } from "@/cashflow/routes.js";
 import { whatsappWebhookRoutes } from "@/channels/whatsapp/webhook.js";
+import { whatsappConfigRoutes } from "@/channels/whatsapp/config-routes.js";
+import { whatsappMessagesRoutes } from "@/channels/whatsapp/messages-routes.js";
 import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushTraces } from "@/observability/tracing.js";
@@ -146,6 +148,8 @@ await app.register(hubRoutes);
 await app.register(exportRoutes);
 await app.register(cashflowRoutes);
 await app.register(whatsappWebhookRoutes);
+await app.register(whatsappConfigRoutes);
+await app.register(whatsappMessagesRoutes);
 
 startWorkers();
 

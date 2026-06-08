@@ -51,7 +51,7 @@ export default function ResetPassword() {
         </div>
         <div className="bg-card border border-border rounded-lg p-8">
           <h1 className="text-[20px] font-medium  mb-1">Redefinir senha</h1>
-          <p className="text-[13px] text-[#96ff7e] mb-6">
+          <p className="text-[13px] dark:text-[#96ff7e] mb-6">
             Escolha uma nova senha pra sua conta.
           </p>
 
@@ -62,7 +62,9 @@ export default function ResetPassword() {
           ) : (
             <form onSubmit={submit} className="flex flex-col gap-3.5">
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-[#96ff7e]">Nova senha</span>
+                <span className="text-[12px] dark:text-[#96ff7e]">
+                  Nova senha
+                </span>
                 <input
                   type="password"
                   value={password}
@@ -72,7 +74,9 @@ export default function ResetPassword() {
                 />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-[#96ff7e]">Confirme a senha</span>
+                <span className="text-[12px] dark:text-[#96ff7e]">
+                  Confirme a senha
+                </span>
                 <input
                   type="password"
                   value={confirmPassword}

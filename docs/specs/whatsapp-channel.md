@@ -19,11 +19,11 @@ outcomes:
   - cashflow_summary_sent
   - cashflow_from_statement
   - analysis_delivered_whatsapp
-related_adrs: ["014", "015", "016"]
+related_adrs: ["014", "015", "016", "017", "018"]
 provider: "unnichat"
 created_at: "2026-05-29"
-last_updated: "2026-06-01"
-version: "0.2.0"
+last_updated: "2026-06-05"
+version: "0.5.0"
 ---
 
 # WhatsApp Channel — Canal de Entrega Principal
@@ -48,8 +48,9 @@ version: "0.2.0"
 
 ### 1.3. `analysis_delivered_whatsapp`
 > A análise mensal é considerada **entregue via WhatsApp** quando o tenant recebe
-> mensagem de texto com resumo executivo (DRE top-5 + card crítico) e documento PDF
-> via `sendDocument` Unnichat, confirmado com status `delivered`.
+> uma mensagem de contexto + documento PDF via `sendDocument` Unnichat (URL assinada
+> TTL 24h), confirmado com status `delivered`. **Valores de DRE, lançamentos e cards
+> não vão em texto** — seguem no PDF/link (ADR-016 Regra 1/2; ver nota LGPD abaixo).
 
 ### 1.4. `cashflow_from_statement`
 > Quando o aluno (plano `student`) envia um extrato (Excel/CSV/PDF) pelo WhatsApp,
@@ -57,6 +58,13 @@ version: "0.2.0"
 > retornado **automaticamente** — sem necessidade de comando e **sem LLM** (pura
 > agregação determinística, custo de inferência R$ 0). A classificação em contas do
 > DRE permanece exclusiva dos planos pagos (`cashflow_from_statement` ≠ análise).
+
+> **Nota LGPD (ADR-018):** os outcomes `cashflow_summary_sent` e `cashflow_from_statement`
+> enviam **valores agregados** (saldo, total de entradas/saídas, resultado) **em texto** —
+> exceção estrita à Regra 1 da ADR-016, aceita para preservar o outcome de número instantâneo.
+> Lançamentos individuais, contraparte, linhas de DRE e relatórios **continuam proibidos em
+> texto** (vão por link assinado TTL 24h). O aviso de opt-in deve declarar literalmente que o
+> resumo de caixa é enviado em texto no WhatsApp. Ver [ADR-018](../adr/018-whatsapp-cashflow-aggregate-text.md).
 
 ---
 
@@ -66,6 +74,32 @@ version: "0.2.0"
 |---|---|
 | `POST /webhooks/whatsapp` | Recebe eventos Unnichat (mensagens + status) |
 | `GET /webhooks/whatsapp` | Verificação de webhook (Unnichat handshake) |
+| `GET /config/whatsapp` | Lê config do canal para o tenant (`phone`, `enabled`, `optInAt`) |
+| `PATCH /config/whatsapp` | Atualiza destinatário e/ou liga/desliga envio (admin) — carimba opt-in LGPD |
+| `GET /whatsapp/messages` | Lista mensagens enviadas/suprimidas do tenant — paginado por cursor (admin) — ADR-017 |
+
+### 2.1. Configuração do canal (`/config/whatsapp`)
+
+Não há "frequência" configurável — o envio proativo é fixo (cron diário). O que o tenant
+controla é **o número destinatário** e o **liga/desliga** do envio:
+
+- `GET /config/whatsapp` → `{ phone: string | null, enabled: boolean, optInAt: string | null }`.
+  `phone` pode vir pré-preenchido pelo `/register` (campo `phone` opcional, E.164) ou `null` se
+  não informado no cadastro. Em ambos os casos o canal nasce **desabilitado** (sem opt-in).
+- `PATCH /config/whatsapp` body `{ phone?: string (E.164) | null, enabled?: boolean }`, role `admin`.
+  - Habilitar (`enabled: true`) sem `phone` configurado nem informado → **400**.
+  - Habilitar carimba `whatsappOptInAt = now()` (opt-in explícito, LGPD Art. 7 — ver ADR-016).
+  - Desabilitar preserva o `optInAt` histórico.
+
+### 2.2. Listagem de mensagens (`GET /whatsapp/messages`)
+
+`GET /whatsapp/messages` (admin) lista o log de mensagens do tenant — paginado por cursor,
+ordenado por `createdAt desc`. Filtros: `status`, `direction`, `from`/`to` (ISO), `cursor`, `limit`.
+
+Inclui mensagens **suprimidas** por opt-out (`status = skipped_disabled`) — o caso de uso do
+operador "ver o que deixei de enviar". Persistência via model `WhatsappMessage`
+([ADR-017](../adr/017-whatsapp-message-log-retention.md)), retenção 180 dias (job diário de purge).
+Redação ADR-018 §5: `body` de mensagens de caixa **não guarda valores** (só `kind` + `status`).
 
 ---
 
@@ -118,14 +152,18 @@ IDLE
 
 ## 6. Configuração por tenant (C8)
 
-```ts
-Tenant.config.whatsapp = {
-  phone: string,           // número vinculado (E.164)
-  notificationTime: "08:00", // hora do resumo diário
-  notificationsEnabled: true,
-  language: "pt-BR",
-}
+Estado do canal vive em **colunas dedicadas do `Tenant`** (não em `productConfig`):
+
+```prisma
+Tenant.whatsappPhone    String?    // número destinatário (E.164)
+Tenant.whatsappEnabled  Boolean    // liga/desliga envio proativo
+Tenant.whatsappOptInAt  DateTime?  // timestamp do opt-in explícito (LGPD Art. 7)
 ```
+
+> **Nota:** a versão 0.1.0 desta spec previa `Tenant.config.whatsapp.notificationTime`
+> (horário por tenant). Isso **não foi implementado** — o envio é um cron fixo, sem
+> frequência configurável. Os campos reais expostos via `/config/whatsapp` são apenas
+> `phone` e `enabled` (+ `optInAt` derivado).
 
 ---
 
@@ -148,6 +186,9 @@ Tenant.config.whatsapp = {
 
 - Pino log em cada evento webhook recebido
 - Pino log em cada mensagem enviada (com status Unnichat)
+- **Persistência (ADR-017)**: cada envio/supressão/recebimento grava em `WhatsappMessage`
+  (status `sent|delivered|read|failed|skipped_disabled`); eventos de status do webhook
+  atualizam a linha via `providerMessageId`. Retenção 180 dias. Body de caixa redigido (ADR-018 §5).
 - Sem LangSmith (módulo sem LLM)
 
 ---
@@ -158,3 +199,6 @@ Tenant.config.whatsapp = {
 |---|---|---|
 | 0.1.0 | 2026-05-29 | Spec inicial — WhatsApp como outcome principal; Unnichat como BSP; free tier estudantes |
 | 0.2.0 | 2026-06-01 | `student` envia extrato e recebe fluxo de caixa automático do período exato do arquivo (zero LLM). EC5 invertido (ingest liberado para `student`); EC7/EC8 adicionados; outcome `cashflow_from_statement`. |
+| 0.3.0 | 2026-06-05 | Endpoints de config `GET/PATCH /config/whatsapp` (phone + enabled + opt-in LGPD). Esclarecido: não há "frequência"/`notificationTime` implementado; estado vive em colunas dedicadas do `Tenant`. `GET /whatsapp/messages` planejado via ADR-017 (log de mensagens + retenção). |
+| 0.4.0 | 2026-06-05 | Nota LGPD ADR-018: resumo agregado de caixa em texto é exceção estrita à ADR-016 Regra 1 (lançamentos/DRE/relatórios seguem por link). §1.3 alinhada (análise via PDF/link, sem DRE em texto). Aviso de opt-in deve declarar envio de caixa em texto. |
+| 0.5.0 | 2026-06-05 | Frente B implementada: `GET /whatsapp/messages` (log paginado por cursor, admin) + persistência `WhatsappMessage` em todo envio/supressão/recebimento + retenção 180d. §8 atualizada. ADR-017/018 promovidas a `aceita`. |

@@ -282,7 +282,7 @@ async function executeNormalization(file: CaseFile): Promise<CaseResult> {
 
 // ─── Executor narrative-synthesis ────────────────────────────────────────────
 
-function parseNarrativeSynthesisInput(file: CaseFile): NarrativeSynthesisAgentInput {
+export function parseNarrativeSynthesisInput(file: CaseFile): NarrativeSynthesisAgentInput {
   const block = extractInputBlock(file);
   const dreStr = /dre:\s*"([^"]+)"/.exec(block)?.[1] ?? "";
   const dre = parseDreKeyValueString(dreStr);
@@ -305,7 +305,7 @@ async function executeNarrativeSynthesis(file: CaseFile): Promise<CaseResult> {
 
 // ─── Executor action-planning ─────────────────────────────────────────────────
 
-function parseActionPlanningInput(file: CaseFile): ActionPlanningAgentInput {
+export function parseActionPlanningInput(file: CaseFile): ActionPlanningAgentInput {
   const block = extractInputBlock(file);
   const dreStr = /dre_and_diagnostics:\s*"([^"]+)"/.exec(block)?.[1] ?? "";
   const dre = parseDreKeyValueString(dreStr);

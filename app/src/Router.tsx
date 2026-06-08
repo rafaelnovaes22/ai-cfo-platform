@@ -17,6 +17,8 @@ import { useEffect } from "react";
 import nprogress from "nprogress";
 import CashFlow from "./lumen/pages/CashFlow.tsx";
 import Credit from "./lumen/pages/Credit.tsx";
+import UserConfig from "./lumen/pages/UserConfig.tsx";
+import NotificationsConfig from "./lumen/pages/NotificationsConfig.tsx";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,8 @@ const Router = () => {
         <Route path="/lancamentos" element={<Transactions />} />
         <Route path="/caixa" element={<CashFlow />} />
         <Route path="/credito" element={<Credit />} />
+        <Route path="/config/usuario" element={<UserConfig />} />
+        <Route path="/config/notificacoes" element={<NotificationsConfig />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

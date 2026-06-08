@@ -57,7 +57,15 @@ export function createTrace(opts: TraceOptions) {
 
         const usage = endOpts.usage as { input?: number; output?: number } | undefined;
 
-        await child.end(outputs);
+        // Marca o run como ERROR no LangSmith quando a geração falhou.
+        const errorMsg =
+          endOpts.level === "ERROR" || endOpts.error != null
+            ? typeof endOpts.error === "string"
+              ? endOpts.error
+              : JSON.stringify(endOpts.error ?? endOpts.output ?? "error")
+            : undefined;
+
+        await child.end(outputs, errorMsg);
 
         if (usage?.input != null || usage?.output != null) {
           const inputTokens = usage.input ?? 0;

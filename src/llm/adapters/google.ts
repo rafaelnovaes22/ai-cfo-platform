@@ -50,8 +50,21 @@ function isRetryable(err: unknown): boolean {
   return msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("RESOURCE_EXHAUSTED");
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Sleep que respeita o AbortSignal: cancela o backoff imediatamente em vez de
+// dormir o intervalo inteiro e só então perceber o abort.
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("aborted"));
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        reject(new Error("aborted"));
+      },
+      { once: true },
+    );
+  });
 }
 
 export async function callGoogle(config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
@@ -59,8 +72,9 @@ export async function callGoogle(config: RouteConfig, req: LlmRequest, signal?: 
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (signal?.aborted) break;
     if (attempt > 0) {
-      await sleep(BASE_DELAY_MS * 2 ** (attempt - 1));
+      await sleep(BASE_DELAY_MS * 2 ** (attempt - 1), signal);
     }
 
     try {
@@ -80,7 +94,11 @@ export async function callGoogle(config: RouteConfig, req: LlmRequest, signal?: 
       const content = response.text ?? "";
       const usage = response.usageMetadata;
       const inputTokens = usage?.promptTokenCount ?? 0;
-      const outputTokens = usage?.candidatesTokenCount ?? 0;
+      // Tokens de "thinking" (thoughtsTokenCount) são cobrados como output mas não
+      // entram em candidatesTokenCount — somá-los evita subcontabilizar o custo
+      // nas tasks com thinkingBudget.
+      const outputTokens =
+        (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0);
 
       return {
         content,

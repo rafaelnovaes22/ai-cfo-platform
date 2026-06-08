@@ -29,9 +29,11 @@ model Tenant {
   learningAutonomyState Json @default("{\"classification\":\"needs_review\",\"narrative\":\"needs_review\",\"action\":\"needs_review\"}")
 
   // Canal WhatsApp (LGPD Art. 7 — opt-in explícito obrigatório)
-  whatsappPhone     String?   // número E.164 vinculado ao canal WhatsApp
-  whatsappOptInAt   DateTime? // timestamp do opt-in explícito (LGPD Art. 7)
-  whatsappEnabled   Boolean   @default(false)
+  // @unique: um número só pode estar vinculado a UM tenant — sem isso, dois tenants
+  // com o mesmo número causariam roteamento cross-tenant no canal inbound.
+  whatsappPhone   String?   @unique // número E.164 vinculado ao canal WhatsApp
+  whatsappOptInAt DateTime? // timestamp do opt-in explícito (LGPD Art. 7)
+  whatsappEnabled Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -43,6 +45,7 @@ model Tenant {
   apiTokens         ApiToken[]
   memoryItems       TenantMemoryItem[]
   validationMetrics ValidationMetric[]
+  whatsappMessages  WhatsappMessage[]
 
   @@index([industrySegment])
 }
@@ -116,7 +119,7 @@ model Session {
 // ===== SUBSCRIPTION (plano + modo SHADOW/ASSISTED/AUTONOMOUS) =====
 
 enum SubscriptionPlan {
-  student  // free tier para estudantes — cashflow summary only
+  student // free tier para estudantes — cashflow summary only
   trial
   lite
   pro
@@ -197,6 +200,7 @@ enum AnalysisStatus {
   ready // gerado, aguardando entrega (SHADOW: Rafael revisa)
   delivered // entregue ao cliente (ASSISTED/AUTONOMOUS)
   approved // cliente aprovou (fecha o mês)
+  failed // pipeline esgotou tentativas — visível ao usuário (re-tentar/re-ingest)
 }
 
 enum CardType {
@@ -398,4 +402,50 @@ model LegalRetention {
   termAcceptedHash String
 
   @@index([retentionUntil])
+}
+
+// ===== WHATSAPP MESSAGE LOG (ADR-017) =====
+// Log append-only de mensagens do canal WhatsApp para visibilidade do operador.
+// Inclui mensagens SUPRIMIDAS por opt-out (status skipped_disabled).
+// Retenção 180 dias (job de purge). Body de mensagens de caixa NÃO guarda valores
+// (redação ADR-018 §5) — mantém o log não-sensível.
+
+enum WaMsgDirection {
+  outbound
+  inbound
+}
+
+enum WaMsgKind {
+  daily_cashflow
+  cashflow_from_statement
+  analysis_ready
+  reply
+  other
+}
+
+enum WaMsgStatus {
+  sent
+  delivered
+  read
+  failed
+  skipped_disabled
+}
+
+model WhatsappMessage {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  direction         WaMsgDirection
+  kind              WaMsgKind
+  body              String // contexto + link; valores de caixa redigidos (ADR-018 §5)
+  status            WaMsgStatus
+  providerMessageId String? // id Unnichat; null em skipped_*
+  error             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt]) // listagem paginada por tenant
+  @@index([providerMessageId]) // update de status (delivered/read) via webhook
+  @@index([createdAt]) // job de retenção: purge < now-180d
 }

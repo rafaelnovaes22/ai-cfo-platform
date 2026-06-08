@@ -25,7 +25,7 @@ export function parseText(raw: string): ParseResult {
     }
   }
 
-  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = cols;
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx, impliedDirection } = cols;
 
   const dataLines = lines.slice(headerLineIdx + 1);
   const entries: RawLedger[] = [];
@@ -40,7 +40,7 @@ export function parseText(raw: string): ParseResult {
     if (!rawDate.trim() && !rawDesc.trim()) continue;
 
     let rawCents: number | null;
-    let rawDir: string | null = dirIdx !== null ? (cells[dirIdx] ?? null) : null;
+    let rawDir: string | null = impliedDirection ?? (dirIdx !== null ? (cells[dirIdx] ?? null) : null);
 
     if (amountIdx >= 0) {
       rawCents = normalizeAmountCents(cells[amountIdx] ?? "");

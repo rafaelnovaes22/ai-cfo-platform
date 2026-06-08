@@ -6,9 +6,11 @@ import { generateActionPlan } from "@/action-plan/generator.js";
 import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
-import type { ClassificationJob, DreNarrativeJob, ActionPlanJob, MonthlyAnalysisGraphJob, EvalContinuousJob } from "@/queue/index.js";
+import type { ClassificationJob, DreNarrativeJob, ActionPlanJob, MonthlyAnalysisGraphJob, EvalContinuousJob, WhatsappRetentionJob } from "@/queue/index.js";
+import { scheduleWhatsappRetention, scheduleEvalContinuous } from "@/queue/index.js";
 import { startSelfHarnessWorker } from "@/learning/self-harness-worker.js";
 import { runEvalContinuous } from "@/learning/eval-continuous.js";
+import { purgeExpiredMessages } from "@/channels/whatsapp/message-log.js";
 
 let _redis: IORedis | null = null;
 
@@ -28,6 +30,24 @@ function getWorkerRedis(): IORedis {
   return _redis;
 }
 
+// Marca a análise como 'failed' quando o job esgotou todas as tentativas BullMQ,
+// para não deixá-la presa em 'generating' (legado) nem escondida em 'pending' (grafo).
+async function markAnalysisFailedIfExhausted(
+  job: { id?: string; data: { analysisId: string }; attemptsMade: number; opts: { attempts?: number } } | undefined,
+  label: string,
+): Promise<void> {
+  if (!job || job.attemptsMade < (job.opts.attempts ?? 1)) return;
+  try {
+    await getPrisma().monthlyAnalysis.update({
+      where: { id: job.data.analysisId },
+      data: { status: "failed" },
+    });
+    logger.warn({ jobId: job.id, analysisId: job.data.analysisId }, `${label}: análise marcada como failed (tentativas esgotadas)`);
+  } catch (updateErr) {
+    logger.error({ jobId: job.id, updateErr }, `${label}: falha ao marcar status failed`);
+  }
+}
+
 export function startWorkers(): void {
   const classificationWorker = new Worker<ClassificationJob>(
     "classification",
@@ -45,8 +65,9 @@ export function startWorkers(): void {
     logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Classificação concluída");
   });
 
-  classificationWorker.on("failed", (job, err) => {
+  classificationWorker.on("failed", async (job, err) => {
     logger.error({ jobId: job?.id, err }, "Classificação falhou");
+    await markAnalysisFailedIfExhausted(job, "Classificação");
   });
 
   const dreNarrativeWorker = new Worker<DreNarrativeJob>(
@@ -61,9 +82,10 @@ export function startWorkers(): void {
   dreNarrativeWorker.on("completed", (job) =>
     logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Narrativa DRE concluída"),
   );
-  dreNarrativeWorker.on("failed", (job, err) =>
-    logger.error({ jobId: job?.id, err }, "Narrativa DRE falhou"),
-  );
+  dreNarrativeWorker.on("failed", async (job, err) => {
+    logger.error({ jobId: job?.id, err }, "Narrativa DRE falhou");
+    await markAnalysisFailedIfExhausted(job, "Narrativa DRE");
+  });
 
   const actionPlanWorker = new Worker<ActionPlanJob>(
     "action-plan",
@@ -77,9 +99,10 @@ export function startWorkers(): void {
   actionPlanWorker.on("completed", (job) =>
     logger.info({ jobId: job.id, analysisId: job.data.analysisId }, "Plano de ação gerado"),
   );
-  actionPlanWorker.on("failed", (job, err) =>
-    logger.error({ jobId: job?.id, err }, "Plano de ação falhou"),
-  );
+  actionPlanWorker.on("failed", async (job, err) => {
+    logger.error({ jobId: job?.id, err }, "Plano de ação falhou");
+    await markAnalysisFailedIfExhausted(job, "Plano de ação");
+  });
 
   const graphWorker = new Worker<MonthlyAnalysisGraphJob>(
     "monthly-analysis-graph",
@@ -106,15 +129,15 @@ export function startWorkers(): void {
   );
   graphWorker.on("failed", async (job, err) => {
     logger.error({ jobId: job?.id, analysisId: job?.data.analysisId, err }, "LangGraph monthly-analysis: falhou");
-    // Quando BullMQ esgota todas as tentativas, atualiza o status no banco para
-    // evitar que a análise fique presa em "generating" indefinidamente.
+    // Quando BullMQ esgota todas as tentativas, marca a análise como 'failed' para
+    // evitar que fique presa em "generating" e para que o erro fique visível ao usuário.
     if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
       try {
         await getPrisma().monthlyAnalysis.update({
           where: { id: job.data.analysisId },
-          data: { status: "pending" },
+          data: { status: "failed" },
         });
-        logger.warn({ jobId: job.id, analysisId: job.data.analysisId }, "LangGraph: análise revertida para pending após esgotar tentativas — re-ingest necessário");
+        logger.warn({ jobId: job.id, analysisId: job.data.analysisId }, "LangGraph: análise marcada como failed após esgotar tentativas");
       } catch (updateErr) {
         logger.error({ jobId: job.id, updateErr }, "Falha ao atualizar status para failed");
       }
@@ -137,5 +160,26 @@ export function startWorkers(): void {
     logger.error({ jobId: job?.id, err }, "eval-continuous: job falhou");
   });
 
-  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph, self-harness, eval-continuous]");
+  const whatsappRetentionWorker = new Worker<WhatsappRetentionJob>(
+    "whatsapp-retention",
+    async () => {
+      const removed = await purgeExpiredMessages();
+      logger.info({ removed }, "whatsapp-retention: purge concluído");
+    },
+    { connection: getWorkerRedis(), concurrency: 1 },
+  );
+
+  whatsappRetentionWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "whatsapp-retention: job falhou");
+  });
+
+  // Agenda os jobs repetíveis (idempotentes — jobId singleton).
+  void scheduleWhatsappRetention().catch((err) =>
+    logger.error({ err }, "whatsapp-retention: falha ao agendar job repetível"),
+  );
+  void scheduleEvalContinuous().catch((err) =>
+    logger.error({ err }, "eval-continuous: falha ao agendar job repetível"),
+  );
+
+  logger.info("Workers BullMQ iniciados: [classification, dre-narrative, action-plan, monthly-analysis-graph, self-harness, eval-continuous, whatsapp-retention]");
 }
