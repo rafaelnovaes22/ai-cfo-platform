@@ -89,7 +89,7 @@ export default function Hub() {
                   {latest.referenceMonth}
                 </div>
                 <div className="text-[88px] leading-none tracking-tight tabular font-sans">
-                  {formatBRL(latest.dre.lucroLiquido / 100)}
+                  {formatBRL(latest.dre.lucroLiquido)}
                 </div>
                 <div className="mt-5 flex items-center gap-3 text-[13px]">
                   <span className="text-[#96ff7e]">Lucro líquido · margem</span>
@@ -120,17 +120,17 @@ export default function Hub() {
                   <ul className="space-y-4 text-[13px]">
                     <li className="flex justify-between items-baseline">
                       <span className="text-[#96ff7e]">Receita</span>
-                      <span className="text-positive">{formatBRL(latest.dre.receitaBruta / 100)}</span>
+                      <span className="text-positive">{formatBRL(latest.dre.receitaBruta)}</span>
                     </li>
                     <li className="flex justify-between items-baseline">
                       <span className="text-[#96ff7e]">EBITDA</span>
                       <span className={latest.dre.ebitda >= 0 ? "text-positive" : "text-negative"}>
-                        {formatBRL(latest.dre.ebitda / 100)}
+                        {formatBRL(latest.dre.ebitda)}
                       </span>
                     </li>
                     <li className="flex justify-between items-baseline pt-4 border-t border-border">
                       <span>Lucro líquido</span>
-                      <span className="font-medium">{formatBRL(latest.dre.lucroLiquido / 100)}</span>
+                      <span className="font-medium">{formatBRL(latest.dre.lucroLiquido)}</span>
                     </li>
                   </ul>
                 </div>

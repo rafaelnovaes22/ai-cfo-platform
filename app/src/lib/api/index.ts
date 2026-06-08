@@ -1,6 +1,13 @@
 import { apiFetch, apiUpload, apiDownload } from "./client.js";
 import type { paths } from "./types.js";
 
+// A API entrega valores monetários do DRE em centavos. A UI (formatBRL) trabalha
+// em reais. Normalizamos na fronteira do client para que NENHUM componente precise
+// dividir por 100 — evita os bugs de "valor 100x" (Hub, gráfico mensal).
+// Campos *Cents explícitos (totalImpactCents, amountCents) NÃO passam por aqui:
+// o nome já sinaliza a unidade e os consumidores os tratam.
+const centsToReais = (n: number): number => n / 100;
+
 export interface TrendPoint {
   referenceMonth: string;
   receitaLiquida: number;
@@ -256,13 +263,34 @@ export const actionPlan = {
 };
 
 export const hub = {
-  get: () => apiFetch<HubResponse>("/hub"),
+  get: async (): Promise<HubResponse> => {
+    const res = await apiFetch<HubResponse>("/hub");
+    const dre = res.latestAnalysis?.dre;
+    if (dre) {
+      dre.receitaBruta = centsToReais(dre.receitaBruta);
+      dre.lucroLiquido = centsToReais(dre.lucroLiquido);
+      dre.ebitda = centsToReais(dre.ebitda);
+      // margemLiquida / margemEbitda são percentuais — não converter.
+    }
+    return res;
+  },
 };
 
 export const analyses = {
   list: () => apiFetch<AnalysesResponse>("/analyses"),
 
-  trend: () => apiFetch<{ trend: TrendPoint[] }>("/analyses/trend"),
+  trend: async (): Promise<{ trend: TrendPoint[] }> => {
+    const res = await apiFetch<{ trend: TrendPoint[] }>("/analyses/trend");
+    return {
+      trend: res.trend.map((t) => ({
+        ...t,
+        receitaLiquida: centsToReais(t.receitaLiquida),
+        lucroLiquido: centsToReais(t.lucroLiquido),
+        ebitda: centsToReais(t.ebitda),
+        // margemBruta / margemOperacional / margemLiquida são percentuais.
+      })),
+    };
+  },
 
   anomalyTimeline: () =>
     apiFetch<{ timeline: AnomalyTimelinePoint[] }>(
