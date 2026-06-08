@@ -186,6 +186,15 @@ export const notificationConfig = {
     }),
 };
 
+export const whatsapp = {
+  // Vincula o número do magic link à conta logada.
+  link: (token: string) =>
+    apiFetch<{ phone: string | null; enabled: boolean; optInAt: string | null }>(
+      "/whatsapp/link",
+      { method: "POST", body: JSON.stringify({ token }) },
+    ),
+};
+
 export const ingest = {
   upload: (file: File, referenceMonth: string) => {
     const form = new FormData();
@@ -335,5 +344,6 @@ export const api = {
   hub,
   analyses,
   notificationConfig,
+  whatsapp,
   export: exportApi,
 };

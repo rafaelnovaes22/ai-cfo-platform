@@ -40,9 +40,10 @@ export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
   // Destino pós-login: a rota que o ProtectedRoute tentou acessar (state.from),
-  // ou "/" como padrão. Antes ignorava o from e sempre ia para "/".
-  const from =
-    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/";
+  // ou "/" como padrão. Inclui a query (?token=...) para o fluxo /whatsapp/auth
+  // não perder o token ao passar pelo login.
+  const fromLoc = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+  const from = fromLoc ? `${fromLoc.pathname ?? "/"}${fromLoc.search ?? ""}` : "/";
   const [mode, setMode] = useState<Mode>("signin");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({

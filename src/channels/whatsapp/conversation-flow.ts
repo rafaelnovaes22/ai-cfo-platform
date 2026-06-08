@@ -4,9 +4,9 @@
 // C8 — tenantId sempre resolvido da sessão Redis; nunca hardcoded.
 
 import { randomUUID } from "node:crypto"
-import { SignJWT } from "jose"
 
 import { logger } from "@/observability/logger.js"
+import { signWhatsAppLinkToken, appBaseUrl } from "./link-token.js"
 import { getPrisma } from "@/persistence/prisma.js"
 import { getCashflowSummaryDay, getCashflow } from "@/cashflow/service.js"
 import {
@@ -44,18 +44,6 @@ function lastNDaysBRT(n: number): { startDate: string; endDate: string } {
   const startMs = Date.now() - (n - 1) * 24 * 60 * 60 * 1000
   const startDate = new Date(startMs).toLocaleDateString("pt-BR", { timeZone: tz }).split("/").reverse().join("-")
   return { startDate, endDate }
-}
-
-/** Gera um token JWT temporário (1h) para vinculação WhatsApp. */
-async function signWhatsAppLinkToken(phone: string): Promise<string> {
-  const secret = process.env["JWT_SECRET"]
-  if (!secret) throw new Error("JWT_SECRET não configurado")
-  const key = new TextEncoder().encode(secret)
-  return new SignJWT({ whatsappPhone: phone, purpose: "whatsapp_link" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(key)
 }
 
 /**
@@ -209,7 +197,7 @@ async function handleIdleOrOnboarding(
 
   // Tenant não encontrado ou whatsappEnabled=false → enviar magic link
   const token = await signWhatsAppLinkToken(msg.from)
-  const link = `https://app.aicfo.com.br/whatsapp/auth?token=${token}`
+  const link = `${appBaseUrl()}/whatsapp/auth?token=${token}`
   const text =
     `Olá! 👋 Para usar o Aicfo pelo WhatsApp, vincule seu número à sua conta:\n\n` +
     `🔗 ${link}\n\n` +
@@ -236,7 +224,7 @@ async function handleAwaitingAuth(
 
   // Ainda sem vínculo — reenviar link
   const token = await signWhatsAppLinkToken(msg.from)
-  const link = `https://app.aicfo.com.br/whatsapp/auth?token=${token}`
+  const link = `${appBaseUrl()}/whatsapp/auth?token=${token}`
   const text =
     `⏳ Seu número ainda não está vinculado a nenhuma conta Aicfo.\n\n` +
     `Use o link para vincular:\n🔗 ${link}\n\n` +
@@ -380,7 +368,7 @@ async function handleMenu(
       const text =
         `📊 *Análise financeira mensal*\n\n` +
         `Acesse o app para ver sua análise completa:\n` +
-        `🔗 https://app.aicfo.com.br/hub\n\n` +
+        `🔗 ${appBaseUrl()}/hub\n\n` +
         `_Aicfo · CFO-IA_`
       await deps.adapter.sendText(msg.from, text)
       break
