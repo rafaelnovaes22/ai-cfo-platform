@@ -69,6 +69,11 @@ async function tryRefresh(): Promise<string | null> {
     setTokens(data.accessToken, data.refreshToken);
     refreshQueue.forEach((cb) => cb(data.accessToken));
     return data.accessToken;
+  } catch {
+    // Erro de rede no refresh: libera os callers enfileirados (senão suas promises
+    // ficariam penduradas para sempre) em vez de deixá-los travados.
+    refreshQueue.forEach((cb) => cb(null));
+    return null;
   } finally {
     isRefreshing = false;
     refreshQueue = [];
@@ -123,7 +128,7 @@ export async function apiFetch<T>(
   return parseResponse<T>(res);
 }
 
-export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
+export async function apiUpload<T>(path: string, body: FormData, retried = false): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     Accept: "application/json, application/problem+json",
@@ -131,5 +136,46 @@ export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, body });
+
+  // Mesmo tratamento de 401 do apiFetch: tenta refresh e repete uma vez.
+  if (res.status === 401 && !retried) {
+    const newToken = await tryRefresh();
+    if (!newToken) {
+      onUnauthorized();
+      throw new ApiProblem(401, "Não autenticado");
+    }
+    return apiUpload<T>(path, body, true);
+  }
+
   return parseResponse<T>(res);
+}
+
+// Download de resposta binária (ex.: PDF de export). NÃO usar apiFetch, que faz
+// res.json() e corromperia/quebraria o stream binário. Mantém auth + refresh 401.
+export async function apiDownload(path: string, retried = false): Promise<Blob> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+
+  if (res.status === 401 && !retried) {
+    const newToken = await tryRefresh();
+    if (!newToken) {
+      onUnauthorized();
+      throw new ApiProblem(401, "Não autenticado");
+    }
+    return apiDownload(path, true);
+  }
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("json")) {
+      const b = (await res.json()) as { title?: string; detail?: string };
+      throw new ApiProblem(res.status, b.title ?? res.statusText, b.detail);
+    }
+    throw new ApiProblem(res.status, res.statusText);
+  }
+
+  return res.blob();
 }

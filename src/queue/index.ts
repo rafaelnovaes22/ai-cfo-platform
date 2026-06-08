@@ -180,3 +180,21 @@ export async function scheduleWhatsappRetention(): Promise<void> {
     removeOnFail: { count: 5 },
   });
 }
+
+// ── Eval Continuous (agendamento repetível) ───────────────────────────────
+// O worker já existia, mas nada agendava o scan de drift (ADR-011) — rodava só
+// se enfileirado manualmente. Agenda um run diário.
+
+export async function scheduleEvalContinuous(): Promise<void> {
+  await getEvalContinuousQueue().add("run", {}, {
+    repeat: { pattern: "0 3 * * *", tz: "America/Sao_Paulo" }, // diário 03:00 BRT
+    jobId: "eval-continuous-repeat",
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}
+
+// NOTA: o resumo diário proativo de caixa via WhatsApp foi intencionalmente NÃO
+// agendado — o canal é reativo (responde a comandos e a extratos recebidos).
+// Envio proativo é business-initiated (cobrado pela Meta) e foi descartado por
+// decisão de produto (anti-spam + custo). Ver notification-service (dead code).

@@ -1,4 +1,4 @@
-import { apiFetch, apiUpload } from "./client.js";
+import { apiFetch, apiUpload, apiDownload } from "./client.js";
 import type { paths } from "./types.js";
 
 export interface TrendPoint {
@@ -277,8 +277,22 @@ export const analyses = {
 };
 
 export const exportApi = {
-  download: (analysisId: string, type: "monthly" | "investors" | "partners") =>
-    apiFetch<void>(`/analysis/${analysisId}/export/${type}`),
+  // Baixa o PDF como binário (Blob) e dispara o download no navegador.
+  // Antes usava apiFetch<void>, que fazia res.json() sobre o stream PDF e quebrava.
+  download: async (
+    analysisId: string,
+    type: "monthly" | "investors" | "partners",
+  ): Promise<void> => {
+    const blob = await apiDownload(`/analysis/${analysisId}/export/${type}`);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analise-${analysisId}-${type}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const api = {

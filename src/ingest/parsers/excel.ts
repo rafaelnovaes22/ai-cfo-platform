@@ -58,7 +58,7 @@ export function parseExcel(buffer: Buffer): ParseResult {
     return parsePositional(rows.slice(firstNonEmptyRowIdx + 1));
   }
 
-  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = detected;
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx, impliedDirection } = detected;
 
   const entries: RawLedger[] = [];
   let orphanCount = 0;
@@ -88,7 +88,7 @@ export function parseExcel(buffer: Buffer): ParseResult {
       rawCents = typeof cellAmount === "number"
         ? normalizeAmountCents(cellAmount)
         : normalizeAmountCents(String(cellAmount ?? ""));
-      rawDirStr = dirIdx !== null ? String(cells[dirIdx] ?? "") : null;
+      rawDirStr = impliedDirection ?? (dirIdx !== null ? String(cells[dirIdx] ?? "") : null);
     } else {
       // Colunas separadas de crédito/débito
       const cellCredit = cells[creditIdx!];

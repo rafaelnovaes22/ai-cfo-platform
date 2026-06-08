@@ -1,18 +1,19 @@
 import { api } from "@/lib/api";
 import { addCountryCode } from "@/lib/utils";
-import { se } from "date-fns/locale";
 import { useCallback, useEffect, useState } from "react";
 import { PatternFormat } from "react-number-format";
-import { Link } from "react-router-dom";
 
 interface NotificationConfigItem {
   phone?: string;
   enabled?: boolean;
 }
 
+type SaveStatus = { type: "idle" | "saving" | "success" | "error"; message?: string };
+
 export default function NotificationsConfig() {
   const [values, setValues] = useState<NotificationConfigItem>({});
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
+  const [status, setStatus] = useState<SaveStatus>({ type: "idle" });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -32,14 +33,28 @@ export default function NotificationsConfig() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setStatus({ type: "saving" });
+
+    // Telefone informado precisa ser um número válido (E.164). Sem isto, um número
+    // incompleto era enviado como undefined e ignorado em silêncio pelo backend.
+    let phone: string | null = null;
+    if (values?.phone) {
+      const normalized = addCountryCode(values.phone);
+      if (!normalized) {
+        setStatus({ type: "error", message: "Número de telefone incompleto ou inválido." });
+        return;
+      }
+      phone = normalized;
+    }
+
     try {
-      await api.notificationConfig.update({
-        phone: values?.phone ? addCountryCode(values.phone) : null,
-        enabled: values?.enabled,
-      });
+      await api.notificationConfig.update({ phone, enabled: values?.enabled });
+      setStatus({ type: "success", message: "Configurações salvas." });
       refresh();
     } catch (error) {
-      console.error("Failed to update notification config:", error);
+      const message =
+        error instanceof Error ? error.message : "Não foi possível salvar. Tente novamente.";
+      setStatus({ type: "error", message });
     }
   };
 
@@ -51,8 +66,6 @@ export default function NotificationsConfig() {
     }
     return digits;
   };
-
-  console.log("Current notification config values:", values);
 
   return (
     <div className="space-y-8 relative max-w-2xl">
@@ -131,10 +144,17 @@ export default function NotificationsConfig() {
             </div>
             <button
               type="submit"
+              disabled={status.type === "saving"}
               className="inline-flex mt-6 items-center justify-center rounded-md bg-[#3D24A0] px-4 py-2 text-sm font-medium text-white hover:bg-[#3D24A0]/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Salvar configurações
+              {status.type === "saving" ? "Salvando..." : "Salvar configurações"}
             </button>
+            {status.type === "success" && (
+              <p className="text-sm text-green-500">{status.message}</p>
+            )}
+            {status.type === "error" && (
+              <p className="text-sm text-red-500">{status.message}</p>
+            )}
           </form>
         </div>
       </div>

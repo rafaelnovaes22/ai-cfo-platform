@@ -99,7 +99,8 @@ export function formatWelcomeMenu(tenantName: string, plan: string): string {
       header +
       "O que posso fazer por você?\n\n" +
       "1️⃣ Ver caixa de hoje\n" +
-      "2️⃣ Resumo do mês\n\n" +
+      "2️⃣ Resumo dos últimos 7 dias\n\n" +
+      "Ou envie um extrato (PDF, Excel ou CSV) que eu calculo seu fluxo de caixa.\n\n" +
       "_Responda com o número da opção._"
     )
   }
@@ -108,10 +109,9 @@ export function formatWelcomeMenu(tenantName: string, plan: string): string {
     header +
     "O que posso fazer por você?\n\n" +
     "1️⃣ Ver caixa de hoje\n" +
-    "2️⃣ Resumo do mês\n" +
-    "3️⃣ Resumo dos últimos 7 dias\n" +
-    "4️⃣ Enviar extrato / planilha\n" +
-    "5️⃣ Ver análise do mês\n\n" +
+    "2️⃣ Resumo dos últimos 7 dias\n" +
+    "3️⃣ Ver análise do mês\n\n" +
+    "Ou envie um extrato / planilha (PDF, Excel ou CSV) para importar lançamentos.\n\n" +
     "_Responda com o número da opção._"
   )
 }

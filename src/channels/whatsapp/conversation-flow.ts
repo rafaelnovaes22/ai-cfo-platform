@@ -68,8 +68,12 @@ async function findTenantByPhone(phone: string): Promise<{
   plan: string
 } | null> {
   const prisma = getPrisma()
+  // A Meta entrega o `from`/wa_id em E.164 SEM o '+', mas whatsappPhone é sempre
+  // persistido COM '+' (regex E.164 no register e no PATCH /config/whatsapp).
+  // Sem normalizar, a query nunca casa e o usuário fica preso em loop de magic-link.
+  const candidates = phone.startsWith("+") ? [phone] : [`+${phone}`, phone]
   const tenant = await prisma.tenant.findFirst({
-    where: { whatsappPhone: phone, whatsappEnabled: true },
+    where: { whatsappPhone: { in: candidates }, whatsappEnabled: true },
     select: {
       id: true,
       name: true,

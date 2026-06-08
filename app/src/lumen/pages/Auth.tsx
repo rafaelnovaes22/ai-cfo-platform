@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { LumenLogo } from "../components/Logo.tsx";
@@ -11,7 +11,7 @@ import { addCountryCode } from "@/lib/utils.ts";
 const signUpSchema = z
   .object({
     tenantName: z.string().trim().min(2, "Informe o nome da empresa").max(100),
-    name: z.string().trim().min(1, "Informe seu nome").max(100),
+    name: z.string().trim().min(2, "Informe seu nome").max(100),
     phone: z
       .string()
       .transform((val) => val.replace(/\D/g, ""))
@@ -38,6 +38,11 @@ type Mode = "signin" | "signup" | "forgot";
 export default function Auth() {
   const { user, loading, signIn, signUp, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Destino pós-login: a rota que o ProtectedRoute tentou acessar (state.from),
+  // ou "/" como padrão. Antes ignorava o from e sempre ia para "/".
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/";
   const [mode, setMode] = useState<Mode>("signin");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -62,7 +67,7 @@ export default function Auth() {
     );
   }
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={from} replace />;
 
   const update =
     (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -123,7 +128,7 @@ export default function Auth() {
     setSubmitting(true);
     try {
       await signIn(parsed.data.email, parsed.data.password);
-      navigate("/", { replace: true });
+      navigate(from, { replace: true });
     } catch (err) {
       const msg =
         err instanceof ApiProblem && err.status === 401

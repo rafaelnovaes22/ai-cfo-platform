@@ -5,6 +5,7 @@
 //   • optInAt — timestamp do consentimento explícito (whatsappOptInAt, LGPD Art. 7)
 // C8 — nenhum tenantId hardcoded; estado lido/gravado em colunas dedicadas do Tenant.
 
+import { Prisma } from "@prisma/client"
 import { getPrisma } from "@/persistence/prisma.js"
 import type { WhatsappConfigPatchInput } from "./config-schema.js"
 
@@ -61,11 +62,20 @@ export async function updateWhatsappConfig(
   if (patch.enabled !== undefined) data.whatsappEnabled = patch.enabled
   if (patch.enabled === true) data.whatsappOptInAt = new Date()
 
-  const updated = await db.tenant.update({
-    where: { id: tenantId },
-    data,
-    select: { whatsappPhone: true, whatsappEnabled: true, whatsappOptInAt: true },
-  })
+  let updated
+  try {
+    updated = await db.tenant.update({
+      where: { id: tenantId },
+      data,
+      select: { whatsappPhone: true, whatsappEnabled: true, whatsappOptInAt: true },
+    })
+  } catch (err) {
+    // Número já vinculado a outro tenant (índice único whatsappPhone).
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw httpError("Este número de WhatsApp já está vinculado a outra conta", 409)
+    }
+    throw err
+  }
 
   return {
     phone: updated.whatsappPhone,

@@ -90,12 +90,31 @@ export async function ingest(params: {
   // keepAllEntries (fluxo de caixa do aluno a partir de extrato): ingere todos os
   // lançamentos do arquivo, sem recortar por competência — o período exibido vem do
   // range real das datas. A competência-container usa o mês predominante só como chave.
-  const effectiveReferenceMonth = params.keepAllEntries
+  let effectiveReferenceMonth = params.keepAllEntries
     ? predominantMonth(parseResult.entries) ?? parseResult.referenceMonth ?? referenceMonth
     : parseResult.referenceMonth ?? referenceMonth;
-  const { entries, ignoredCount: outOfReferenceMonthCount } = params.keepAllEntries
+  let { entries, ignoredCount: outOfReferenceMonthCount } = params.keepAllEntries
     ? { entries: parseResult.entries, ignoredCount: 0 }
     : filterEntriesByReferenceMonth(parseResult.entries, effectiveReferenceMonth);
+
+  // Guarda contra perda total silenciosa: se o mês efetivo (detectado no arquivo
+  // ou escolhido pelo usuário) não casa NENHUM lançamento mas há lançamentos,
+  // recai no mês predominante real dos dados em vez de descartar tudo.
+  if (!params.keepAllEntries && entries.length === 0 && parseResult.entries.length > 0) {
+    const fallbackMonth = predominantMonth(parseResult.entries);
+    if (fallbackMonth && fallbackMonth !== effectiveReferenceMonth) {
+      const refiltered = filterEntriesByReferenceMonth(parseResult.entries, fallbackMonth);
+      if (refiltered.entries.length > 0) {
+        logger.warn(
+          { tenantId, requested: effectiveReferenceMonth, fallback: fallbackMonth, recovered: refiltered.entries.length },
+          "Ingest: mês efetivo descartou tudo; recaindo no mês predominante dos lançamentos",
+        );
+        entries = refiltered.entries;
+        outOfReferenceMonthCount = refiltered.ignoredCount;
+        effectiveReferenceMonth = fallbackMonth;
+      }
+    }
+  }
   const { orphanCount } = parseResult;
   logger.info(
     {
@@ -200,6 +219,12 @@ export async function ingest(params: {
   // skipAnalysis=true: apenas parse+store, sem LLM — usado por planos que não geram análise (ex: student).
   // Dados ficam disponíveis imediatamente para GET /cashflow/summary (direction+amountCents+date).
   if (outcome === "completed" && !params.skipAnalysis) {
+    // Marca generating ANTES de enfileirar: se o job rodar e concluir muito rápido,
+    // um update de status feito depois reverteria o resultado de volta para generating.
+    await db.monthlyAnalysis.update({
+      where: { id: analysis.id },
+      data: { status: "generating" },
+    });
     if (orchestrator === "langgraph") {
       await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId: trace.id });
       logger.info({ analysisId: analysis.id, tenantId }, "Ingest: despachando para LangGraph");
@@ -208,10 +233,6 @@ export async function ingest(params: {
     } else {
       await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
     }
-    await db.monthlyAnalysis.update({
-      where: { id: analysis.id },
-      data: { status: "generating" },
-    });
   }
 
   await trace.update({

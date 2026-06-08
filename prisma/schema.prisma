@@ -29,7 +29,9 @@ model Tenant {
   learningAutonomyState Json @default("{\"classification\":\"needs_review\",\"narrative\":\"needs_review\",\"action\":\"needs_review\"}")
 
   // Canal WhatsApp (LGPD Art. 7 — opt-in explícito obrigatório)
-  whatsappPhone   String? // número E.164 vinculado ao canal WhatsApp
+  // @unique: um número só pode estar vinculado a UM tenant — sem isso, dois tenants
+  // com o mesmo número causariam roteamento cross-tenant no canal inbound.
+  whatsappPhone   String?   @unique // número E.164 vinculado ao canal WhatsApp
   whatsappOptInAt DateTime? // timestamp do opt-in explícito (LGPD Art. 7)
   whatsappEnabled Boolean   @default(false)
 
@@ -198,6 +200,7 @@ enum AnalysisStatus {
   ready // gerado, aguardando entrega (SHADOW: Rafael revisa)
   delivered // entregue ao cliente (ASSISTED/AUTONOMOUS)
   approved // cliente aprovou (fecha o mês)
+  failed // pipeline esgotou tentativas — visível ao usuário (re-tentar/re-ingest)
 }
 
 enum CardType {

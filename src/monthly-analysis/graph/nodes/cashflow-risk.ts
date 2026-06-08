@@ -7,7 +7,11 @@ import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 export async function cashflowRiskNode(
   state: MonthlyAnalysisState,
 ): Promise<Partial<MonthlyAnalysisState>> {
-  const cashflowRisk = assessCashflowRisk(state.normalizedEntries);
+  // Passa openingBalance para que o runway seja calculado (igual ao agente legado).
+  // Sem isto, o nó do grafo subestimava o risco de caixa (runway nunca computado).
+  const cashflowRisk = assessCashflowRisk(state.normalizedEntries, {
+    openingBalance: state.openingBalance,
+  });
 
   const { costs, traces } = buildRuleBasedTrace({
     agent: "cashflow-risk",

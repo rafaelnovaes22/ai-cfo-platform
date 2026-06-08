@@ -92,7 +92,16 @@ export default function Dashboard() {
 
         {current && trend?.length > 1 && (
           <div className="w-full">
-            <MonthlyViewChart chartData={trend} />
+            {/* API entrega valores em centavos; o gráfico (e o demoData) trabalham
+                em reais. Converte os campos monetários na fronteira (margens são %). */}
+            <MonthlyViewChart
+              chartData={trend.map((t) => ({
+                ...t,
+                receitaLiquida: t.receitaLiquida / 100,
+                lucroLiquido: t.lucroLiquido / 100,
+                ebitda: t.ebitda / 100,
+              }))}
+            />
           </div>
         )}
 

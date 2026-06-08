@@ -53,16 +53,21 @@ export function normalizeAmountCents(raw: string | number): number | null {
   let s = raw.toString().trim();
   // Remove R$, espaços, aspas
   s = s.replace(/R\$\s*/gi, "").replace(/\s/g, "").replace(/"/g, "");
-  // Parênteses → negativo (formato contábil)
-  const negative = (s.startsWith("(") && s.endsWith(")")) || s.startsWith("-");
-  s = s.replace(/[()]/g, "");
+  // Negativo: parênteses contábeis, sinal à esquerda OU à direita (formato Totvs/Protheus: "1.234,56-")
+  const negative =
+    (s.startsWith("(") && s.endsWith(")")) || s.startsWith("-") || s.endsWith("-");
+  s = s.replace(/[()]/g, "").replace(/^-|-$/g, "");
 
-  // Formato BR: 1.234,56 → 1234.56
-  if (s.includes(",")) {
+  // Decide o separador decimal pelo que aparece MAIS À DIREITA, distinguindo
+  // BR (1.234,56 → vírgula decimal) de US (1,234.56 → ponto decimal).
+  // Sem isto, "1,234.56" era lido como 1,23456 → 123 centavos.
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma > lastDot) {
+    // Decimal é a vírgula (BR): pontos são milhar.
     s = s.replace(/\./g, "").replace(",", ".");
-  }
-  // Formato US: 1,234.56 → já ok depois de remover vírgula de milhar
-  else if (s.includes(".") && s.indexOf(".") < s.length - 3) {
+  } else if (lastDot > lastComma) {
+    // Decimal é o ponto (US/plano): vírgulas são milhar.
     s = s.replace(/,/g, "");
   }
 
@@ -107,6 +112,9 @@ export function detectColumns(headers: string[]): {
   dirIdx: number | null;
   creditIdx: number | null;
   debitIdx: number | null;
+  // Direção fixa quando há uma única coluna de Crédito OU Débito (todos os
+  // lançamentos têm o mesmo sentido). null quando a direção vem de dado da linha.
+  impliedDirection: "credit" | "debit" | null;
 } {
   const normalizedHeaders = headers.map((h) =>
     h.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim(),
@@ -114,14 +122,32 @@ export function detectColumns(headers: string[]): {
   const find = (re: RegExp) => normalizedHeaders.findIndex((h) => re.test(h));
   const creditIdx = find(COL_CREDIT);
   const debitIdx  = find(COL_DEBIT);
+  const amountIdx = find(COL_AMOUNT);
   // Quando ambas as colunas existem, são colunas de valor (não de direção)
   const hasSplitAmounts = creditIdx >= 0 && debitIdx >= 0;
+
+  // Coluna única de Crédito OU Débito (sem a contraparte e sem coluna de valor
+  // genérica): ela própria é a coluna de valor, com direção implícita. Sem isto,
+  // amountIdx ficava -1 e o parser caía em modo posicional gerando lixo.
+  let resolvedAmountIdx = amountIdx;
+  let impliedDirection: "credit" | "debit" | null = null;
+  if (!hasSplitAmounts && amountIdx < 0) {
+    if (creditIdx >= 0) {
+      resolvedAmountIdx = creditIdx;
+      impliedDirection = "credit";
+    } else if (debitIdx >= 0) {
+      resolvedAmountIdx = debitIdx;
+      impliedDirection = "debit";
+    }
+  }
+
   return {
     dateIdx:   find(COL_DATE),
     descIdx:   find(COL_DESC),
-    amountIdx: find(COL_AMOUNT),
+    amountIdx: resolvedAmountIdx,
     dirIdx:    hasSplitAmounts ? null : (find(COL_DIR) >= 0 ? find(COL_DIR) : null),
     creditIdx: hasSplitAmounts ? creditIdx : null,
     debitIdx:  hasSplitAmounts ? debitIdx : null,
+    impliedDirection,
   };
 }

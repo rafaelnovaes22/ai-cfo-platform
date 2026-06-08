@@ -79,11 +79,23 @@ export async function logSkipped(params: {
   })
 }
 
-/** Registra uma mensagem recebida do usuário. */
+/** Registra uma mensagem recebida do usuário (idempotente por providerMessageId). */
 export async function logInbound(params: {
   tenantId: string
   providerMessageId: string
 }): Promise<void> {
+  const db = getPrisma()
+  // Idempotência: a Meta reentrega webhooks; sem isto, cada reentrega/reprocesso
+  // criaria uma nova linha inbound para a mesma mensagem.
+  try {
+    const existing = await db.whatsappMessage.findFirst({
+      where: { providerMessageId: params.providerMessageId, direction: "inbound" },
+      select: { id: true },
+    })
+    if (existing) return
+  } catch (err) {
+    logger.warn({ providerMessageId: params.providerMessageId, err }, "whatsapp:message-log — falha ao checar inbound existente")
+  }
   await safeCreate({
     tenantId: params.tenantId,
     direction: "inbound",
