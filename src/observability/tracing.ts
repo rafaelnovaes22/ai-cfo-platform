@@ -71,10 +71,8 @@ export function createTrace(opts: TraceOptions) {
           const inputTokens = usage.input ?? 0;
           const outputTokens = usage.output ?? 0;
           // LangSmith lê tokens de extra.metadata.usage_metadata (input_tokens/output_tokens)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const existing = (child as any).extra as Record<string, unknown> ?? {};
           const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (child as any).extra = {
             ...existing,
             metadata: {
