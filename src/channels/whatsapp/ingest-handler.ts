@@ -136,6 +136,16 @@ export async function handleIngestDocument(
         { tenantId, referenceMonth, source, result },
         "whatsapp:ingest — ingest retornou outcome=failed",
       )
+      // Fluxo cash-flow-only (aluno) com PDF sem lançamentos: provavelmente é uma
+      // DRE, não um extrato. Orienta a enviar o extrato (sem disparar o LLM da DRE).
+      if (result.entryCount === 0 && source === "pdf" && opts.skipAnalysis) {
+        return {
+          error:
+            "📄 Isso parece uma DRE, não um extrato bancário. Aqui eu calculo o " +
+            "*fluxo de caixa* a partir do seu *extrato* (PDF, Excel ou CSV). " +
+            "Me envie o extrato da conta que eu te devolvo o caixa na hora.",
+        }
+      }
       return {
         error:
           result.entryCount === 0

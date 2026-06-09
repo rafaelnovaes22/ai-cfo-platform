@@ -266,10 +266,14 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
       return parseExcel(params.buffer!);
     case "pdf": {
       // PDF pode ser extrato bancário (lista de transações, ex.: aluno no WhatsApp)
-      // OU DRE consolidado do contador. Tenta o extrato primeiro; se não achar
-      // lançamentos, cai no parser de DRE (auto-detecção pelo conteúdo).
+      // OU DRE consolidado do contador. Tenta o extrato primeiro (determinístico).
       const statement = await parsePdfStatement(params.buffer!);
       if (statement.entries.length > 0) return statement;
+      // O parser de DRE usa LLM. No fluxo cash-flow-only (skipAnalysis = free tier do
+      // aluno, zero IA), NÃO cair nele: devolve vazio e o handler orienta a enviar o
+      // extrato. Sem isto, um aluno mandando DRE dispararia LLM (fura o custo R$0) e
+      // veria números de competência rotulados como fluxo de caixa.
+      if (params.skipAnalysis) return statement;
       return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
     }
     case "text":

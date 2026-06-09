@@ -65,3 +65,21 @@ describe("parsePdfStatement — extrato bancário (Santander)", () => {
     expect(debit).toBe(4355052);
   });
 });
+
+describe("parsePdfStatement — DRE não é confundida com extrato", () => {
+  // Uma DRE (linhas de categoria, sem data no início) não deve gerar lançamentos.
+  // Assim o roteador devolve 0 e, no fluxo do aluno, NÃO cai no parser LLM de DRE.
+  const DRE = `DEMONSTRATIVO DE RESULTADO DO EXERCÍCIO
+Período de competência: março/2026
+Receita Bruta              50.000,00
+(-) Deduções               5.000,00
+= Receita Líquida          45.000,00
+(-) Custos                 20.000,00
+= Lucro Bruto              25.000,00
+(-) Despesas Operacionais  10.000,00
+= Lucro Líquido            15.000,00`;
+
+  it("retorna 0 lançamentos para texto de DRE", () => {
+    expect(parseStatementText(DRE).entries.length).toBe(0);
+  });
+});
