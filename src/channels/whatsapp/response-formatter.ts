@@ -139,9 +139,11 @@ export function formatError(
  * Formata confirmação de recebimento de arquivo para ingest.
  */
 export function formatIngestReceived(filename: string, studentPlan = false): string {
+  // Canal reativo: NÃO prometer notificação proativa (ela está desligada). O usuário
+  // pede "análise" aqui ou acessa o app para ver quando ficar pronta.
   const body = studentPlan
     ? "Já estou lendo seus lançamentos e calculando o fluxo de caixa do extrato. Um instante…"
-    : "Estou processando os lançamentos. Você será notificado assim que a análise ficar pronta."
+    : "Estou processando os lançamentos. Quando a análise ficar pronta, peça *análise* aqui ou acesse o app para ver."
   return `✅ *Arquivo recebido!*\n\n📄 ${filename}\n\n${body}`
 }
 
