@@ -188,10 +188,13 @@ async function handleIdleOrOnboarding(
   const tenant = await findTenantByPhone(msg.from)
 
   if (tenant) {
-    // Tenant encontrado e habilitado → entrar direto no menu
+    // Tenant reconhecido → entra no MENU e processa o CONTEÚDO da mensagem direto
+    // (documento/comando) via handleMenu. Sem isto, a 1a mensagem de uma sessão nova
+    // (ex.: extrato enviado depois da sessão Redis de 30min expirar) era ignorada e o
+    // menu era mostrado, obrigando o usuário a reenviar. Greeting cai no UNKNOWN do
+    // handleMenu, que mostra o menu de boas-vindas (comportamento preservado).
     await transitionTo(session, "MENU", deps.store, { tenantId: tenant.id })
-    const menuText = formatWelcomeMenu(tenant.name, tenant.plan)
-    await deps.adapter.sendText(msg.from, menuText)
+    await handleMenu(msg, { ...session, step: "MENU", tenantId: tenant.id }, deps)
     return
   }
 
@@ -216,9 +219,9 @@ async function handleAwaitingAuth(
   const tenant = await findTenantByPhone(msg.from)
 
   if (tenant) {
+    // Acabou de vincular → entra no MENU e processa o conteúdo direto (igual onboarding).
     await transitionTo(session, "MENU", deps.store, { tenantId: tenant.id })
-    const menuText = formatWelcomeMenu(tenant.name, tenant.plan)
-    await deps.adapter.sendText(msg.from, menuText)
+    await handleMenu(msg, { ...session, step: "MENU", tenantId: tenant.id }, deps)
     return
   }
 
