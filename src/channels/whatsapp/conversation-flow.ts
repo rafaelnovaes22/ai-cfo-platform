@@ -20,6 +20,9 @@ import {
 } from "./response-formatter.js"
 import { classifyCommand, isSupportedDocument } from "./message-parser.js"
 import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
+import { decideWhatsappConversation } from "./conversation-graph/index.js"
+import { buildConversationState, withConversationState } from "./conversation-graph/state.js"
+import type { WaConversationState } from "./conversation-graph/state.js"
 import type { WaIncomingMessage, WaSession, WaSessionStep, IWhatsAppSessionStore, IWhatsAppAdapter } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -55,6 +58,7 @@ async function findTenantByPhone(phone: string): Promise<{
   id: string
   name: string
   plan: string
+  userName?: string
 } | null> {
   const prisma = getPrisma()
   // A Meta entrega o `from`/wa_id em E.164 SEM o '+', mas whatsappPhone é sempre
@@ -66,6 +70,7 @@ async function findTenantByPhone(phone: string): Promise<{
     select: {
       id: true,
       name: true,
+      users: { select: { name: true }, orderBy: { createdAt: "asc" }, take: 1 },
       subscriptions: {
         select: { plan: true },
         take: 1,
@@ -76,6 +81,7 @@ async function findTenantByPhone(phone: string): Promise<{
   return {
     id: tenant.id,
     name: tenant.name,
+    userName: tenant.users[0]?.name ?? undefined,
     plan: tenant.subscriptions[0]?.plan ?? "trial",
   }
 }
@@ -287,7 +293,11 @@ async function handleIngestDocument(
   // Confirma recebimento imediatamente
   await deps.adapter.sendText(msg.from, formatIngestReceived(filename, isStudent))
   await transitionTo(session, "INGEST_FLOW", deps.store, {
-    context: { mediaId: msg.document?.id, filename },
+    context: {
+      ...session.context,
+      mediaId: msg.document?.id,
+      filename,
+    },
   })
   // Dispara ingest em background — student: parse+store (zero LLM) + caixa do extrato;
   // pago: pipeline completo (classificação → DRE → plano de ação).
@@ -427,6 +437,132 @@ async function handleMenu(
 }
 
 // ---------------------------------------------------------------------------
+// Fluxo conversacional LangGraph (zero-token por padrão)
+// ---------------------------------------------------------------------------
+
+function conversationGraphEnabled(): boolean {
+  return process.env.WHATSAPP_CONVERSATION_GRAPH_ENABLED === "true"
+}
+
+async function sendAuthLink(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+  prefix?: string,
+): Promise<void> {
+  const token = await signWhatsAppLinkToken(msg.from)
+  const link = `${appBaseUrl()}/whatsapp/auth?token=${token}`
+  const text =
+    (prefix ?? `Olá! 👋 Para usar o Aicfo pelo WhatsApp, vincule seu número à sua conta:`) +
+    `\n\n🔗 ${link}\n\n` +
+    `_O link expira em 1 hora._`
+
+  await deps.adapter.sendText(msg.from, text)
+  const conversation = buildConversationState(session, null)
+  await transitionTo(withConversationState(session, conversation), "AWAITING_AUTH", deps.store)
+}
+
+async function sendStatus(
+  msg: WaIncomingMessage,
+  tenantId: string,
+  deps: { adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const plan = await getTenantPlan(tenantId)
+  const text =
+    `ℹ️ *Status da sua conta*\n\n` +
+    `Plano: *${plan}*\n` +
+    `Canal WhatsApp: ✅ Ativo\n\n` +
+    `_Aicfo · CFO-IA_`
+  await deps.adapter.sendText(msg.from, text)
+}
+
+async function sendMonthlyAnalysisLink(
+  msg: WaIncomingMessage,
+  tenantId: string,
+  deps: { adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const plan = await getTenantPlan(tenantId)
+  if (plan === "student") {
+    await deps.adapter.sendText(msg.from, formatError("PLAN_LIMIT"))
+    return
+  }
+  const text =
+    `📊 *Análise financeira mensal*\n\n` +
+    `Acesse o app para ver sua análise completa:\n` +
+    `🔗 ${appBaseUrl()}/hub\n\n` +
+    `_Aicfo · CFO-IA_`
+  await deps.adapter.sendText(msg.from, text)
+}
+
+function applyConversationOutcome(
+  conversation: WaConversationState,
+  decision: Awaited<ReturnType<typeof decideWhatsappConversation>>,
+): WaConversationState {
+  const summary = decision.responseText?.split("\n").find((line) => line.trim().length > 0)?.slice(0, 180)
+  return {
+    ...decision.conversation,
+    lastBotAction: decision.route,
+    ...(summary
+      ? {
+          lastOutcome: {
+            type: decision.route === "HANDLE_DOCUMENT" ? "ingest_received" : conversation.lastOutcome?.type ?? "cashflow_statement",
+            summary,
+            createdAt: new Date().toISOString(),
+          },
+        }
+      : {}),
+  }
+}
+
+async function processMessageWithConversationGraph(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { sessionStore: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const tenant = await findTenantByPhone(msg.from)
+  if (!tenant) {
+    await sendAuthLink(msg, session, { store: deps.sessionStore, adapter: deps.adapter })
+    return
+  }
+
+  const baseSession: WaSession = { ...session, tenantId: tenant.id, step: "MENU" }
+  const conversation = buildConversationState(baseSession, tenant)
+  const decision = await decideWhatsappConversation(msg, conversation)
+
+  logger.info(
+    { from: msg.from, intent: decision.intent, route: decision.route, usedSlm: decision.usedSlm },
+    "whatsapp:conversation-graph — decision",
+  )
+
+  switch (decision.route) {
+    case "HANDLE_DOCUMENT": {
+      const persisted = withConversationState(baseSession, applyConversationOutcome(conversation, decision))
+      await handleIngestDocument(msg, persisted, { store: deps.sessionStore, adapter: deps.adapter }, tenant.plan)
+      return
+    }
+
+    case "STATUS":
+      await sendStatus(msg, tenant.id, { adapter: deps.adapter })
+      break
+
+    case "MONTHLY_ANALYSIS":
+      await sendMonthlyAnalysisLink(msg, tenant.id, { adapter: deps.adapter })
+      break
+
+    case "SEND_TEXT":
+    case "NEED_SLM":
+    default:
+      if (decision.responseText) {
+        await deps.adapter.sendText(msg.from, decision.responseText)
+      }
+      break
+  }
+
+  const updatedConversation = applyConversationOutcome(conversation, decision)
+  await deps.sessionStore.set(withConversationState(baseSession, updatedConversation))
+}
+
+// ---------------------------------------------------------------------------
 // Entrypoint público
 // ---------------------------------------------------------------------------
 
@@ -455,6 +591,11 @@ export async function processMessage(
   )
 
   try {
+    if (conversationGraphEnabled()) {
+      await processMessageWithConversationGraph(msg, session, { sessionStore, adapter })
+      return
+    }
+
     switch (session.step) {
       case "IDLE":
       case "ONBOARDING":

@@ -10,6 +10,7 @@ import { getCashflowSummaryDay } from "@/cashflow/service.js"
 import { formatCashflowSummary, formatAnalysisReady } from "./response-formatter.js"
 import { logOutbound, logSkipped } from "./message-log.js"
 import { logger } from "@/observability/logger.js"
+import { storePassiveContext } from "./conversation-graph/passive-context.js"
 import type { IWhatsAppAdapter } from "./types.js"
 import { randomUUID } from "node:crypto"
 
@@ -104,6 +105,14 @@ export async function sendDailyCashflowSummary(
 
   const result = await adapter.sendText(tenant.whatsappPhone, text)
   await logOutbound({ tenantId, kind: "daily_cashflow", body: text, result })
+  if (result.status === "queued") {
+    await storePassiveContext({
+      phoneE164: tenant.whatsappPhone,
+      tenantId,
+      source: "daily_cashflow",
+      summary: "Resumo diário de caixa enviado.",
+    })
+  }
 
   logger.info(
     { tenantId, date, status: result.status, messageId: result.messageId },
@@ -167,6 +176,14 @@ export async function notifyAnalysisReady(
   const text = formatAnalysisReady(referenceMonth)
   const result = await adapter.sendText(tenant.whatsappPhone, text)
   await logOutbound({ tenantId, kind: "analysis_ready", body: text, result })
+  if (result.status === "queued") {
+    await storePassiveContext({
+      phoneE164: tenant.whatsappPhone,
+      tenantId,
+      source: "analysis_ready",
+      summary: `Análise mensal de ${referenceMonth} pronta para consulta.`,
+    })
+  }
 
   logger.info(
     { tenantId, referenceMonth, status: result.status, messageId: result.messageId },
@@ -240,6 +257,14 @@ export async function sendDailyCashflowToAll(adapter: IWhatsAppAdapter): Promise
         // whatsappPhone nunca é null aqui (filtrado pela query acima)
         const result = await adapter.sendText(tenant.whatsappPhone!, text)
         await logOutbound({ tenantId: tenant.id, kind: "daily_cashflow", body: text, result })
+        if (result.status === "queued") {
+          await storePassiveContext({
+            phoneE164: tenant.whatsappPhone!,
+            tenantId: tenant.id,
+            source: "daily_cashflow",
+            summary: "Resumo diário de caixa enviado.",
+          })
+        }
 
         logger.info(
           { tenantId: tenant.id, date, status: result.status, messageId: result.messageId },
