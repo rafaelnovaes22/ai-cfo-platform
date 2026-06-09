@@ -1,6 +1,7 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
 import { buildNarrativeSignals } from "@/dre-narrative/prompts.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 import type {
   Anomaly,
   CashflowRisk,
@@ -22,6 +23,8 @@ export interface NarrativeSynthesisAgentInput {
 // (verbos proibidos/exigidos, jargão por taxRegime, evidence métrica-first).
 export function buildSystemPrompt(): string {
   return `Você é o analista financeiro do Aicfo, especialista em PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Leia o diagnóstico financeiro (DRE + anomalias + diagnóstico de margens + risco de caixa) e gere

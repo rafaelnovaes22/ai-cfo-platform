@@ -1,5 +1,6 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 import type {
   ActionPlanDraft,
   Anomaly,
@@ -26,6 +27,8 @@ export function buildSystemPrompt(): string {
 mensal pode ser publicada para o CEO da PME. Seu trabalho é detectar incoerências entre
 os artefatos gerados (cards de narrativa, plano de ação) e a base factual (DRE, anomalias,
 diagnóstico de margens, risco de caixa).
+
+${INJECTION_GUARD}
 
 VOCÊ NÃO REESCREVE conteúdo — apenas reporta issues estruturados. Quem corrige é o agente
 upstream (narrative-synthesis ou action-planning) num re-run.

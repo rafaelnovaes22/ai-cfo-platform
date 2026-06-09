@@ -1,5 +1,6 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 
 function brl(cents: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -50,6 +51,8 @@ ${priorities.length > 0 ? priorities.map((p) => `- ${p}`).join("\n") : "- Sem ga
 // L0 — estático e cacheável
 export function buildNarrativeSystemPrompt(): string {
   return `Você é o analista financeiro do Aicfo, especialista em PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Leia a DRE Facilitada da empresa e gere EXATAMENTE 3 cards de "Leitura da história" do mês.
