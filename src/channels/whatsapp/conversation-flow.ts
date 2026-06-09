@@ -312,6 +312,24 @@ async function getTenantPlan(tenantId: string): Promise<string> {
   return subscription?.plan ?? "trial"
 }
 
+/**
+ * Nome para a saudação: primeiro nome do usuário (mais pessoal) em vez do nome da
+ * empresa/tenant. Usa o usuário mais antigo do tenant; cai no nome do tenant se não houver.
+ */
+async function greetingName(tenantId: string): Promise<string> {
+  const prisma = getPrisma()
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      name: true,
+      users: { select: { name: true }, orderBy: { createdAt: "asc" }, take: 1 },
+    },
+  })
+  const userName = tenant?.users[0]?.name?.trim()
+  if (userName) return userName.split(/\s+/)[0]!
+  return tenant?.name ?? ""
+}
+
 async function handleMenu(
   msg: WaIncomingMessage,
   session: WaSession,
@@ -353,9 +371,7 @@ async function handleMenu(
   switch (command) {
     case "MENU": {
       const plan = await getTenantPlan(tenantId)
-      const prisma = getPrisma()
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
-      const menuText = formatWelcomeMenu(tenant?.name ?? "", plan)
+      const menuText = formatWelcomeMenu(await greetingName(tenantId), plan)
       await deps.adapter.sendText(msg.from, menuText)
       break
     }
@@ -403,9 +419,7 @@ async function handleMenu(
     default: {
       // Texto não reconhecido → reenviar menu de ajuda
       const plan = await getTenantPlan(tenantId)
-      const prisma = getPrisma()
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
-      const helpText = formatWelcomeMenu(tenant?.name ?? "", plan)
+      const helpText = formatWelcomeMenu(await greetingName(tenantId), plan)
       await deps.adapter.sendText(msg.from, helpText)
       break
     }
