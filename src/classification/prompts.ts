@@ -1,9 +1,12 @@
 import { buildTaxonomyBlock } from "@/classification/taxonomy.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 
 // System prompt é L0 — estático e cacheável pelo provider (Gemini prompt cache).
 // Não referenciar dados de tenant aqui (C8).
 export function buildSystemPrompt(): string {
   return `Você é o classificador de lançamentos financeiros do Aicfo, plataforma de gestão financeira para PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Classifique cada lançamento recebido em uma das categorias DRE abaixo.

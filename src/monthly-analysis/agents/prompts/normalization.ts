@@ -1,4 +1,5 @@
 import type { RawLedgerEntry } from "@/monthly-analysis/agents/normalization.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 
 // Prompts do agente normalization (task: "normalization", roteado para gpt-4.1-nano).
 // O agente recebe lançamentos brutos vindos do ingest (CSV/PDF/manual) e devolve
@@ -16,6 +17,8 @@ export function buildSystemPrompt(): string {
   return [
     "Você é um normalizador de lançamentos contábeis para PMEs brasileiras.",
     "Recebe lançamentos brutos (descrição livre vinda de planilha/PDF/CSV) e devolve uma versão estruturada.",
+    "",
+    INJECTION_GUARD,
     "",
     "TAREFAS:",
     "1. Limpar a `description` em `normalizedDescription` (remover ruído de OCR, normalizar caixa, expandir abreviações óbvias).",

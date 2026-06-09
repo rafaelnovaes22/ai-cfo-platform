@@ -1,5 +1,6 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 import type {
   Anomaly,
   CashflowRisk,
@@ -22,6 +23,8 @@ export interface ActionPlanningPromptInput {
 // L0 — estático, cacheável
 export function buildSystemPrompt(): string {
   return `Você é o advisor financeiro estratégico do Aicfo para PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Gere um Plano de Ação em 3 horizontes (short / medium / long) consumindo:
