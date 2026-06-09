@@ -4,6 +4,7 @@ import { enqueueClassification, enqueueDreNarrative, enqueueMonthlyAnalysisGraph
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
+import { parsePdfStatement } from "@/ingest/parsers/pdf-statement.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { createTrace } from "@/observability/tracing.js";
 import { logger } from "@/observability/logger.js";
@@ -263,10 +264,14 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
     case "excel":
     case "csv":
       return parseExcel(params.buffer!);
-    case "pdf":
-      // No Aicfo, upload PDF representa DRE consolidado do contador.
-      // Extratos/ledgers devem entrar como Excel, CSV ou texto colado.
+    case "pdf": {
+      // PDF pode ser extrato bancário (lista de transações, ex.: aluno no WhatsApp)
+      // OU DRE consolidado do contador. Tenta o extrato primeiro; se não achar
+      // lançamentos, cai no parser de DRE (auto-detecção pelo conteúdo).
+      const statement = await parsePdfStatement(params.buffer!);
+      if (statement.entries.length > 0) return statement;
       return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
+    }
     case "text":
       return parseText(params.text!);
     case "manual":
