@@ -32,7 +32,10 @@ export async function verifyWhatsAppLinkToken(token: string): Promise<string> {
 /**
  * Base URL do frontend para montar links enviados no WhatsApp.
  * Reusa APP_URL (mesma var dos redirects de Stripe/password-reset) — não hardcodar (C8).
+ * Normaliza o domínio legado do Railway para o canônico: se APP_URL em prod estiver
+ * desatualizado (host antigo), o magic link ainda aponta para o frontend ativo.
  */
 export function appBaseUrl(): string {
-  return (process.env["APP_URL"] ?? "https://aicfo.up.railway.app").replace(/\/$/, "")
+  const raw = (process.env["APP_URL"] ?? "https://aicfo.up.railway.app").replace(/\/$/, "")
+  return raw.replace("aicfo-production.up.railway.app", "aicfo.up.railway.app")
 }
