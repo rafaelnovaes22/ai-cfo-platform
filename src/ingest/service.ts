@@ -2,6 +2,7 @@ import { getPrisma } from "@/persistence/prisma.js";
 import { Prisma } from "@prisma/client";
 import { enqueueClassification, enqueueDreNarrative, enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
+import { parseCsv } from "@/ingest/parsers/csv.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parsePdfStatement } from "@/ingest/parsers/pdf-statement.js";
@@ -262,8 +263,12 @@ export async function ingest(params: {
 async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResult> {
   switch (params.source) {
     case "excel":
-    case "csv":
       return parseExcel(params.buffer!);
+    case "csv":
+      // CSV usa parser de texto dedicado, não o xlsx: este faz type-inference de
+      // data em CSV com semântica MM/DD (americana) e perde o sinal de valores
+      // negativos. Ver src/ingest/parsers/csv.ts.
+      return parseCsv(params.buffer!);
     case "pdf": {
       // PDF pode ser extrato bancário (lista de transações, ex.: aluno no WhatsApp)
       // OU DRE consolidado do contador. Tenta o extrato primeiro (determinístico).
