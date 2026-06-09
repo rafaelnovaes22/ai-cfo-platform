@@ -21,6 +21,7 @@ export type WaIntent =
   | "ASK_NEXT_STEP"
   | "ASK_STATUS"
   | "ASK_MONTHLY_ANALYSIS"
+  | "CAPABILITIES_HELP"
   | "AUTH_HELP"
   | "CONFIRMATION"
   | "NEGATION"

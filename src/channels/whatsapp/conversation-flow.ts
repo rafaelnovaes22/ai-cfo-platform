@@ -21,8 +21,10 @@ import {
 import { classifyCommand, isSupportedDocument } from "./message-parser.js"
 import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
 import { decideWhatsappConversation } from "./conversation-graph/index.js"
-import { buildConversationState, withConversationState } from "./conversation-graph/state.js"
+import { buildConversationState, withConversationState, getConversationState } from "./conversation-graph/state.js"
 import type { WaConversationState } from "./conversation-graph/state.js"
+import { cashflowToMetrics, encodeOutcomeMetrics, buildCashflowOutcomeSummary } from "./conversation-graph/explanation.js"
+import type { CashflowResponse } from "@/cashflow/types.js"
 import type { WaIncomingMessage, WaSession, WaSessionStep, IWhatsAppSessionStore, IWhatsAppAdapter } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -130,7 +132,7 @@ async function sendStatementCashflow(
   tenantId: string,
   analysisId: string,
   adapter: IWhatsAppAdapter,
-): Promise<void> {
+): Promise<CashflowResponse | null> {
   const prisma = getPrisma()
   const range = await prisma.ledgerEntry.aggregate({
     where: { analysisId },
@@ -141,7 +143,7 @@ async function sendStatementCashflow(
   const max = range._max.date
   if (!min || !max) {
     logger.warn({ tenantId, analysisId }, "whatsapp:ingest — sem range de datas; não há caixa a enviar")
-    return
+    return null
   }
 
   const requestId = randomUUID()
@@ -153,6 +155,37 @@ async function sendStatementCashflow(
     requestId,
   })
   await adapter.sendText(phone, formatCashflowStatement(cashflow))
+  return cashflow
+}
+
+/**
+ * Grava os números reais do extrato no lastOutcome do estado conversacional.
+ * Sem isto, "me explica o resultado" não tinha os dados e acabava ecoando a
+ * saudação anterior. Só persiste se já existe estado conversacional (o fluxo
+ * legado não consome lastOutcome). Relê a sessão atual do store para não
+ * sobrescrever uma transição mais recente do usuário (race do background).
+ */
+async function persistCashflowOutcome(
+  store: IWhatsAppSessionStore,
+  phone: string,
+  cashflow: CashflowResponse,
+): Promise<void> {
+  const current = await store.get(phone)
+  if (!current) return
+  const conversation = getConversationState(current)
+  if (!conversation) return
+
+  const metrics = cashflowToMetrics(cashflow)
+  const updated: WaConversationState = {
+    ...conversation,
+    lastOutcome: {
+      type: "cashflow_statement",
+      summary: buildCashflowOutcomeSummary(metrics),
+      dataRef: encodeOutcomeMetrics(metrics),
+      createdAt: new Date().toISOString(),
+    },
+  }
+  await store.set(withConversationState(current, updated))
 }
 
 /**
@@ -164,7 +197,7 @@ function ingestDocumentBackground(
   msg: WaIncomingMessage,
   tenantId: string,
   adapter: IWhatsAppAdapter,
-  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean },
+  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean; store?: IWhatsAppSessionStore },
 ): void {
   ingestDoc(msg, tenantId, adapter, opts).then(async (result) => {
     if ("error" in result) {
@@ -176,7 +209,10 @@ function ingestDocumentBackground(
     }
     logger.info({ tenantId, analysisId: result.analysisId, entryCount: result.entryCount }, "whatsapp:ingest — concluído")
     if (opts.keepAllEntries && result.entryCount > 0) {
-      await sendStatementCashflow(msg.from, tenantId, result.analysisId, adapter)
+      const cashflow = await sendStatementCashflow(msg.from, tenantId, result.analysisId, adapter)
+      if (cashflow && opts.store) {
+        await persistCashflowOutcome(opts.store, msg.from, cashflow)
+      }
     }
   }).catch((err) => {
     logger.error({ tenantId, err }, "whatsapp:ingest — exceção no background ingest")
@@ -305,6 +341,7 @@ async function handleIngestDocument(
     ingestDocumentBackground(msg, session.tenantId, deps.adapter, {
       skipAnalysis: isStudent,
       keepAllEntries: isStudent,
+      store: deps.store,
     })
   }
 }
@@ -495,22 +532,15 @@ async function sendMonthlyAnalysisLink(
 }
 
 function applyConversationOutcome(
-  conversation: WaConversationState,
   decision: Awaited<ReturnType<typeof decideWhatsappConversation>>,
 ): WaConversationState {
-  const summary = decision.responseText?.split("\n").find((line) => line.trim().length > 0)?.slice(0, 180)
+  // Preserva o lastOutcome real (o resultado do extrato, gravado pelo background
+  // com os números e o dataRef). NÃO deriva outcome do texto da resposta: fazer isso
+  // sobrescrevia o resultado financeiro com a saudação ("Olá, Rafael!") e perdia os
+  // números — era a causa do "me explica o resultado" ecoar a saudação.
   return {
     ...decision.conversation,
     lastBotAction: decision.route,
-    ...(summary
-      ? {
-          lastOutcome: {
-            type: decision.route === "HANDLE_DOCUMENT" ? "ingest_received" : conversation.lastOutcome?.type ?? "cashflow_statement",
-            summary,
-            createdAt: new Date().toISOString(),
-          },
-        }
-      : {}),
   }
 }
 
@@ -536,7 +566,7 @@ async function processMessageWithConversationGraph(
 
   switch (decision.route) {
     case "HANDLE_DOCUMENT": {
-      const persisted = withConversationState(baseSession, applyConversationOutcome(conversation, decision))
+      const persisted = withConversationState(baseSession, applyConversationOutcome(decision))
       await handleIngestDocument(msg, persisted, { store: deps.sessionStore, adapter: deps.adapter }, tenant.plan)
       return
     }
@@ -558,7 +588,7 @@ async function processMessageWithConversationGraph(
       break
   }
 
-  const updatedConversation = applyConversationOutcome(conversation, decision)
+  const updatedConversation = applyConversationOutcome(decision)
   await deps.sessionStore.set(withConversationState(baseSession, updatedConversation))
 }
 

@@ -46,6 +46,36 @@ export function classifyWaIntent(
     return { intent: "HUMAN_SUPPORT", confidence: "high", requiresSlm: false, normalizedText }
   }
 
+  // Pergunta sobre o que o bot faz / como se fala com ele. Vem antes de GREETING e
+  // SEND_STATEMENT_HELP para "como funciona"/"como interajo"/"o que voce faz" não
+  // caírem no fallback genérico (que só repetia o pedido de extrato).
+  if (
+    includesAny(normalizedText, [
+      "como funciona",
+      "como interajo",
+      "como interagir",
+      "interagir com voce",
+      "interagir",
+      "como uso",
+      "como usar",
+      "como te uso",
+      "como utilizo",
+      "como utilizar",
+      "o que voce faz",
+      "o que voce pode",
+      "o que da pra fazer",
+      "o que da para fazer",
+      "pra que serve",
+      "para que serve",
+      "como falar com voce",
+      "como converso com voce",
+      "quem e voce",
+      "o que e o aicfo",
+    ])
+  ) {
+    return { intent: "CAPABILITIES_HELP", confidence: "high", requiresSlm: false, normalizedText }
+  }
+
   if (["sim", "ok", "pode", "claro", "vamos", "continuar"].includes(normalizedText)) {
     return { intent: "CONFIRMATION", confidence: "medium", requiresSlm: false, normalizedText }
   }

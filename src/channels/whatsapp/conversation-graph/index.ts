@@ -3,6 +3,7 @@ import { Annotation, END, START, StateGraph } from "@langchain/langgraph"
 import type { WaIncomingMessage } from "../types.js"
 import { classifyWaIntent, type WaIntentClassification } from "./intent-classifier.js"
 import {
+  formatCapabilitiesHelp,
   formatContextualFallback,
   formatContinuePrompt,
   formatConversationalWelcome,
@@ -12,6 +13,7 @@ import {
   formatStatementHowTo,
   formatStatementRequest,
 } from "./responses.js"
+import { decodeOutcomeMetrics, formatDeterministicCashflowExplanation } from "./explanation.js"
 import type { WaConversationState, WaIntent } from "./state.js"
 
 export type WaConversationRoute =
@@ -86,6 +88,14 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
         usedSlm: false,
       }
 
+    case "CAPABILITIES_HELP":
+      return {
+        conversation: { ...conversation, stage: "AWAITING_STATEMENT", pendingAction: "send_statement" },
+        route: "SEND_TEXT",
+        responseText: formatCapabilitiesHelp(conversation.userName),
+        usedSlm: false,
+      }
+
     case "ASK_CASHFLOW":
       return {
         conversation: { ...conversation, stage: "AWAITING_STATEMENT", pendingAction: "send_statement" },
@@ -117,16 +127,28 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
         usedSlm: false,
       }
 
-    case "EXPLAIN_LAST_OUTCOME":
-      if (state.classification?.requiresSlm && process.env.WHATSAPP_CONVERSATION_SLM_ENABLED === "true") {
-        return { conversation, route: "NEED_SLM", usedSlm: false }
+    case "EXPLAIN_LAST_OUTCOME": {
+      // Modelo híbrido: a leitura determinística (zero-token) é a base para todos.
+      // Sem números reais do extrato, mantém o fallback contextual antigo.
+      const metrics = decodeOutcomeMetrics(conversation.lastOutcome?.dataRef)
+      if (!metrics) {
+        return {
+          conversation,
+          route: "SEND_TEXT",
+          responseText: formatSlmDisabledExplanation(conversation),
+          usedSlm: false,
+        }
       }
-      return {
-        conversation,
-        route: "SEND_TEXT",
-        responseText: formatSlmDisabledExplanation(conversation),
-        usedSlm: false,
+      const deterministic = formatDeterministicCashflowExplanation(metrics, conversation.userName)
+      const isPaidPlan = Boolean(conversation.plan && conversation.plan !== "student")
+      // Pagos com SLM ligado seguem para o nó de IA (Phase 2). Enquanto a narrativa
+      // via LLM não está implementada, o nó devolve a leitura determinística já pronta
+      // (nunca o texto evasivo). Free tier recebe a determinística direto, custo zero.
+      if (isPaidPlan && process.env.WHATSAPP_CONVERSATION_SLM_ENABLED === "true") {
+        return { conversation, route: "NEED_SLM", responseText: deterministic, usedSlm: false }
       }
+      return { conversation, route: "SEND_TEXT", responseText: deterministic, usedSlm: false }
+    }
 
     case "NEGATION":
       return {
@@ -150,10 +172,12 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
 
 function slmPlaceholderNode(state: GraphState): Partial<GraphState> {
   // Phase 1: o grafo já separa o caminho SLM, mas não consome tokens ainda.
-  // Phase 2 trocará este placeholder por chamada controlada ao SLM com budget.
+  // Phase 2 (IA nos pagos) trocará este placeholder por chamada controlada ao
+  // SLM/LLM com budget e trace (C6). Por ora devolve a leitura determinística já
+  // calculada no nó anterior — nunca o texto evasivo.
   return {
     route: "SEND_TEXT",
-    responseText: formatSlmDisabledExplanation(state.conversation),
+    responseText: state.responseText ?? formatSlmDisabledExplanation(state.conversation),
     usedSlm: false,
   }
 }

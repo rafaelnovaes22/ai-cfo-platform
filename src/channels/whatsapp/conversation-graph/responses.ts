@@ -18,6 +18,23 @@ export function formatConversationalWelcome(name: string | undefined): string {
   )
 }
 
+export function formatCapabilitiesHelp(name: string | undefined): string {
+  const greeting = firstName(name)
+  return (
+    `${greeting ? `*${greeting}*, ` : ""}é simples falar comigo. 💬\n` +
+    `Sou o Aicfo, seu CFO-IA, e funciono direto por aqui no WhatsApp.\n\n` +
+    `O que eu faço:\n` +
+    `• Calculo seu *fluxo de caixa* a partir de um extrato (PDF, Excel ou CSV)\n` +
+    `• Mostro entradas, saídas e resultado do período\n` +
+    `• Explico o resultado e indico o próximo passo\n\n` +
+    `Você fala comigo em linguagem natural, sem comando decorado. Pode escrever, por exemplo:\n` +
+    `• “quero ver meu caixa”\n` +
+    `• “como envio o extrato?”\n` +
+    `• “me explica esse resultado”\n\n` +
+    `Para começar agora, me envie um extrato da sua conta aqui no chat. 📎`
+  )
+}
+
 export function formatStatementRequest(): string {
   return (
     `Consigo te ajudar com o fluxo de caixa.\n\n` +

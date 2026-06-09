@@ -10,8 +10,27 @@ afterEach(() => {
 
 import { classifyWaIntent } from "@/channels/whatsapp/conversation-graph/intent-classifier.js"
 import { decideWhatsappConversation } from "@/channels/whatsapp/conversation-graph/index.js"
+import {
+  encodeOutcomeMetrics,
+  formatDeterministicCashflowExplanation,
+  type CashflowMetrics,
+} from "@/channels/whatsapp/conversation-graph/explanation.js"
 import type { WaIncomingMessage } from "@/channels/whatsapp/types.js"
 import type { WaConversationState } from "@/channels/whatsapp/conversation-graph/state.js"
+
+// Espelha o extrato da screenshot: entradas 45.593,73 / saídas 90.593,73 / resultado -45.000,00
+function negativeMetrics(): CashflowMetrics {
+  return {
+    creditsCents: 4_559_373,
+    debitsCents: 9_059_373,
+    resultCents: -4_500_000,
+    creditCount: 28,
+    debitCount: 24,
+    closingBalanceCents: null,
+    startDate: "2026-02-27",
+    endDate: "2026-05-20",
+  }
+}
 
 function textMsg(text: string): WaIncomingMessage {
   return {
@@ -59,6 +78,67 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
     expect(decision.responseText?.toLowerCase()).toContain("continuo sim")
     expect(decision.responseText?.toLowerCase()).toContain("extrato")
     expect(decision.responseText?.toLowerCase()).not.toContain("1️⃣")
+  })
+
+  it("trata 'como consigo interagir com você?' como ajuda de capacidades, sem repetir o menu", async () => {
+    const decision = await decideWhatsappConversation(
+      textMsg("como consigo interagir com você?"),
+      baseState(),
+    )
+
+    expect(decision.intent).toBe("CAPABILITIES_HELP")
+    expect(decision.usedSlm).toBe(false)
+    expect(decision.route).toBe("SEND_TEXT")
+    expect(decision.responseText?.toLowerCase()).toContain("fluxo de caixa")
+    expect(decision.responseText).not.toContain("1️⃣")
+  })
+
+  it("reconhece 'o que você faz?' e 'como funciona' como capacidades", () => {
+    expect(classifyWaIntent(textMsg("o que você faz?"), baseState()).intent).toBe("CAPABILITIES_HELP")
+    expect(classifyWaIntent(textMsg("como funciona isso?"), baseState()).intent).toBe("CAPABILITIES_HELP")
+  })
+
+  it("não confunde 'como envio o extrato?' (continua send-statement-help)", () => {
+    expect(classifyWaIntent(textMsg("como envio o extrato?"), baseState()).intent).toBe("SEND_STATEMENT_HELP")
+  })
+
+  it("'me explica o resultado' devolve leitura determinística com os números reais, sem ecoar saudação", async () => {
+    const decision = await decideWhatsappConversation(
+      textMsg("me explica o resultado"),
+      baseState({
+        plan: "student",
+        lastOutcome: {
+          type: "cashflow_statement",
+          summary: "Resultado negativo de -R$ 45.000,00",
+          dataRef: encodeOutcomeMetrics(negativeMetrics()),
+          createdAt: "2026-06-09T12:00:00.000Z",
+        },
+      }),
+    )
+
+    expect(decision.intent).toBe("EXPLAIN_LAST_OUTCOME")
+    expect(decision.usedSlm).toBe(false)
+    expect(decision.route).toBe("SEND_TEXT")
+    // Explica de verdade: comenta o resultado negativo e os valores
+    // (toLocaleString usa espaço non-breaking após "R$", por isso checamos só os dígitos)
+    expect(decision.responseText?.toLowerCase()).toContain("negativo")
+    expect(decision.responseText).toContain("45.000,00")
+    expect(decision.responseText).toContain("90.593,73")
+    // Não ecoa a saudação (bug corrigido)
+    expect(decision.responseText).not.toContain("Olá")
+  })
+
+  it("leitura determinística comenta resultado negativo (saídas vs entradas) e positivo", () => {
+    const negativo = formatDeterministicCashflowExplanation(negativeMetrics(), "Rafael De Novaes")
+    expect(negativo.toLowerCase()).toContain("negativo")
+    expect(negativo.toLowerCase()).toContain("dobro")
+    expect(negativo).toContain("Rafael")
+
+    const positivo = formatDeterministicCashflowExplanation(
+      { ...negativeMetrics(), debitsCents: 1_000_000, resultCents: 3_559_373 },
+    )
+    expect(positivo.toLowerCase()).toContain("positivo")
+    expect(positivo.toLowerCase()).toContain("sobrou")
   })
 
   it("pergunta explicativa não consome SLM quando a flag está desligada", async () => {
