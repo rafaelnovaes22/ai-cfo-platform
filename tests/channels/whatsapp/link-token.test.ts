@@ -49,7 +49,7 @@ describe("link-token sign/verify", () => {
     expect(appBaseUrl()).toBe("https://aicfo.up.railway.app")
   })
 
-  it("appBaseUrl normaliza domínio legacy do Railway para o canônico", () => {
+  it("appBaseUrl normaliza domínio legacy do Railway para domínio canônico", () => {
     process.env.APP_URL = "https://aicfo-production.up.railway.app/"
     expect(appBaseUrl()).toBe("https://aicfo.up.railway.app")
   })
