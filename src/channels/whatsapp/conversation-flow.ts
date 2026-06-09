@@ -16,6 +16,7 @@ import {
   formatWelcomeMenu,
   formatError,
   formatIngestReceived,
+  formatStudentCashflowHint,
 } from "./response-formatter.js"
 import { classifyCommand, isSupportedDocument } from "./message-parser.js"
 import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
@@ -338,6 +339,16 @@ async function handleMenu(
     { from: msg.from, step: session.step, command },
     "whatsapp:flow — command dispatched",
   )
+
+  // Free tier do aluno não tem dado contínuo: caixa/semana voltariam R$ 0,00.
+  // Orienta a enviar o extrato em vez de mostrar um caixa vazio e confuso.
+  if (command === "CAIXA" || command === "SEMANA") {
+    const plan = await getTenantPlan(tenantId)
+    if (plan === "student") {
+      await deps.adapter.sendText(msg.from, formatStudentCashflowHint())
+      return
+    }
+  }
 
   switch (command) {
     case "MENU": {

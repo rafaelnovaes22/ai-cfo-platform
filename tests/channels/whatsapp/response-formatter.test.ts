@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { formatCashflowStatement, formatIngestReceived } from "@/channels/whatsapp/response-formatter.js";
+import {
+  formatCashflowStatement,
+  formatIngestReceived,
+  formatWelcomeMenu,
+} from "@/channels/whatsapp/response-formatter.js";
+
+describe("whatsapp/response-formatter — formatWelcomeMenu", () => {
+  it("aluno (student): centrado no extrato, sem opção 'caixa de hoje' (voltaria vazio)", () => {
+    const menu = formatWelcomeMenu("Acme", "student");
+    expect(menu.toLowerCase()).not.toContain("caixa de hoje");
+    expect(menu.toLowerCase()).not.toContain("últimos 7 dias");
+    expect(menu.toLowerCase()).toContain("extrato");
+    expect(menu.toLowerCase()).toContain("fluxo de caixa");
+  });
+
+  it("plano pago mantém as opções de menu", () => {
+    const menu = formatWelcomeMenu("Empresa", "lite");
+    expect(menu).toContain("Ver caixa de hoje");
+    expect(menu).toContain("Ver análise do mês");
+  });
+});
 
 // Período exato do extrato + resultado sempre calculável (entradas − saídas).
 describe("whatsapp/response-formatter — formatCashflowStatement", () => {
