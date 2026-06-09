@@ -29,10 +29,15 @@ export async function verifyWhatsAppLinkToken(token: string): Promise<string> {
   return payload["whatsappPhone"]
 }
 
+const DEFAULT_APP_URL = "https://aicfo.up.railway.app"
+const LEGACY_RAILWAY_APP_URL = "https://aicfo-production.up.railway.app"
+
 /**
  * Base URL do frontend para montar links enviados no WhatsApp.
- * Reusa APP_URL (mesma var dos redirects de Stripe/password-reset) — não hardcodar (C8).
+ * Reusa APP_URL (mesma var dos redirects de Stripe/password-reset), mas normaliza
+ * o domínio legacy gerado automaticamente pelo Railway para o domínio canônico do app.
  */
 export function appBaseUrl(): string {
-  return (process.env["APP_URL"] ?? "https://aicfo.up.railway.app").replace(/\/$/, "")
+  const configuredUrl = (process.env["APP_URL"] ?? DEFAULT_APP_URL).replace(/\/$/, "")
+  return configuredUrl === LEGACY_RAILWAY_APP_URL ? DEFAULT_APP_URL : configuredUrl
 }
