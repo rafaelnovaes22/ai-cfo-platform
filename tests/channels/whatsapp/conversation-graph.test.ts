@@ -67,6 +67,37 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
     expect(decision.responseText?.toLowerCase()).not.toContain("r$ 0")
   })
 
+  it("'como está meu caixa?' mostra o resultado já calculado em vez de pedir extrato de novo", async () => {
+    const decision = await decideWhatsappConversation(
+      textMsg("Como está meu caixa?"),
+      baseState({
+        lastOutcome: {
+          type: "cashflow_statement",
+          summary: "Resultado negativo de -R$ 45.000,00",
+          dataRef: encodeOutcomeMetrics(negativeMetrics()),
+          createdAt: "2026-06-09T12:00:00.000Z",
+        },
+      }),
+    )
+
+    expect(decision.intent).toBe("ASK_CASHFLOW")
+    expect(decision.usedSlm).toBe(false)
+    expect(decision.route).toBe("SEND_TEXT")
+    // Mostra os números do caixa (entradas, saídas, resultado), não o pedido de extrato
+    expect(decision.responseText).toContain("45.593,73")
+    expect(decision.responseText).toContain("90.593,73")
+    expect(decision.responseText).toContain("Resultado")
+    // Oferece a leitura sem ser a leitura completa em si
+    expect(decision.responseText?.toLowerCase()).toContain("me explica")
+  })
+
+  it("'como está meu caixa?' SEM resultado calculado ainda pede o extrato (regressão)", async () => {
+    const decision = await decideWhatsappConversation(textMsg("Como está meu caixa?"), baseState())
+
+    expect(decision.intent).toBe("ASK_CASHFLOW")
+    expect(decision.responseText?.toLowerCase()).toContain("extrato")
+  })
+
   it("responde 'vc não continua?' com continuação contextual sem reenviar menu", async () => {
     const decision = await decideWhatsappConversation(
       textMsg("Vc nao continua a conversa?"),

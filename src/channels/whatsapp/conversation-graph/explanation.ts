@@ -72,6 +72,34 @@ export function buildCashflowOutcomeSummary(metrics: CashflowMetrics): string {
   ).slice(0, 180)
 }
 
+/**
+ * Snapshot do caixa a partir das métricas já calculadas (zero-token).
+ * Responde "como está meu caixa?" mostrando os números, quando a sessão já tem um
+ * extrato processado — em vez de pedir o extrato de novo. Distinto da leitura
+ * narrativa (formatDeterministicCashflowExplanation), acessível via "me explica".
+ */
+export function formatCashflowSnapshot(metrics: CashflowMetrics): string {
+  const lines: string[] = [
+    `📊 *Seu caixa*`,
+    `🗓️ ${formatDate(metrics.startDate)} a ${formatDate(metrics.endDate)}`,
+    "",
+    `⬆️ Entradas: ${formatBRL(metrics.creditsCents)} (${metrics.creditCount} lançamentos)`,
+    `⬇️ Saídas: ${formatBRL(metrics.debitsCents)} (${metrics.debitCount} lançamentos)`,
+    `${metrics.resultCents >= 0 ? "🟢" : "🔴"} Resultado: ${formatBRL(metrics.resultCents)}`,
+  ]
+
+  if (metrics.closingBalanceCents !== null) {
+    lines.push(`💰 Saldo final: ${formatBRL(metrics.closingBalanceCents)}`)
+  }
+
+  lines.push(
+    "",
+    `Quer que eu explique esse resultado? É só dizer *me explica*.`,
+    `Para atualizar, envie um novo extrato. 📎`,
+  )
+  return lines.join("\n")
+}
+
 /** Frase que descreve quanto as saídas superaram as entradas (resultado negativo). */
 function outflowRatioPhrase(creditsCents: number, debitsCents: number): string {
   if (creditsCents <= 0) return "não houve entradas no período, só saídas"

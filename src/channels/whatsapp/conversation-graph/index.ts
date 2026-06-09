@@ -13,7 +13,7 @@ import {
   formatStatementHowTo,
   formatStatementRequest,
 } from "./responses.js"
-import { decodeOutcomeMetrics, formatDeterministicCashflowExplanation } from "./explanation.js"
+import { decodeOutcomeMetrics, formatCashflowSnapshot, formatDeterministicCashflowExplanation } from "./explanation.js"
 import type { WaConversationState, WaIntent } from "./state.js"
 
 export type WaConversationRoute =
@@ -96,13 +96,25 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
         usedSlm: false,
       }
 
-    case "ASK_CASHFLOW":
+    case "ASK_CASHFLOW": {
+      // Se a sessão já tem um caixa calculado, "como está meu caixa?" mostra o
+      // resultado em vez de pedir o extrato de novo (feedback do usuário 2026-06-09).
+      const metrics = decodeOutcomeMetrics(conversation.lastOutcome?.dataRef)
+      if (metrics) {
+        return {
+          conversation: { ...conversation, stage: "READY_FOR_INPUT" },
+          route: "SEND_TEXT",
+          responseText: formatCashflowSnapshot(metrics),
+          usedSlm: false,
+        }
+      }
       return {
         conversation: { ...conversation, stage: "AWAITING_STATEMENT", pendingAction: "send_statement" },
         route: "SEND_TEXT",
         responseText: formatStatementRequest(),
         usedSlm: false,
       }
+    }
 
     case "ASK_NEXT_STEP":
     case "CONFIRMATION":
