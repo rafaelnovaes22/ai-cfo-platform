@@ -17,7 +17,8 @@ export interface CaseFile extends CaseFrontmatter {
 export interface ClassificationInput {
   description: string;
   amountCents: number;
-  direction: "credit" | "debit";
+  // "unknown" = arquivo de origem sem marcação de sentido (PR #164)
+  direction: "credit" | "debit" | "unknown";
   date: string;
   tenantContext?: Record<string, unknown>;
 }

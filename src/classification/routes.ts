@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
 import { requireAuth, requireMode } from "@/auth/middleware.js";
 import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
+import { resolveDirectionFix } from "@/classification/direction-fix.js";
 import { defaultErrorResponses, problemDetail } from "@/http/problem-detail.js";
 import { enqueueHarnessEvent } from "@/queue/index.js";
 import { logger } from "@/observability/logger.js";
@@ -79,7 +80,11 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ entryId: z.string() }),
       body: CorrectBody,
       response: {
-        200: z.object({ id: z.string(), confirmedCategory: z.string() }),
+        200: z.object({
+          id: z.string(),
+          confirmedCategory: z.string(),
+          direction: z.enum(["credit", "debit"]),
+        }),
         ...defaultErrorResponses,
       },
     },
@@ -104,14 +109,26 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
         }));
       }
 
+      // Correção manual de categoria também corrige direção inferida: se o humano
+      // diz que "Conta de energia" é despesa e a direção veio de chute do parser,
+      // o lançamento flipa para debit junto (ver direction-fix.ts).
+      const directionFix = resolveDirectionFix(entry, req.body.category) ?? {};
+      if ("direction" in directionFix) {
+        logger.info(
+          { entryId: entry.id, from: entry.direction, to: directionFix.direction, category: req.body.category },
+          "Correção manual de categoria flipou direção inferida",
+        );
+      }
+
       const updated = await db.ledgerEntry.update({
         where: { id: entry.id },
         data: {
           correctedCategory: req.body.category,
           confirmedCategory: req.body.category,
           correctionSource:  req.body.source,
+          ...directionFix,
         },
-        select: { id: true, confirmedCategory: true },
+        select: { id: true, confirmedCategory: true, direction: true },
       });
 
       // Emite evento para o SelfHarnessWorker (ADR-011 Etapa 4) — não-bloqueante
@@ -140,7 +157,11 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
         logger.warn({ entryId: entry.id, err: harnessErr }, "self-harness enqueue falhou — ignorando");
       }
 
-      return reply.send({ id: updated.id, confirmedCategory: updated.confirmedCategory! });
+      return reply.send({
+        id: updated.id,
+        confirmedCategory: updated.confirmedCategory!,
+        direction: updated.direction,
+      });
     },
   });
 };

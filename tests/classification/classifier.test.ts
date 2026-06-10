@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const ledgerFindManyMock = vi.fn();
 const ledgerUpdateManyMock = vi.fn();
+const tenantFindUniqueMock = vi.fn();
 const enqueueDreNarrativeMock = vi.fn();
 const callLlmMock = vi.fn();
 
@@ -13,6 +14,9 @@ vi.mock("@/persistence/prisma.js", () => ({
     ledgerEntry: {
       findMany: ledgerFindManyMock,
       updateMany: ledgerUpdateManyMock,
+    },
+    tenant: {
+      findUnique: tenantFindUniqueMock,
     },
   }),
 }));
@@ -30,9 +34,11 @@ import { classifyAnalysis } from "@/classification/classifier.js";
 beforeEach(() => {
   ledgerFindManyMock.mockReset();
   ledgerUpdateManyMock.mockReset();
+  tenantFindUniqueMock.mockReset();
   enqueueDreNarrativeMock.mockReset();
   callLlmMock.mockReset();
   ledgerUpdateManyMock.mockResolvedValue({ count: 1 });
+  tenantFindUniqueMock.mockResolvedValue({ industrySegment: null });
 });
 
 describe("classification/classifier — segurança C8", () => {
@@ -186,6 +192,21 @@ describe("classification/classifier — correção de direção inferida (regres
 
     const update = ledgerUpdateManyMock.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(update.data).not.toHaveProperty("direction");
+  });
+
+  it("injeta o segment do tenant no prompt (paridade com o nó LangGraph)", async () => {
+    tenantFindUniqueMock.mockResolvedValue({ industrySegment: "agência de jornalismo" });
+    ledgerFindManyMock.mockResolvedValue([inferredEntry("e1", "credit", true)]);
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([{ entryId: "e1", category: "receita_bruta", confidence: 0.9 }]),
+      costCents: 1,
+      traceId: null,
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    const llmArg = callLlmMock.mock.calls[0]?.[0] as { userPrompt: string };
+    expect(llmArg.userPrompt).toContain("Segmento da empresa: agência de jornalismo");
   });
 
   it("NÃO flipa em categoria de natureza neutra (nao_classificado / transferencia_interna)", async () => {

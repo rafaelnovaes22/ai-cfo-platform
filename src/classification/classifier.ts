@@ -2,7 +2,8 @@ import { z } from "zod";
 import { callLlm } from "@/llm/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { buildSystemPrompt, buildUserPrompt } from "@/classification/prompts.js";
-import { CATEGORY_NATURE, DRE_CATEGORIES, type DreCategory } from "@/classification/taxonomy.js";
+import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
+import { resolveDirectionFix } from "@/classification/direction-fix.js";
 import { enqueueDreNarrative } from "@/queue/index.js";
 import { logger } from "@/observability/logger.js";
 
@@ -31,6 +32,16 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
     return;
   }
 
+  // Segment do tenant no prompt (paridade com o nó LangGraph): sem ele, descrições
+  // de serviço prestado ("cobertura jornalística", "assessoria mensal") são
+  // ambíguas e o modelo erra a natureza receita/despesa — crítico com direction
+  // "unknown", onde a semântica é o único sinal.
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { industrySegment: true },
+  });
+  const segment = tenant?.industrySegment ?? undefined;
+
   const systemPrompt = buildSystemPrompt();
   let lowConfidenceCount = 0;
 
@@ -48,6 +59,7 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
         // modelo a classificar despesas como receita. "unknown" força semântica.
         direction:   e.directionInferred ? "unknown" : e.direction,
       })),
+      segment,
     );
 
     let parsed: z.infer<typeof ClassificationResponseSchema>;
@@ -94,17 +106,12 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
       if (isLowConfidence) lowConfidenceCount++;
 
       // Direção inferida (fallback do parser) + categoria com natureza contrária →
-      // a categoria vence e a direção é corrigida. Direção confiável (extrato,
-      // sinal, coluna Tipo) NUNCA é sobrescrita pela predição do LLM.
+      // a categoria vence e a direção é corrigida (ver direction-fix.ts).
       const entry = batchById.get(result.entryId)!;
-      const nature = CATEGORY_NATURE[category as DreCategory] ?? null;
-      const directionFix =
-        entry.directionInferred && nature !== null && nature !== entry.direction
-          ? { direction: nature }
-          : {};
+      const directionFix = resolveDirectionFix(entry, category) ?? {};
       if ("direction" in directionFix) {
         logger.info(
-          { analysisId, entryId: result.entryId, from: entry.direction, to: nature, category },
+          { analysisId, entryId: result.entryId, from: entry.direction, to: directionFix.direction, category },
           "Classifier corrigiu direção inferida pela natureza da categoria",
         );
       }
