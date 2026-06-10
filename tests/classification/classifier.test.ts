@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const ledgerFindManyMock = vi.fn();
 const ledgerUpdateManyMock = vi.fn();
 const tenantFindUniqueMock = vi.fn();
+const transactionMock = vi.fn();
 const enqueueDreNarrativeMock = vi.fn();
 const callLlmMock = vi.fn();
 
@@ -18,6 +19,7 @@ vi.mock("@/persistence/prisma.js", () => ({
     tenant: {
       findUnique: tenantFindUniqueMock,
     },
+    $transaction: (...args: unknown[]) => transactionMock(...args),
   }),
 }));
 
@@ -35,10 +37,13 @@ beforeEach(() => {
   ledgerFindManyMock.mockReset();
   ledgerUpdateManyMock.mockReset();
   tenantFindUniqueMock.mockReset();
+  transactionMock.mockReset();
   enqueueDreNarrativeMock.mockReset();
   callLlmMock.mockReset();
   ledgerUpdateManyMock.mockResolvedValue({ count: 1 });
   tenantFindUniqueMock.mockResolvedValue({ industrySegment: null });
+  // $transaction(array de PrismaPromises) → resolve todas (batch transaction)
+  transactionMock.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
 });
 
 describe("classification/classifier — segurança C8", () => {
@@ -115,6 +120,89 @@ describe("classification/classifier — segurança C8", () => {
     await classifyAnalysis("analysis-vazia", "tenant-1");
     expect(callLlmMock).not.toHaveBeenCalled();
     expect(enqueueDreNarrativeMock).not.toHaveBeenCalled();
+  });
+});
+
+// Monta a resposta do LLM ecoando os entryIds presentes no userPrompt do batch.
+function llmReplyFromPrompt(userPrompt: string, category = "receita_bruta") {
+  const payload = JSON.parse(userPrompt.slice(userPrompt.indexOf("["))) as Array<{ entryId: string }>;
+  return {
+    content: JSON.stringify(payload.map((p) => ({ entryId: p.entryId, category, confidence: 0.9 }))),
+    costCents: 1,
+    traceId: null,
+  };
+}
+
+function manyEntries(n: number) {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `e${i}`,
+    date: new Date("2026-04-01"),
+    description: `Lançamento ${i}`,
+    amountCents: 100,
+    direction: "credit",
+    directionInferred: false,
+  }));
+}
+
+describe("classification/classifier — batches paralelos (perf, espelha PR #120 no caminho BullMQ)", () => {
+  it("processa os batches LLM em paralelo, não em série", async () => {
+    ledgerFindManyMock.mockResolvedValue(manyEntries(50)); // 3 batches de 20/20/10
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    callLlmMock.mockImplementation(async (req: { userPrompt: string }) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 20));
+      inFlight--;
+      return llmReplyFromPrompt(req.userPrompt);
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    expect(callLlmMock).toHaveBeenCalledTimes(3);
+    expect(maxInFlight).toBeGreaterThan(1); // sobreposição = paralelismo real
+    expect(enqueueDreNarrativeMock).toHaveBeenCalledTimes(1); // barreira preservada
+  });
+
+  it("falha de LLM em um lote degrada só aquele lote; os demais classificam normalmente", async () => {
+    ledgerFindManyMock.mockResolvedValue(manyEntries(50)); // 3 batches
+
+    callLlmMock.mockImplementation(async (req: { userPrompt: string }) => {
+      const payload = JSON.parse(req.userPrompt.slice(req.userPrompt.indexOf("["))) as Array<{ entryId: string }>;
+      if (payload.some((p) => p.entryId === "e0")) throw new Error("LLM down");
+      return llmReplyFromPrompt(req.userPrompt);
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    // Lote que falhou: marcado nao_classificado/needs_review em bloco (catch path).
+    const catchCall = ledgerUpdateManyMock.mock.calls
+      .map((c) => c[0] as { where: { id?: { in?: string[] } }; data: Record<string, unknown> })
+      .find((c) => Array.isArray(c.where.id?.in));
+    expect(catchCall?.where.id?.in).toContain("e0");
+    expect(catchCall?.data.predictedCategory).toBe("nao_classificado");
+
+    // Lotes saudáveis: 2 transações de updates (uma por batch ok).
+    expect(transactionMock).toHaveBeenCalledTimes(2);
+    // Pipeline continua: dre-narrative enfileirado mesmo com degradação parcial.
+    expect(enqueueDreNarrativeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("agrupa os updates de cada batch numa transação única (R7), mantendo o where composto C8", async () => {
+    ledgerFindManyMock.mockResolvedValue(manyEntries(3)); // 1 batch
+    callLlmMock.mockImplementation(async (req: { userPrompt: string }) => llmReplyFromPrompt(req.userPrompt));
+
+    await classifyAnalysis("analysis-XYZ", "tenant-XYZ");
+
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+    const ops = transactionMock.mock.calls[0]?.[0] as unknown[];
+    expect(ops).toHaveLength(3);
+    // Cada update continua escopado por id+analysisId+tenantId (defesa C8).
+    for (const call of ledgerUpdateManyMock.mock.calls) {
+      const arg = call[0] as { where: Record<string, unknown> };
+      expect(arg.where).toMatchObject({ analysisId: "analysis-XYZ", tenantId: "tenant-XYZ" });
+    }
   });
 });
 

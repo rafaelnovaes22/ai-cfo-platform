@@ -1,5 +1,6 @@
 import type { LlmResponse } from "@/llm/types.js";
 import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
+import { mapWithConcurrency } from "@/shared/concurrency.js";
 
 // Resultado padrão de um agente instrumentado: dados + resposta crua do LLM
 // (para telemetria) + latência medida. Espelha o retorno das funções
@@ -41,24 +42,6 @@ function splitIntoChunks<I>(items: I[], size: number): I[][] {
     chunks.push(items.slice(i, i + size));
   }
   return chunks;
-}
-
-// Pool de concorrência que preserva a ordem dos resultados (results[i] ↔ items[i]).
-async function mapWithConcurrency<A, B>(
-  items: A[],
-  limit: number,
-  fn: (item: A, index: number) => Promise<B>,
-): Promise<B[]> {
-  const results = new Array<B>(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    for (let i = next++; i < items.length; i = next++) {
-      results[i] = await fn(items[i]!, i);
-    }
-  }
-  const pool = Array.from({ length: Math.min(limit, items.length) }, () => worker());
-  await Promise.all(pool);
-  return results;
 }
 
 // Soma tokens/custo de todos os lotes; provider/model/traceId do primeiro lote
