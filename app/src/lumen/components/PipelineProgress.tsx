@@ -92,6 +92,23 @@ export function PipelineProgress({ entryCount }: { entryCount?: number }) {
         </div>
       )}
 
+      {!done && !failed && (
+        <>
+          {/* Os lançamentos ficam visíveis ~2s após o upload (persist é síncrono;
+              só a IA roda em background) — não faça o usuário esperar a análise
+              inteira para começar a revisar. */}
+          <Link
+            to="/lancamentos"
+            className="mt-6 w-full flex items-center justify-center gap-2 border dark:border-[#96ff7e]/30 text-[#96ff7e] rounded-lg py-2.5 text-[13px] hover:bg-[#96ff7e]/10 transition-colors"
+          >
+            Revisar lançamentos agora <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <div className="mt-2 text-center text-[11px] opacity-40">
+            Seus lançamentos já estão disponíveis. As categorias da IA aparecem em tempo real.
+          </div>
+        </>
+      )}
+
       {done && (
         <Link
           to="/dre"
