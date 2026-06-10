@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
 
 # Cancel runs concorrentes na mesma ref (não rodar PR duplo).
@@ -63,3 +63,29 @@ jobs:
         run: npm audit --omit=dev --audit-level=high || true
         # `|| true` mantém o passo verde. ADR-003 documenta o risco residual.
         # Quando o `xlsx` ganhar fix upstream, remover o `|| true` e revisar a ADR.
+
+  # ─── Auto-merge para staging ────────────────────────────────────────
+  # Permite que contribuidores (ex: Edu) tenham PRs absorvidos em `staging`
+  # sem aprovação manual, desde que o job `validate` esteja verde.
+  # Railway (serviço de staging) faz o auto-deploy no push resultante.
+  # PRs contra `main` (produção) NÃO entram aqui: continuam exigindo merge
+  # deliberado, preservando a regra de CLAUDE.md.
+  auto-merge:
+    name: auto-merge → staging
+    needs: validate
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.base_ref == 'staging' &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Squash-merge do PR (CI verde)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --squash --delete-branch
