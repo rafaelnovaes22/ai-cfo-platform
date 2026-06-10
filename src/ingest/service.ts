@@ -20,6 +20,25 @@ export function shouldSkipClassification(entries: RawLedger[]): boolean {
   return entries.length > 0 && entries.every((entry) => entry.confirmedCategory != null);
 }
 
+// Um arquivo "usa sinais sistematicamente" quando ≥25% das linhas têm valor negativo.
+// Abaixo disso (ex: planilha do cliente com 1 estorno no meio de 77 positivos),
+// um positivo sem marcador de direção é chute, não fato.
+const DIRECTION_SIGN_SHARE_THRESHOLD = 0.25;
+
+/**
+ * Decide, por lançamento, se a direção é INFERIDA (não-confiável): veio do fallback
+ * "positivo = credit" num arquivo que não usa sinais sistematicamente. Lançamentos
+ * inferidos são persistidos com directionInferred=true e o classificador LLM pode
+ * corrigir a direção pela natureza da categoria (ver classification/classifier.ts).
+ * Entries sem directionSource (parsers legados) são tratadas como confiáveis.
+ */
+export function computeDirectionInferred(entries: RawLedger[]): boolean[] {
+  if (entries.length === 0) return [];
+  const signCount = entries.filter((e) => e.directionSource === "sign").length;
+  const fileHasSystematicSigns = signCount / entries.length >= DIRECTION_SIGN_SHARE_THRESHOLD;
+  return entries.map((e) => e.directionSource === "fallback" && !fileHasSystematicSigns);
+}
+
 export function filterEntriesByReferenceMonth(
   entries: RawLedger[],
   referenceMonth: string,
@@ -197,14 +216,16 @@ export async function ingest(params: {
   });
 
   // 3. Bulk insert LedgerEntry
+  const directionInferredFlags = computeDirectionInferred(entries);
   await db.ledgerEntry.createMany({
-    data: entries.map((e: RawLedger) => ({
+    data: entries.map((e: RawLedger, i: number) => ({
       tenantId,
       analysisId: analysis.id,
       date: new Date(e.date),
       description: e.description,
       amountCents: e.amountCents,
       direction: e.direction,
+      directionInferred: directionInferredFlags[i] ?? false,
       ...(e.confirmedCategory != null ? {
         predictedCategory:        e.confirmedCategory,
         confirmedCategory:        e.confirmedCategory,

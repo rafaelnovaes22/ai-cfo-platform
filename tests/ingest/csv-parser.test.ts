@@ -84,8 +84,8 @@ describe("ingest/parsers/csv — separadores e formatos", () => {
       ),
     );
     expect(r.entries).toEqual([
-      { date: "2026-05-20", description: "PIX RECEBIDO", amountCents: 100_000, direction: "credit" },
-      { date: "2026-05-20", description: "PIX ENVIADO", amountCents: 100_000, direction: "debit" },
+      { date: "2026-05-20", description: "PIX RECEBIDO", amountCents: 100_000, direction: "credit", directionSource: "explicit" },
+      { date: "2026-05-20", description: "PIX ENVIADO", amountCents: 100_000, direction: "debit", directionSource: "explicit" },
     ]);
   });
 
@@ -101,7 +101,7 @@ describe("ingest/parsers/csv — separadores e formatos", () => {
       ),
     );
     expect(r.entries).toEqual([
-      { date: "2026-06-02", description: "Pix", amountCents: 10_000, direction: "credit" },
+      { date: "2026-06-02", description: "Pix", amountCents: 10_000, direction: "credit", directionSource: "fallback" },
     ]);
   });
 
@@ -116,6 +116,37 @@ describe("ingest/parsers/csv — separadores e formatos", () => {
     );
     expect(r.entries).toHaveLength(2);
     expect(r.orphanCount).toBe(0);
+  });
+});
+
+describe("ingest/parsers/csv — origem da direção", () => {
+  it("positivo sem coluna de direção → 'fallback'; negativo → 'sign'", () => {
+    const r = parseCsv(
+      buf(
+        [
+          "Data,Descricao,Valor",
+          "02/06/2026,Venda PIX cliente A,1500.00",
+          "05/06/2026,Pagamento fornecedor ABC,-800.00",
+        ].join("\n"),
+      ),
+    );
+    expect(r.entries[0]).toMatchObject({ direction: "credit", directionSource: "fallback" });
+    expect(r.entries[1]).toMatchObject({ direction: "debit", directionSource: "sign" });
+  });
+
+  it("coluna Tipo C/D preenchida → 'explicit'", () => {
+    const r = parseCsv(
+      buf(["Data,Historico,Valor,Tipo", "02/06/2026,Pix,1500.00,C", "03/06/2026,Boleto,300.00,D"].join("\n")),
+    );
+    expect(r.entries[0]?.directionSource).toBe("explicit");
+    expect(r.entries[1]?.directionSource).toBe("explicit");
+  });
+
+  it("coluna Tipo presente mas vazia + positivo → 'fallback' (regressão CID & CID)", () => {
+    const r = parseCsv(
+      buf(["Data,Descricao,Valor,Tipo", "20/04/2026,DAS Simples Nacional,3870.00,"].join("\n")),
+    );
+    expect(r.entries[0]).toMatchObject({ direction: "credit", directionSource: "fallback" });
   });
 });
 

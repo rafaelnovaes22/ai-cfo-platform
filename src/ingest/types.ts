@@ -1,8 +1,17 @@
+// Como a direção foi determinada no parse:
+// - "explicit": coluna Tipo/D-C preenchida, colunas separadas de crédito/débito,
+//   entrada manual ou formato que garante sinal (extrato bancário, DRE)
+// - "sign": sinal negativo no próprio valor (negativo = débito é fato)
+// - "fallback": valor positivo sem nenhum marcador — credit é CHUTE, não fato.
+//   O classificador LLM pode corrigir (ver computeDirectionInferred no service).
+export type DirectionSource = "explicit" | "sign" | "fallback";
+
 export interface RawLedger {
   date: string;        // YYYY-MM-DD normalizado
   description: string;
   amountCents: number; // sempre positivo; direction indica sentido
   direction: "credit" | "debit";
+  directionSource?: DirectionSource;
   // Preenchido pelo parsePdfDre — pula classificação LLM
   confirmedCategory?: string;
   correctionSource?: string;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { callLlm } from "@/llm/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { buildSystemPrompt, buildUserPrompt } from "@/classification/prompts.js";
-import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
+import { CATEGORY_NATURE, DRE_CATEGORIES, type DreCategory } from "@/classification/taxonomy.js";
 import { enqueueDreNarrative } from "@/queue/index.js";
 import { logger } from "@/observability/logger.js";
 
@@ -22,7 +22,7 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
 
   const entries = await db.ledgerEntry.findMany({
     where: { analysisId, predictedCategory: null },
-    select: { id: true, date: true, description: true, amountCents: true, direction: true },
+    select: { id: true, date: true, description: true, amountCents: true, direction: true, directionInferred: true },
     orderBy: { date: "asc" },
   });
 
@@ -44,7 +44,9 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
         date:        e.date.toISOString().slice(0, 10),
         description: e.description,
         amountCents: e.amountCents,
-        direction:   e.direction,
+        // Direção inferida (fallback) não é fato — enviar "credit" enviesaria o
+        // modelo a classificar despesas como receita. "unknown" força semântica.
+        direction:   e.directionInferred ? "unknown" : e.direction,
       })),
     );
 
@@ -73,10 +75,10 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
     // Defesa C8: o entryId vem do LLM e NÃO é confiável. Atualizar só IDs que
     // (a) pertencem ao batch atual, (b) pertencem à mesma análise e (c) pertencem
     // ao tenant. Qualquer ID alucinado/forjado é silenciosamente descartado.
-    const batchIds = new Set(batch.map((e) => e.id));
+    const batchById = new Map(batch.map((e) => [e.id, e]));
 
     for (const result of parsed) {
-      if (!batchIds.has(result.entryId)) {
+      if (!batchById.has(result.entryId)) {
         logger.warn(
           { analysisId, suspiciousId: result.entryId, batchStart: i },
           "Classifier retornou entryId fora do batch — descartado",
@@ -91,6 +93,22 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
       const isLowConfidence = result.confidence < LOW_CONFIDENCE_THRESHOLD;
       if (isLowConfidence) lowConfidenceCount++;
 
+      // Direção inferida (fallback do parser) + categoria com natureza contrária →
+      // a categoria vence e a direção é corrigida. Direção confiável (extrato,
+      // sinal, coluna Tipo) NUNCA é sobrescrita pela predição do LLM.
+      const entry = batchById.get(result.entryId)!;
+      const nature = CATEGORY_NATURE[category as DreCategory] ?? null;
+      const directionFix =
+        entry.directionInferred && nature !== null && nature !== entry.direction
+          ? { direction: nature }
+          : {};
+      if ("direction" in directionFix) {
+        logger.info(
+          { analysisId, entryId: result.entryId, from: entry.direction, to: nature, category },
+          "Classifier corrigiu direção inferida pela natureza da categoria",
+        );
+      }
+
       // updateMany com where composto: id + analysisId + tenantId.
       // Se algum não bater, 0 linhas são afetadas (não levanta exceção).
       const updated = await db.ledgerEntry.updateMany({
@@ -99,6 +117,7 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
           predictedCategory:        category,
           classificationConfidence: result.confidence,
           correctionSource:         isLowConfidence ? "needs_review" : null,
+          ...directionFix,
         },
       });
       if (updated.count === 0) {

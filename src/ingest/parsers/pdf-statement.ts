@@ -54,6 +54,8 @@ export function parseStatementText(text: string): ParseResult {
       description,
       amountCents: Math.abs(rawCents),
       direction: normalizeDirection(null, rawCents),
+      // Extrato bancário sempre marca débito com sinal — positivo é crédito de fato.
+      directionSource: "explicit",
     });
   }
 

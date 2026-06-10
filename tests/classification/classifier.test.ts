@@ -111,3 +111,102 @@ describe("classification/classifier — segurança C8", () => {
     expect(enqueueDreNarrativeMock).not.toHaveBeenCalled();
   });
 });
+
+describe("classification/classifier — correção de direção inferida (regressão CID & CID)", () => {
+  const inferredEntry = (id: string, direction: "credit" | "debit", directionInferred: boolean) => ({
+    id,
+    date: new Date("2026-04-20"),
+    description: `Lançamento ${id}`,
+    amountCents: 387000,
+    direction,
+    directionInferred,
+  });
+
+  it("envia direction 'unknown' ao LLM quando a direção foi inferida", async () => {
+    ledgerFindManyMock.mockResolvedValue([
+      inferredEntry("e-inf", "credit", true),
+      inferredEntry("e-ok", "credit", false),
+    ]);
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([
+        { entryId: "e-inf", category: "simples_nacional", confidence: 0.95 },
+        { entryId: "e-ok", category: "receita_bruta", confidence: 0.9 },
+      ]),
+      costCents: 1,
+      traceId: null,
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    const llmArg = callLlmMock.mock.calls[0]?.[0] as { userPrompt: string };
+    const payload = JSON.parse(llmArg.userPrompt.slice(llmArg.userPrompt.indexOf("["))) as
+      Array<{ entryId: string; direction: string }>;
+    expect(payload.find((p) => p.entryId === "e-inf")?.direction).toBe("unknown");
+    expect(payload.find((p) => p.entryId === "e-ok")?.direction).toBe("credit");
+  });
+
+  it("flipa direção quando inferida E categoria tem natureza contrária (despesa marcada como credit)", async () => {
+    ledgerFindManyMock.mockResolvedValue([inferredEntry("e1", "credit", true)]);
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([{ entryId: "e1", category: "simples_nacional", confidence: 0.95 }]),
+      costCents: 1,
+      traceId: null,
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    const update = ledgerUpdateManyMock.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(update.data).toMatchObject({ predictedCategory: "simples_nacional", direction: "debit" });
+  });
+
+  it("NÃO flipa direção quando ela veio confiável do arquivo (extrato bancário)", async () => {
+    // Direção é fato do extrato; categoria do LLM pode estar errada — direção vence.
+    ledgerFindManyMock.mockResolvedValue([inferredEntry("e1", "credit", false)]);
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([{ entryId: "e1", category: "simples_nacional", confidence: 0.95 }]),
+      costCents: 1,
+      traceId: null,
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    const update = ledgerUpdateManyMock.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(update.data).not.toHaveProperty("direction");
+  });
+
+  it("NÃO flipa quando a categoria já concorda com a direção inferida", async () => {
+    ledgerFindManyMock.mockResolvedValue([inferredEntry("e1", "credit", true)]);
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([{ entryId: "e1", category: "receita_bruta", confidence: 0.9 }]),
+      costCents: 1,
+      traceId: null,
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    const update = ledgerUpdateManyMock.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(update.data).not.toHaveProperty("direction");
+  });
+
+  it("NÃO flipa em categoria de natureza neutra (nao_classificado / transferencia_interna)", async () => {
+    ledgerFindManyMock.mockResolvedValue([
+      inferredEntry("e1", "credit", true),
+      inferredEntry("e2", "credit", true),
+    ]);
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([
+        { entryId: "e1", category: "nao_classificado", confidence: 0.45 },
+        { entryId: "e2", category: "transferencia_interna", confidence: 0.8 },
+      ]),
+      costCents: 1,
+      traceId: null,
+    });
+
+    await classifyAnalysis("analysis-A", "tenant-A");
+
+    for (const call of ledgerUpdateManyMock.mock.calls) {
+      const update = call[0] as { data: Record<string, unknown> };
+      expect(update.data).not.toHaveProperty("direction");
+    }
+  });
+});

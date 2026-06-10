@@ -28,6 +28,9 @@ REGRAS DE CATEGORIA
 - DAS / Simples → "simples_nacional". IRPJ/CSLL separados → "irpj_csll".
 - Valores de entrada de empréstimo → "emprestimos_entrada" (não "receita_bruta").
 - Estorno (credit) de tarifa/multa → "despesas_financeiras" (reverte despesa, não é receita).
+- direction="unknown": o arquivo de origem NÃO informou se o lançamento é entrada ou saída.
+  Classifique APENAS pela semântica da descrição — contas/impostos/fornecedores/folha são
+  despesas mesmo sem sinal. NÃO assuma que é receita.
 
 REGRAS DE CONFIDENCE
 confidence deve refletir sua certeza real. Use confidence ≤ 0.65 em QUALQUER um dos casos abaixo:
@@ -51,6 +54,12 @@ Saída:   [{"entryId":"b2","category":"receita_bruta","confidence":0.95}]
 
 Entrada: [{"entryId":"a3","date":"2026-04-22","description":"MULTA DETRAN PLACA ABC1D23 VEICULO EMPRESA","amountCents":19500,"direction":"debit"}]
 Saída:   [{"entryId":"a3","category":"outras_despesas","confidence":0.88}]
+
+Entrada: [{"entryId":"a4","date":"2026-04-20","description":"DAS Simples Nacional","amountCents":387000,"direction":"unknown"}]
+Saída:   [{"entryId":"a4","category":"simples_nacional","confidence":0.97}]
+
+Entrada: [{"entryId":"a5","date":"2026-04-10","description":"Conta de energia - Light","amountCents":134000,"direction":"unknown"}]
+Saída:   [{"entryId":"a5","category":"despesas_administrativas","confidence":0.9}]
 
 EXEMPLOS — BAIXA CONFIANÇA (regra 1: TED para sócio sem NF)
 Entrada: [{"entryId":"d1","date":"2026-04-30","description":"TED PARA JOAO SILVA SOCIO R$ 10.000","amountCents":1000000,"direction":"debit"}]

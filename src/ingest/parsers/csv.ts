@@ -1,4 +1,4 @@
-import { normalizeDate, normalizeAmountCents, normalizeDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 // Parser CSV dedicado (texto puro), deliberadamente separado do xlsx. Motivos:
@@ -151,11 +151,13 @@ function buildEntries(dataRows: string[][], detected: ReturnType<typeof detectCo
       continue;
     }
 
+    const resolved = resolveDirection(rawDirStr, rawCents);
     entries.push({
       date,
       description: rawDescStr,
       amountCents: Math.abs(rawCents),
-      direction: normalizeDirection(rawDirStr, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 
@@ -178,11 +180,13 @@ function parsePositional(dataRows: string[][]): ParseResult {
       continue;
     }
 
+    const resolved = resolveDirection(cells[3] ?? null, rawCents);
     entries.push({
       date,
       description: desc,
       amountCents: Math.abs(rawCents),
-      direction: normalizeDirection(cells[3] ?? null, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 

@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { normalizeDate, normalizeAmountCents, normalizeDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 // Defesa em profundidade contra o risco residual do xlsx (CVE de prototype pollution).
@@ -111,11 +111,13 @@ export function parseExcel(buffer: Buffer): ParseResult {
     if (!date || rawCents === null || !rawDescStr) { orphanCount++; continue; }
 
     const amountCents = Math.abs(rawCents);
+    const resolved = resolveDirection(rawDirStr, rawCents);
     entries.push({
       date,
       description: rawDescStr,
       amountCents,
-      direction: normalizeDirection(rawDirStr, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 
@@ -136,11 +138,13 @@ function parsePositional(rows: unknown[][]): ParseResult {
 
     if (!date || rawCents === null || !desc) { orphanCount++; continue; }
 
+    const resolved = resolveDirection(cells[3] ?? null, rawCents);
     entries.push({
       date,
       description: desc,
       amountCents: Math.abs(rawCents),
-      direction: normalizeDirection(cells[3] ?? null, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 

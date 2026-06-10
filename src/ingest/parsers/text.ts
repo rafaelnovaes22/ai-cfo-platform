@@ -1,5 +1,5 @@
 // Parser para texto colado (clipboard) — TSV ou CSV simples
-import { normalizeDate, normalizeAmountCents, normalizeDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 function splitRow(line: string): string[] {
@@ -61,11 +61,13 @@ export function parseText(raw: string): ParseResult {
     const date = normalizeDate(rawDate);
     if (!date || rawCents === null || !rawDesc.trim()) { orphanCount++; continue; }
 
+    const resolved = resolveDirection(rawDir, rawCents);
     entries.push({
       date,
       description: rawDesc,
       amountCents: Math.abs(rawCents),
-      direction: normalizeDirection(rawDir, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 

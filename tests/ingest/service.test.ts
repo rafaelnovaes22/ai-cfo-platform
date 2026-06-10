@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { filterEntriesByReferenceMonth, shouldSkipClassification, predominantMonth } from "@/ingest/service.js";
+import {
+  filterEntriesByReferenceMonth,
+  shouldSkipClassification,
+  predominantMonth,
+  computeDirectionInferred,
+} from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
 
 vi.mock("@/persistence/prisma.js", () => ({ getPrisma: vi.fn() }));
@@ -52,6 +57,47 @@ describe("ingest/service pipeline routing", () => {
 
     expect(result.ignoredCount).toBe(1);
     expect(result.entries.map((e) => e.description)).toEqual(["Marco 1", "Marco 2"]);
+  });
+});
+
+describe("ingest/service computeDirectionInferred (confiabilidade da direção por arquivo)", () => {
+  it("arquivo sem sinal sistemático (caso CID & CID): fallback → inferida, sign → confiável", () => {
+    // 4 positivos sem marcação + 1 estorno negativo (8% < 25% de linhas com sinal):
+    // o arquivo NÃO usa sinais sistematicamente, logo os fallback são chute.
+    const entries = [
+      entry({ directionSource: "fallback", direction: "credit" }),
+      entry({ directionSource: "fallback", direction: "credit" }),
+      entry({ directionSource: "fallback", direction: "credit" }),
+      entry({ directionSource: "fallback", direction: "credit" }),
+      entry({ directionSource: "sign", direction: "debit" }),
+    ];
+    expect(computeDirectionInferred(entries)).toEqual([true, true, true, true, false]);
+  });
+
+  it("extrato com sinais sistemáticos (≥25% negativos): positivos são confiáveis", () => {
+    const entries = [
+      entry({ directionSource: "fallback", direction: "credit" }),
+      entry({ directionSource: "sign", direction: "debit" }),
+      entry({ directionSource: "fallback", direction: "credit" }),
+      entry({ directionSource: "sign", direction: "debit" }),
+    ];
+    expect(computeDirectionInferred(entries)).toEqual([false, false, false, false]);
+  });
+
+  it("direção explícita nunca é marcada como inferida", () => {
+    const entries = [
+      entry({ directionSource: "explicit", direction: "debit" }),
+      entry({ directionSource: "explicit", direction: "credit" }),
+    ];
+    expect(computeDirectionInferred(entries)).toEqual([false, false]);
+  });
+
+  it("entries sem directionSource (parsers legados) são tratadas como confiáveis", () => {
+    expect(computeDirectionInferred([entry(), entry()])).toEqual([false, false]);
+  });
+
+  it("lista vazia devolve lista vazia", () => {
+    expect(computeDirectionInferred([])).toEqual([]);
   });
 });
 

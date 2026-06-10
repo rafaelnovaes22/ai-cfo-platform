@@ -1,5 +1,7 @@
 // Normalização determinística de datas e valores financeiros no padrão BR.
 
+import type { DirectionSource } from "@/ingest/types.js";
+
 // ── Datas ──────────────────────────────────────────────────────────────────
 
 // Groups[1..3] são garantidos pela regex; com noUncheckedIndexedAccess TS exige defaults.
@@ -47,7 +49,11 @@ export function normalizeDate(raw: string): string | null {
 
 export function normalizeAmountCents(raw: string | number): number | null {
   if (typeof raw === "number") {
-    return isNaN(raw) ? null : Math.round(Math.abs(raw) * 100);
+    // Preserva o sinal: -900 do Excel é débito de fato (resolveDirection usa o
+    // sinal). Os parsers aplicam Math.abs no amountCents persistido.
+    if (isNaN(raw)) return null;
+    const cents = Math.round(Math.abs(raw) * 100);
+    return raw < 0 ? -cents : cents;
   }
 
   let s = raw.toString().trim();
@@ -82,17 +88,32 @@ export function normalizeAmountCents(raw: string | number): number | null {
 const CREDIT_TOKENS = /^(c|cr|cred|crédito|credito|entrada|e|receita|in|credit)$/i;
 const DEBIT_TOKENS  = /^(d|db|deb|débito|debito|saída|saida|s|despesa|out|debit)$/i;
 
+export interface ResolvedDirection {
+  direction: "credit" | "debit";
+  source: DirectionSource;
+}
+
+// Resolve direção E registra a origem. "fallback" significa que o credit é chute
+// (positivo sem marcador) — downstream decide se confia (ver service.ts).
+export function resolveDirection(
+  raw: string | null | undefined,
+  amountCents: number,
+): ResolvedDirection {
+  if (raw) {
+    const s = raw.trim();
+    if (CREDIT_TOKENS.test(s)) return { direction: "credit", source: "explicit" };
+    if (DEBIT_TOKENS.test(s))  return { direction: "debit", source: "explicit" };
+  }
+  return amountCents < 0
+    ? { direction: "debit", source: "sign" }
+    : { direction: "credit", source: "fallback" };
+}
+
 export function normalizeDirection(
   raw: string | null | undefined,
   amountCents: number,
 ): "credit" | "debit" {
-  if (raw) {
-    const s = raw.trim();
-    if (CREDIT_TOKENS.test(s)) return "credit";
-    if (DEBIT_TOKENS.test(s))  return "debit";
-  }
-  // Fallback: sinal do valor (negativo = debit)
-  return amountCents >= 0 ? "credit" : "debit";
+  return resolveDirection(raw, amountCents).direction;
 }
 
 // ── Detecção de coluna ─────────────────────────────────────────────────────

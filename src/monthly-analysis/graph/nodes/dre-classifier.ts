@@ -5,19 +5,27 @@ import {
 import { runChunkedWithTelemetry } from "@/monthly-analysis/agents/chunk-runner.js";
 import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
 import type { EntryForClassification } from "@/classification/prompts.js";
+import { CATEGORY_NATURE, type DreCategory } from "@/classification/taxonomy.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 
+const NATURE_TO_FLOW = { credit: "in", debit: "out" } as const;
+
 export async function dreClassifierNode(
   state: MonthlyAnalysisState,
 ): Promise<Partial<MonthlyAnalysisState>> {
+  // Direção inferida (parser sem marcação de sentido) não é fato — enviar o credit
+  // chutado enviesaria o modelo a classificar despesas como receita.
+  const inferredById = new Set(
+    (state.rawEntries ?? []).filter((r) => r.directionInferred === true).map((r) => r.entryId),
+  );
   const inputs: EntryForClassification[] = (state.normalizedEntries ?? []).map((entry) => ({
     entryId: entry.entryId,
     date: entry.date,
     description: entry.normalizedDescription,
     amountCents: entry.amountCents,
-    direction: entry.direction,
+    direction: inferredById.has(entry.entryId) ? "unknown" : entry.direction,
   }));
   const tenantFacts = (state.tenantMemory?.facts ?? [])
     .filter((f): f is { content: { description: string; category: string }; confidence: number } =>
@@ -54,6 +62,23 @@ export async function dreClassifierNode(
     outputPayload: finalClassifications,
   });
 
+  // Correção de direção inferida: quando a categoria prevista tem natureza
+  // contrária à direção chutada no parse, a categoria vence. Direção confiável
+  // (extrato com sinal, coluna Tipo, manual) NUNCA é sobrescrita.
+  const directionFixById = new Map<string, "credit" | "debit">();
+  for (const c of finalClassifications) {
+    if (!inferredById.has(c.entryId)) continue;
+    const nature = CATEGORY_NATURE[c.category as DreCategory] ?? null;
+    const current = (state.normalizedEntries ?? []).find((e) => e.entryId === c.entryId)?.direction;
+    if (nature !== null && current !== undefined && NATURE_TO_FLOW[nature] !== current) {
+      directionFixById.set(c.entryId, nature);
+      logger.info(
+        { analysisId: state.analysisId, entryId: c.entryId, to: nature, category: c.category },
+        "monthly-analysis.dre-classifier: direção inferida corrigida pela natureza da categoria",
+      );
+    }
+  }
+
   // Flywheel de treinamento: persiste predição + confiança para cada lançamento.
   // Usado por SelfHarnessWorker (ADR-011 Etapa 4) para construir dataset rotulado.
   // Falha não-bloqueante: o pipeline continua mesmo se o write-back falhar.
@@ -61,17 +86,21 @@ export async function dreClassifierNode(
     try {
       const db = getPrisma();
       const results = await Promise.allSettled(
-        finalClassifications.map((c) =>
-          db.ledgerEntry.updateMany({
+        finalClassifications.map((c) => {
+          const directionFix = directionFixById.has(c.entryId)
+            ? { direction: directionFixById.get(c.entryId) }
+            : {};
+          return db.ledgerEntry.updateMany({
             // analysisId escopa o write-back à análise atual: um entryId alucinado
             // pelo LLM não pode sobrescrever lançamento de outra análise do tenant.
             where: { id: c.entryId, tenantId: state.tenantId, analysisId: state.analysisId },
             data: {
               predictedCategory: c.category,
               classificationConfidence: c.confidence,
+              ...directionFix,
             },
-          }),
-        ),
+          });
+        }),
       );
       const failed = results.filter((r) => r.status === "rejected");
       if (failed.length > 0) {
@@ -88,5 +117,20 @@ export async function dreClassifierNode(
     }
   }
 
-  return { classifiedEntries: finalClassifications, costs, traces };
+  // Propaga a direção corrigida para os nós downstream (financial-diagnosis,
+  // cashflow-risk) — o estado é a fonte deles, não o banco.
+  const correctedNormalizedEntries =
+    directionFixById.size > 0
+      ? (state.normalizedEntries ?? []).map((e) => {
+          const nature = directionFixById.get(e.entryId);
+          return nature ? { ...e, direction: NATURE_TO_FLOW[nature] } : e;
+        })
+      : undefined;
+
+  return {
+    classifiedEntries: finalClassifications,
+    costs,
+    traces,
+    ...(correctedNormalizedEntries ? { normalizedEntries: correctedNormalizedEntries } : {}),
+  };
 }

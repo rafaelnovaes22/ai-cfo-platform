@@ -21,6 +21,9 @@ export interface RawLedgerEntry {
   description: string;
   amountCents: number;
   direction: "in" | "out";
+  // true = direção veio de fallback no parse (arquivo sem marcação de sentido).
+  // O dre-classifier envia "unknown" ao LLM e pode corrigir pela categoria.
+  directionInferred?: boolean;
 }
 
 const NormalizedLedgerEntriesSchema = z.array(NormalizedLedgerEntrySchema);

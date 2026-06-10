@@ -3,6 +3,7 @@ import {
   normalizeDate,
   normalizeAmountCents,
   normalizeDirection,
+  resolveDirection,
   detectColumns,
 } from "@/ingest/normalize.js";
 
@@ -44,6 +45,11 @@ describe("ingest/normalize — valores monetários BR", () => {
     expect(normalizeAmountCents(1234.56)).toBe(123456);
   });
 
+  it("preserva o sinal de number negativo (célula -900 do Excel é débito)", () => {
+    expect(normalizeAmountCents(-900)).toBe(-90000);
+    expect(normalizeAmountCents(-1234.56)).toBe(-123456);
+  });
+
   it("trata parênteses como negativo (formato contábil)", () => {
     expect(normalizeAmountCents("(500,00)")).toBe(-50000);
   });
@@ -77,6 +83,34 @@ describe("ingest/normalize — direction", () => {
     expect(normalizeDirection(null, 100)).toBe("credit");
     expect(normalizeDirection(null, -100)).toBe("debit");
     expect(normalizeDirection(undefined, -50)).toBe("debit");
+  });
+});
+
+describe("ingest/normalize — resolveDirection (origem da direção)", () => {
+  it("token explícito → source 'explicit'", () => {
+    expect(resolveDirection("C", 100)).toEqual({ direction: "credit", source: "explicit" });
+    expect(resolveDirection("despesa", 100)).toEqual({ direction: "debit", source: "explicit" });
+    expect(resolveDirection("credit", -100)).toEqual({ direction: "credit", source: "explicit" });
+  });
+
+  it("valor negativo sem token → source 'sign'", () => {
+    expect(resolveDirection(null, -100)).toEqual({ direction: "debit", source: "sign" });
+    expect(resolveDirection("", -50)).toEqual({ direction: "debit", source: "sign" });
+  });
+
+  it("positivo sem token → source 'fallback' (credit é chute, não fato)", () => {
+    expect(resolveDirection(null, 100)).toEqual({ direction: "credit", source: "fallback" });
+    expect(resolveDirection("", 100)).toEqual({ direction: "credit", source: "fallback" });
+  });
+
+  it("token não reconhecido cai na regra de sinal", () => {
+    expect(resolveDirection("boleto", 100)).toEqual({ direction: "credit", source: "fallback" });
+    expect(resolveDirection("boleto", -100)).toEqual({ direction: "debit", source: "sign" });
+  });
+
+  it("normalizeDirection permanece compatível (wrapper)", () => {
+    expect(normalizeDirection("C", -100)).toBe("credit");
+    expect(normalizeDirection(null, -100)).toBe("debit");
   });
 });
 

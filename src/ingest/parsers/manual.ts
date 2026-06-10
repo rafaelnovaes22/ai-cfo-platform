@@ -26,6 +26,8 @@ export function parseManual(entries: unknown[]): ParseResult {
       description: parsed.data.description,
       amountCents: Math.abs(rawCents),
       direction: parsed.data.direction,
+      // Direção escolhida pelo usuário no formulário — sempre confiável.
+      directionSource: "explicit",
     });
   }
 

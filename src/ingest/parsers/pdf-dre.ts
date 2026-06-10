@@ -169,6 +169,8 @@ export async function parsePdfDre(
       description: line.description,
       amountCents: Math.round(absValue * 100),
       direction: line.direction,
+      // Direção derivada da natureza da linha DRE — confiável por construção.
+      directionSource: "explicit",
       confirmedCategory: category,
       correctionSource: "dre-import",
       classificationConfidence: 1.0,
