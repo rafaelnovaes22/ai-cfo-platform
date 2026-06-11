@@ -16,6 +16,26 @@ import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 const DEFAULT_MIN_INGEST_ENTRIES = 10;
 
 export type IngestSource = "excel" | "csv" | "text" | "pdf" | "manual";
+export type Orchestrator = "langgraph" | "bullmq";
+
+/**
+ * Resolve o orquestrador da análise. LangGraph é o caminho único (orquestrador dos
+ * agentes); BullMQ fica como camada de fila. A cadeia BullMQ legada (jobs
+ * classification→dre-narrative→action-plan) só roda quando EXPLICITAMENTE pedida
+ * E a flag LEGACY_BULLMQ_CHAIN_ENABLED está ligada — senão cairia num job sem
+ * worker (os workers legados não são registrados com a flag off). Isso dá o
+ * rollback de emergência (flag=true + orchestrator=bullmq) sem deploy.
+ * @param requested valor de productConfig.monthlyAnalysis.orchestrator (per-tenant)
+ *   ou de MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR (global); undefined = default.
+ */
+export function resolveOrchestrator(requested: string | undefined): Orchestrator {
+  const legacyEnabled = process.env.LEGACY_BULLMQ_CHAIN_ENABLED === "true";
+  return requested === "bullmq" && legacyEnabled ? "bullmq" : "langgraph";
+}
+
+export function legacyBullmqChainEnabled(): boolean {
+  return process.env.LEGACY_BULLMQ_CHAIN_ENABLED === "true";
+}
 
 export function shouldSkipClassification(entries: RawLedger[]): boolean {
   return entries.length > 0 && entries.every((entry) => entry.confirmedCategory != null);
@@ -201,10 +221,10 @@ export async function ingest(params: {
       Record<string, unknown> | undefined;
     const threshold =
       (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
-    const orchestrator =
+    const orchestrator = resolveOrchestrator(
       (tenantConfig?.orchestrator as string | undefined) ??
-      process.env.MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR ??
-      "bullmq";
+        process.env.MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR,
+    );
     const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
 
     const existing = await tx.monthlyAnalysis.findUnique({

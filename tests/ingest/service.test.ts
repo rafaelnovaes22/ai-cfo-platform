@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   filterEntriesByReferenceMonth,
   shouldSkipClassification,
   predominantMonth,
   computeDirectionInferred,
+  resolveOrchestrator,
 } from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
 
@@ -28,6 +29,37 @@ function entry(overrides: Partial<RawLedger> = {}): RawLedger {
     ...overrides,
   };
 }
+
+describe("ingest/service resolveOrchestrator (LangGraph é o caminho único)", () => {
+  const original = process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
+  afterEach(() => {
+    if (original === undefined) delete process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
+    else process.env.LEGACY_BULLMQ_CHAIN_ENABLED = original;
+  });
+
+  it("default (sem config) → langgraph", () => {
+    delete process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
+    expect(resolveOrchestrator(undefined)).toBe("langgraph");
+  });
+
+  it("'langgraph' explícito → langgraph", () => {
+    expect(resolveOrchestrator("langgraph")).toBe("langgraph");
+  });
+
+  it("'bullmq' com flag OFF → langgraph (não enfileira em fila sem worker)", () => {
+    delete process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
+    expect(resolveOrchestrator("bullmq")).toBe("langgraph");
+  });
+
+  it("'bullmq' com flag ON → bullmq (rollback de emergência)", () => {
+    process.env.LEGACY_BULLMQ_CHAIN_ENABLED = "true";
+    expect(resolveOrchestrator("bullmq")).toBe("bullmq");
+  });
+
+  it("valor desconhecido → langgraph (fail-safe para o caminho único)", () => {
+    expect(resolveOrchestrator("foobar")).toBe("langgraph");
+  });
+});
 
 describe("ingest/service pipeline routing", () => {
   it("pula classificacao quando todas as entradas ja vieram categorizadas pela DRE", () => {
