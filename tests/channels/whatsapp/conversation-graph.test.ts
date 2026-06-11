@@ -1,22 +1,22 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/observability/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}))
+}));
 
 afterEach(() => {
-  vi.unstubAllEnvs()
-})
+  vi.unstubAllEnvs();
+});
 
-import { classifyWaIntent } from "@/channels/whatsapp/conversation-graph/intent-classifier.js"
-import { decideWhatsappConversation } from "@/channels/whatsapp/conversation-graph/index.js"
+import { classifyWaIntent } from "@/channels/whatsapp/conversation-graph/intent-classifier.js";
+import { decideWhatsappConversation } from "@/channels/whatsapp/conversation-graph/index.js";
 import {
   encodeOutcomeMetrics,
   formatDeterministicCashflowExplanation,
   type CashflowMetrics,
-} from "@/channels/whatsapp/conversation-graph/explanation.js"
-import type { WaIncomingMessage } from "@/channels/whatsapp/types.js"
-import type { WaConversationState } from "@/channels/whatsapp/conversation-graph/state.js"
+} from "@/channels/whatsapp/conversation-graph/explanation.js";
+import type { WaIncomingMessage } from "@/channels/whatsapp/types.js";
+import type { WaConversationState } from "@/channels/whatsapp/conversation-graph/state.js";
 
 // Espelha o extrato da screenshot: entradas 45.593,73 / saídas 90.593,73 / resultado -45.000,00
 function negativeMetrics(): CashflowMetrics {
@@ -29,7 +29,7 @@ function negativeMetrics(): CashflowMetrics {
     closingBalanceCents: null,
     startDate: "2026-02-27",
     endDate: "2026-05-20",
-  }
+  };
 }
 
 function textMsg(text: string): WaIncomingMessage {
@@ -39,10 +39,12 @@ function textMsg(text: string): WaIncomingMessage {
     timestamp: "2026-06-09T12:00:00.000Z",
     type: "text",
     text,
-  }
+  };
 }
 
-function baseState(overrides: Partial<WaConversationState> = {}): WaConversationState {
+function baseState(
+  overrides: Partial<WaConversationState> = {},
+): WaConversationState {
   return {
     phoneE164: "5511999999999",
     tenantId: "tenant-1",
@@ -52,20 +54,23 @@ function baseState(overrides: Partial<WaConversationState> = {}): WaConversation
     mode: "active",
     updatedAt: "2026-06-09T12:00:00.000Z",
     ...overrides,
-  }
+  };
 }
 
 describe("whatsapp conversation graph — deterministic zero-token UX", () => {
   it("interpreta escolha legada '1' como pedido de caixa, mas pede extrato em vez de menu/caixa zerado", async () => {
-    const decision = await decideWhatsappConversation(textMsg("1"), baseState())
+    const decision = await decideWhatsappConversation(
+      textMsg("1"),
+      baseState(),
+    );
 
-    expect(decision.intent).toBe("ASK_CASHFLOW")
-    expect(decision.usedSlm).toBe(false)
-    expect(decision.route).toBe("SEND_TEXT")
-    expect(decision.responseText?.toLowerCase()).toContain("extrato")
-    expect(decision.responseText?.toLowerCase()).not.toContain("caixa de hoje")
-    expect(decision.responseText?.toLowerCase()).not.toContain("r$ 0")
-  })
+    expect(decision.intent).toBe("ASK_CASHFLOW");
+    expect(decision.usedSlm).toBe(false);
+    expect(decision.route).toBe("SEND_TEXT");
+    expect(decision.responseText?.toLowerCase()).toContain("extrato");
+    expect(decision.responseText?.toLowerCase()).not.toContain("caixa de hoje");
+    expect(decision.responseText?.toLowerCase()).not.toContain("r$ 0");
+  });
 
   it("'como está meu caixa?' mostra o resultado já calculado em vez de pedir extrato de novo", async () => {
     const decision = await decideWhatsappConversation(
@@ -78,60 +83,93 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
           createdAt: "2026-06-09T12:00:00.000Z",
         },
       }),
-    )
+    );
 
-    expect(decision.intent).toBe("ASK_CASHFLOW")
-    expect(decision.usedSlm).toBe(false)
-    expect(decision.route).toBe("SEND_TEXT")
+    expect(decision.intent).toBe("ASK_CASHFLOW");
+    expect(decision.usedSlm).toBe(false);
+    expect(decision.route).toBe("SEND_TEXT");
     // Mostra os números do caixa (entradas, saídas, resultado), não o pedido de extrato
-    expect(decision.responseText).toContain("45.593,73")
-    expect(decision.responseText).toContain("90.593,73")
-    expect(decision.responseText).toContain("Resultado")
+    expect(decision.responseText).toContain("45.593,73");
+    expect(decision.responseText).toContain("90.593,73");
+    expect(decision.responseText).toContain("Resultado");
     // Oferece a leitura sem ser a leitura completa em si
-    expect(decision.responseText?.toLowerCase()).toContain("me explica")
-  })
+    expect(decision.responseText?.toLowerCase()).toContain("me explica");
+  });
 
   it("'como está meu caixa?' SEM resultado calculado ainda pede o extrato (regressão)", async () => {
-    const decision = await decideWhatsappConversation(textMsg("Como está meu caixa?"), baseState())
+    const decision = await decideWhatsappConversation(
+      textMsg("Como está meu caixa?"),
+      baseState(),
+    );
 
-    expect(decision.intent).toBe("ASK_CASHFLOW")
-    expect(decision.responseText?.toLowerCase()).toContain("extrato")
-  })
+    expect(decision.intent).toBe("ASK_CASHFLOW");
+    expect(decision.responseText?.toLowerCase()).toContain("extrato");
+  });
 
   it("responde 'vc não continua?' com continuação contextual sem reenviar menu", async () => {
     const decision = await decideWhatsappConversation(
       textMsg("Vc nao continua a conversa?"),
-      baseState({ stage: "AWAITING_STATEMENT", pendingAction: "send_statement" }),
-    )
+      baseState({
+        stage: "AWAITING_STATEMENT",
+        pendingAction: "send_statement",
+      }),
+    );
 
-    expect(decision.intent).toBe("ASK_NEXT_STEP")
-    expect(decision.usedSlm).toBe(false)
-    expect(decision.responseText?.toLowerCase()).toContain("continuo sim")
-    expect(decision.responseText?.toLowerCase()).toContain("extrato")
-    expect(decision.responseText?.toLowerCase()).not.toContain("1️⃣")
-  })
+    expect(decision.intent).toBe("ASK_NEXT_STEP");
+    expect(decision.usedSlm).toBe(false);
+    expect(decision.responseText?.toLowerCase()).toContain("continuo sim");
+    expect(decision.responseText?.toLowerCase()).toContain("extrato");
+    expect(decision.responseText?.toLowerCase()).not.toContain("1️⃣");
+  });
 
   it("trata 'como consigo interagir com você?' como ajuda de capacidades, sem repetir o menu", async () => {
     const decision = await decideWhatsappConversation(
       textMsg("como consigo interagir com você?"),
       baseState(),
-    )
+    );
 
-    expect(decision.intent).toBe("CAPABILITIES_HELP")
-    expect(decision.usedSlm).toBe(false)
-    expect(decision.route).toBe("SEND_TEXT")
-    expect(decision.responseText?.toLowerCase()).toContain("fluxo de caixa")
-    expect(decision.responseText).not.toContain("1️⃣")
-  })
+    expect(decision.intent).toBe("CAPABILITIES_HELP");
+    expect(decision.usedSlm).toBe(false);
+    expect(decision.route).toBe("SEND_TEXT");
+    expect(decision.responseText?.toLowerCase()).toContain("fluxo de caixa");
+    expect(decision.responseText).not.toContain("1️⃣");
+  });
 
   it("reconhece 'o que você faz?' e 'como funciona' como capacidades", () => {
-    expect(classifyWaIntent(textMsg("o que você faz?"), baseState()).intent).toBe("CAPABILITIES_HELP")
-    expect(classifyWaIntent(textMsg("como funciona isso?"), baseState()).intent).toBe("CAPABILITIES_HELP")
-  })
+    expect(
+      classifyWaIntent(textMsg("o que você faz?"), baseState()).intent,
+    ).toBe("CAPABILITIES_HELP");
+    expect(
+      classifyWaIntent(textMsg("como funciona isso?"), baseState()).intent,
+    ).toBe("CAPABILITIES_HELP");
+  });
 
   it("não confunde 'como envio o extrato?' (continua send-statement-help)", () => {
-    expect(classifyWaIntent(textMsg("como envio o extrato?"), baseState()).intent).toBe("SEND_STATEMENT_HELP")
-  })
+    expect(
+      classifyWaIntent(textMsg("como envio o extrato?"), baseState()).intent,
+    ).toBe("SEND_STATEMENT_HELP");
+  });
+
+  it("reconhece 'como está meu resultado?' e 'avalie meu resultado' como EXPLAIN_LAST_OUTCOME", () => {
+    expect(
+      classifyWaIntent(textMsg("Como está meu resultado?"), baseState()).intent,
+    ).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(
+      classifyWaIntent(textMsg("Como está o resultado?"), baseState()).intent,
+    ).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(
+      classifyWaIntent(textMsg("avalie meu resultado"), baseState()).intent,
+    ).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(
+      classifyWaIntent(textMsg("analise meu resultado"), baseState()).intent,
+    ).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(
+      classifyWaIntent(textMsg("analise o caixa"), baseState()).intent,
+    ).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(classifyWaIntent(textMsg("analise"), baseState()).intent).toBe(
+      "ASK_MONTHLY_ANALYSIS",
+    );
+  });
 
   it("'me explica o resultado' devolve leitura determinística com os números reais, sem ecoar saudação", async () => {
     const decision = await decideWhatsappConversation(
@@ -145,35 +183,40 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
           createdAt: "2026-06-09T12:00:00.000Z",
         },
       }),
-    )
+    );
 
-    expect(decision.intent).toBe("EXPLAIN_LAST_OUTCOME")
-    expect(decision.usedSlm).toBe(false)
-    expect(decision.route).toBe("SEND_TEXT")
+    expect(decision.intent).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(decision.usedSlm).toBe(false);
+    expect(decision.route).toBe("SEND_TEXT");
     // Explica de verdade: comenta o resultado negativo e os valores
     // (toLocaleString usa espaço non-breaking após "R$", por isso checamos só os dígitos)
-    expect(decision.responseText?.toLowerCase()).toContain("negativo")
-    expect(decision.responseText).toContain("45.000,00")
-    expect(decision.responseText).toContain("90.593,73")
+    expect(decision.responseText?.toLowerCase()).toContain("negativo");
+    expect(decision.responseText).toContain("45.000,00");
+    expect(decision.responseText).toContain("90.593,73");
     // Não ecoa a saudação (bug corrigido)
-    expect(decision.responseText).not.toContain("Olá")
-  })
+    expect(decision.responseText).not.toContain("Olá");
+  });
 
   it("leitura determinística comenta resultado negativo (saídas vs entradas) e positivo", () => {
-    const negativo = formatDeterministicCashflowExplanation(negativeMetrics(), "Rafael De Novaes")
-    expect(negativo.toLowerCase()).toContain("negativo")
-    expect(negativo.toLowerCase()).toContain("dobro")
-    expect(negativo).toContain("Rafael")
+    const negativo = formatDeterministicCashflowExplanation(
+      negativeMetrics(),
+      "Rafael De Novaes",
+    );
+    expect(negativo.toLowerCase()).toContain("negativo");
+    expect(negativo.toLowerCase()).toContain("dobro");
+    expect(negativo).toContain("Rafael");
 
-    const positivo = formatDeterministicCashflowExplanation(
-      { ...negativeMetrics(), debitsCents: 1_000_000, resultCents: 3_559_373 },
-    )
-    expect(positivo.toLowerCase()).toContain("positivo")
-    expect(positivo.toLowerCase()).toContain("sobrou")
-  })
+    const positivo = formatDeterministicCashflowExplanation({
+      ...negativeMetrics(),
+      debitsCents: 1_000_000,
+      resultCents: 3_559_373,
+    });
+    expect(positivo.toLowerCase()).toContain("positivo");
+    expect(positivo.toLowerCase()).toContain("sobrou");
+  });
 
   it("pergunta explicativa não consome SLM quando a flag está desligada", async () => {
-    vi.stubEnv("WHATSAPP_CONVERSATION_SLM_ENABLED", "false")
+    vi.stubEnv("WHATSAPP_CONVERSATION_SLM_ENABLED", "false");
 
     const decision = await decideWhatsappConversation(
       textMsg("me explica esse resultado"),
@@ -184,21 +227,31 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
           createdAt: "2026-06-09T12:00:00.000Z",
         },
       }),
-    )
+    );
 
-    expect(decision.intent).toBe("EXPLAIN_LAST_OUTCOME")
-    expect(decision.usedSlm).toBe(false)
-    expect(decision.responseText).toContain("Resultado positivo de R$ 6.450")
-  })
+    expect(decision.intent).toBe("EXPLAIN_LAST_OUTCOME");
+    expect(decision.usedSlm).toBe(false);
+    expect(decision.responseText).toContain("Resultado positivo de R$ 6.450");
+  });
 
   it("classificador marca pergunta aberta explicativa como candidata a SLM só quando há contexto", () => {
-    const withoutContext = classifyWaIntent(textMsg("isso está bom?"), baseState())
+    const withoutContext = classifyWaIntent(
+      textMsg("isso está bom?"),
+      baseState(),
+    );
     const withContext = classifyWaIntent(
       textMsg("isso está bom?"),
-      baseState({ passiveContext: { source: "daily_cashflow", summary: "Caixa diário enviado", createdAt: "2026-06-09T12:00:00.000Z", expiresAt: "2026-06-10T12:00:00.000Z" } }),
-    )
+      baseState({
+        passiveContext: {
+          source: "daily_cashflow",
+          summary: "Caixa diário enviado",
+          createdAt: "2026-06-09T12:00:00.000Z",
+          expiresAt: "2026-06-10T12:00:00.000Z",
+        },
+      }),
+    );
 
-    expect(withoutContext.requiresSlm).toBe(false)
-    expect(withContext.requiresSlm).toBe(true)
-  })
-})
+    expect(withoutContext.requiresSlm).toBe(false);
+    expect(withContext.requiresSlm).toBe(true);
+  });
+});
