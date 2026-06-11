@@ -18,6 +18,11 @@ vi.mock("@/monthly-analysis/agents/classification.js", () => ({
   runDreClassificationAgentWithTelemetry: vi.fn(),
 }));
 
+// Perfil de negócio tem chamada LLM própria — mockado para isolar o nó.
+vi.mock("@/classification/business-profile.js", () => ({
+  inferBusinessProfile: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/monthly-analysis/graph/instrumentation.js", () => ({
   buildAgentTelemetry: () => ({ costs: [], traces: [] }),
   NOOP_LLM_RESPONSE: {},
@@ -158,5 +163,70 @@ describe("monthly-analysis/dre-classifier — direção inferida", () => {
       .filter((c) => c.data.direction !== undefined);
     expect(updatesWithDirection).toHaveLength(0);
     expect(result.normalizedEntries === undefined || result.normalizedEntries[0]?.direction === "in").toBe(true);
+  });
+});
+
+describe("monthly-analysis/dre-classifier — categoria confirmada na origem (paridade shouldSkipClassification)", () => {
+  it("entries com confirmedCategory são puladas do LLM e do write-back", async () => {
+    runChunkedMock.mockResolvedValue({
+      data: [{ entryId: "e2", category: "despesas_administrativas", confidence: 0.9 }],
+      response: {},
+      latencyMs: 10,
+    });
+
+    await dreClassifierNode(baseState({
+      rawEntries: [
+        { ...raw("e1", "out", false), confirmedCategory: "custo_servicos" },
+        raw("e2", "out", false),
+      ],
+      normalizedEntries: [normalized("e1", "out"), normalized("e2", "out")],
+    }));
+
+    // Só e2 vai ao LLM.
+    const inputs = runChunkedMock.mock.calls[0]?.[0] as Array<{ entryId: string }>;
+    expect(inputs.map((i) => i.entryId)).toEqual(["e2"]);
+
+    // Write-back não toca a entry confirmada (não sobrescreve predictedCategory dela).
+    const touchedIds = updateManyMock.mock.calls
+      .map((c) => (c[0] as { where: { id: string } }).where.id);
+    expect(touchedIds).not.toContain("e1");
+  });
+
+  it("todas confirmadas → nenhuma chamada LLM (skip total, como o BullMQ)", async () => {
+    // runChunkedWithTelemetry real curto-circuita lista vazia sem chamar runFn;
+    // aqui validamos que o nó nem invoca o chunk-runner com itens.
+    runChunkedMock.mockResolvedValue({ data: [], response: {}, latencyMs: 0 });
+
+    await dreClassifierNode(baseState({
+      rawEntries: [
+        { ...raw("e1", "out", false), confirmedCategory: "custo_servicos" },
+        { ...raw("e2", "in", false), confirmedCategory: "receita_bruta" },
+      ],
+      normalizedEntries: [normalized("e1", "out"), normalized("e2", "in")],
+    }));
+
+    const inputs = runChunkedMock.mock.calls[0]?.[0] as unknown[];
+    expect(inputs).toHaveLength(0);
+    expect(updateManyMock).not.toHaveBeenCalled();
+  });
+
+  it("aggregate-dre usa a categoria confirmada com precedência sobre a predita", async () => {
+    const { aggregateDreNode } = await import("@/monthly-analysis/graph/nodes/aggregate-dre.js");
+
+    const result = await aggregateDreNode(baseState({
+      rawEntries: [
+        { ...raw("e1", "in", false), confirmedCategory: "receita_bruta" },
+        raw("e2", "out", false),
+      ],
+      normalizedEntries: [normalized("e1", "in"), normalized("e2", "out")],
+      // Predição contraditória para e1: a confirmada deve vencer no DRE.
+      classifiedEntries: [
+        { entryId: "e1", category: "outras_despesas", confidence: 0.9 },
+        { entryId: "e2", category: "despesas_administrativas", confidence: 0.9 },
+      ],
+    }));
+
+    // e1 (R$3.870,00, confirmada receita_bruta) entra como receita, não despesa.
+    expect(result.dre?.receitaBruta).toBe(387000);
   });
 });

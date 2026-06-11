@@ -22,13 +22,29 @@ export async function dreClassifierNode(
   const inferredById = new Set(
     (state.rawEntries ?? []).filter((r) => r.directionInferred === true).map((r) => r.entryId),
   );
-  const inputs: EntryForClassification[] = (state.normalizedEntries ?? []).map((entry) => ({
-    entryId: entry.entryId,
-    date: entry.date,
-    description: entry.normalizedDescription,
-    amountCents: entry.amountCents,
-    direction: inferredById.has(entry.entryId) ? "unknown" : entry.direction,
-  }));
+  // Categoria confirmada na origem (PDF de DRE do contador) é fato: pula o LLM e
+  // não entra no write-back — paridade com shouldSkipClassification do BullMQ.
+  // O aggregate-dre usa a confirmada com precedência (rawEntries → rows).
+  const confirmedIds = new Set(
+    (state.rawEntries ?? [])
+      .filter((r) => r.confirmedCategory != null && r.confirmedCategory !== "")
+      .map((r) => r.entryId),
+  );
+  if (confirmedIds.size > 0) {
+    logger.info(
+      { analysisId: state.analysisId, confirmedCount: confirmedIds.size },
+      "monthly-analysis.dre-classifier: entries com categoria confirmada na origem — puladas do LLM",
+    );
+  }
+  const inputs: EntryForClassification[] = (state.normalizedEntries ?? [])
+    .filter((entry) => !confirmedIds.has(entry.entryId))
+    .map((entry) => ({
+      entryId: entry.entryId,
+      date: entry.date,
+      description: entry.normalizedDescription,
+      amountCents: entry.amountCents,
+      direction: inferredById.has(entry.entryId) ? "unknown" : entry.direction,
+    }));
   const tenantFacts = (state.tenantMemory?.facts ?? [])
     .filter((f): f is { content: { description: string; category: string }; confidence: number } =>
       typeof (f.content as Record<string, unknown>)?.description === "string" &&
