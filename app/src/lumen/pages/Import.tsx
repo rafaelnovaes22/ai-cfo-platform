@@ -14,6 +14,7 @@ import {
 import * as XLSX from "xlsx";
 import { api } from "@/lib/api/index.js";
 import { ApiProblem } from "@/lib/api/client.js";
+import { LIMITS, isAcceptedFile, formatBytes } from "@/lib/limits.js";
 import { toast } from "sonner";
 import ImportLoading from "@/components/ImportLoading";
 
@@ -163,7 +164,17 @@ function PasteModal({
       <MonthField value={referenceMonth} onChange={setReferenceMonth} />
       <textarea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        maxLength={LIMITS.PASTE_MAX_CHARS}
+        onChange={(e) => {
+          // maxLength não cobre paste programático em todos os browsers — corta aqui também.
+          const next = e.target.value;
+          if (next.length > LIMITS.PASTE_MAX_CHARS) {
+            toast.error("Texto muito grande. Cole até 1 milhão de caracteres ou envie como arquivo.");
+            setText(next.slice(0, LIMITS.PASTE_MAX_CHARS));
+            return;
+          }
+          setText(next);
+        }}
         disabled={submitting}
         className="w-full h-56 bg-background border border-[#171132] rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-[#96ff7e] mt-3"
         placeholder={
@@ -244,6 +255,21 @@ function FileModal({
   }
 
   async function handleFileChange(selected: File | null) {
+    // Valida ANTES de aceitar: a UI promete "até 10 MB" e isso precisa ser real
+    // (em prod um PDF de 10211 KB passava e só falhava depois do round-trip).
+    if (selected && selected.size > LIMITS.FILE_MAX_BYTES) {
+      toast.error(
+        `Arquivo de ${formatBytes(selected.size)} excede o limite de ${formatBytes(LIMITS.FILE_MAX_BYTES)}.`,
+      );
+      setFile(null);
+      return;
+    }
+    if (selected && !isAcceptedFile(selected.name)) {
+      toast.error("Formato não suportado. Envie PDF, Excel (.xlsx/.xls) ou CSV.");
+      setFile(null);
+      return;
+    }
+
     setFile(selected);
     if (!selected || kind !== "xls") return;
 
@@ -343,9 +369,13 @@ function ManualEntry({
     const errs: Record<string, string> = {};
     if (!date) errs.date = "Informe a data";
     if (!description.trim()) errs.description = "Informe a descrição";
+    else if (description.trim().length > LIMITS.DESCRIPTION_MAX_CHARS)
+      errs.description = `Descrição até ${LIMITS.DESCRIPTION_MAX_CHARS} caracteres`;
     const numAmount = parseFloat(amount.replace(",", "."));
-    if (!amount || isNaN(numAmount) || numAmount <= 0)
+    if (!amount || isNaN(numAmount) || !Number.isFinite(numAmount) || numAmount <= 0)
       errs.amount = "Valor inválido";
+    else if (numAmount > LIMITS.AMOUNT_MAX_REAIS)
+      errs.amount = `Valor máximo por lançamento: R$ ${LIMITS.AMOUNT_MAX_REAIS.toLocaleString("pt-BR")},00`;
     if (!referenceMonth) errs.referenceMonth = "Informe o mês";
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -407,6 +437,7 @@ function ManualEntry({
           <input
             type="text"
             value={description}
+            maxLength={LIMITS.DESCRIPTION_MAX_CHARS}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Ex: Contrato cliente Alfa, Meta Ads setembro…"
             className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
@@ -417,8 +448,14 @@ function ManualEntry({
             type="number"
             step="0.01"
             min="0"
+            max={LIMITS.AMOUNT_MAX_REAIS}
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              // type=number não respeita maxLength: sem este corte dava para
+              // digitar uma fileira interminável de dígitos (visto em prod).
+              if (e.target.value.length > 16) return;
+              setAmount(e.target.value);
+            }}
             placeholder="0,00"
             className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
           />

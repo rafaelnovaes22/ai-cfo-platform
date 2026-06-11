@@ -63,8 +63,23 @@ describe("ingest/normalize — valores monetários BR", () => {
     expect(normalizeAmountCents("0,00")).toBe(0);
   });
 
-  it("valor grande no padrão BR", () => {
-    expect(normalizeAmountCents("999.999.999,99")).toBe(99999999999);
+  it("rejeita overflow: 1e308, Infinity e acima do teto (caso de prod 2026-06-11)", () => {
+    expect(normalizeAmountCents("1e308")).toBeNull();
+    expect(normalizeAmountCents(1e308)).toBeNull();
+    expect(normalizeAmountCents(1e22)).toBeNull();
+    expect(normalizeAmountCents(Infinity)).toBeNull();
+    // Acima de MAX_AMOUNT_CENTS (R$20M) — antes estourava o Int4 do Postgres.
+    expect(normalizeAmountCents("999.999.999,99")).toBeNull();
+    expect(normalizeAmountCents(20_000_000.01)).toBeNull();
+  });
+
+  it("aceita até o teto de R$20M", () => {
+    expect(normalizeAmountCents(20_000_000)).toBe(2_000_000_000);
+    expect(normalizeAmountCents("19.999.999,99")).toBe(1_999_999_999);
+  });
+
+  it("fileira de zeros vira 0 (não overflow)", () => {
+    expect(normalizeAmountCents("0".repeat(60))).toBe(0);
   });
 });
 

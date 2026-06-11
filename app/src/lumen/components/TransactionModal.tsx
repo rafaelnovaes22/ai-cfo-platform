@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { z } from "zod";
 import { categoriesFor } from "../data/categories.ts";
 import type { Transaction, NewTransaction } from "../data/useTransactions.ts";
+import { LIMITS } from "@/lib/limits.js";
 import { toast } from "@/components/ui/sonner";
 
 const schema = z.object({
@@ -10,7 +11,12 @@ const schema = z.object({
   description: z.string().trim().min(1, "Informe a descrição").max(200),
   category: z.string().min(1, "Escolha uma categoria"),
   account: z.string().trim().min(1, "Informe a conta").max(80),
-  amount: z.number().positive("Valor deve ser maior que zero").max(99999999.99),
+  // Teto compartilhado (R$20M): o antigo 99.999.999,99 estourava o Int4 do
+  // Postgres em cents (max R$21,4M) e dava 500 em vez de erro de validação.
+  amount: z
+    .number()
+    .positive("Valor deve ser maior que zero")
+    .max(LIMITS.AMOUNT_MAX_REAIS, "Valor máximo por lançamento: R$ 20.000.000,00"),
   type: z.enum(["income", "expense"]),
   notes: z.string().max(500).optional().nullable(),
 });

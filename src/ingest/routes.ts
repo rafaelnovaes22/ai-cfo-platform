@@ -38,8 +38,23 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         );
       }
 
+      // Whitelist de extensões: antes, qualquer extensão desconhecida (.exe,
+      // .zip, sem extensão) caía silenciosamente no parser CSV.
       const ext = data.filename.split(".").pop()?.toLowerCase() ?? "";
-      const source = ext === "pdf" ? "pdf" : ["xlsx", "xls"].includes(ext) ? "excel" : "csv";
+      const SOURCE_BY_EXT: Record<string, "pdf" | "excel" | "csv"> = {
+        pdf: "pdf", xlsx: "excel", xls: "excel", csv: "csv",
+      };
+      const source = SOURCE_BY_EXT[ext];
+      if (!source) {
+        return reply.status(400).send(
+          problemDetail({
+            type: "https://api.aicfo.com.br/errors/bad-request",
+            title: "Formato de arquivo não suportado",
+            status: 400,
+            detail: `Extensão ".${ext}" não é aceita. Envie PDF, Excel (.xlsx/.xls) ou CSV.`,
+          }),
+        );
+      }
       const buffer = await data.toBuffer();
 
       const result = await ingest({ tenantId: req.auth!.tenantId, referenceMonth, source, buffer });

@@ -1,13 +1,6 @@
-import { z } from "zod";
 import { normalizeDate, normalizeAmountCents } from "@/ingest/normalize.js";
+import { ManualEntrySchema } from "@/ingest/schemas.js";
 import type { ParseResult } from "@/ingest/types.js";
-
-const ManualEntrySchema = z.object({
-  date: z.string(),
-  description: z.string().min(1),
-  amount: z.union([z.number(), z.string()]),
-  direction: z.enum(["credit", "debit"]),
-});
 
 export function parseManual(entries: unknown[]): ParseResult {
   const result: ParseResult = { entries: [], orphanCount: 0 };

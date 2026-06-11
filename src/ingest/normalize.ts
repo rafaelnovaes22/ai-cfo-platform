@@ -47,13 +47,23 @@ export function normalizeDate(raw: string): string | null {
 
 // ── Valores ────────────────────────────────────────────────────────────────
 
+// Teto absoluto por lançamento: R$ 20M (2e9 cents). Precisa caber no Int4 do
+// Postgres (max 2.147.483.647 cents); sem este guard, "1e22" digitado no form
+// virava Infinity/overflow e estourava 500 no INSERT (visto em prod 2026-06-11).
+export const MAX_AMOUNT_CENTS = 2_000_000_000;
+
+function boundedCents(cents: number, negative: boolean): number | null {
+  if (!Number.isFinite(cents) || cents > MAX_AMOUNT_CENTS) return null;
+  return negative ? -cents : cents;
+}
+
 export function normalizeAmountCents(raw: string | number): number | null {
   if (typeof raw === "number") {
     // Preserva o sinal: -900 do Excel é débito de fato (resolveDirection usa o
     // sinal). Os parsers aplicam Math.abs no amountCents persistido.
     if (isNaN(raw)) return null;
     const cents = Math.round(Math.abs(raw) * 100);
-    return raw < 0 ? -cents : cents;
+    return boundedCents(cents, raw < 0);
   }
 
   let s = raw.toString().trim();
@@ -80,7 +90,7 @@ export function normalizeAmountCents(raw: string | number): number | null {
   const num = parseFloat(s);
   if (isNaN(num)) return null;
   const cents = Math.round(Math.abs(num) * 100);
-  return negative ? -cents : cents; // negativo preservado para inferir direção
+  return boundedCents(cents, negative); // negativo preservado para inferir direção
 }
 
 // ── Direção ────────────────────────────────────────────────────────────────
