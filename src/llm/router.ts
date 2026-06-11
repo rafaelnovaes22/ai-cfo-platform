@@ -18,6 +18,7 @@ const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
 
   // Pipeline agentic/LangGraph — SLM first.
   "normalization":        { provider: "google", model: "gemini-2.5-flash-lite" },
+  "business-profile":     { provider: "google", model: "gemini-2.5-flash-lite" },
   "clarity-judge":        { provider: "google", model: "gemini-2.5-flash-lite" },
   "dre-classification":   { provider: "google", model: "gemini-2.5-flash-lite" },
   "anomaly-detection":    { provider: "google", model: "gemini-2.5-flash-lite" },
@@ -43,6 +44,7 @@ const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
 
   // Pipeline agentic/LangGraph.
   "normalization":        { provider: "openai", model: "gpt-4.1-mini" },
+  "business-profile":     { provider: "openai", model: "gpt-4.1-mini" },
   "clarity-judge":        { provider: "openai", model: "gpt-4.1-mini" },
   "dre-classification":   { provider: "openai", model: "gpt-4.1-mini" },
   "anomaly-detection":    { provider: "openai", model: "gpt-4.1-mini" },

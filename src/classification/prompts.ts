@@ -107,14 +107,25 @@ function buildTenantFactsBlock(tenantFacts: TenantFact[]): string {
   return `REGRAS APRENDIDAS DESTE TENANT (alta prioridade — aplicar sempre que a descrição combinar):\n${lines}\n\n`;
 }
 
+function buildBusinessProfileBlock(businessProfile?: string): string {
+  if (!businessProfile || businessProfile.trim().length === 0) return "";
+  // Perfil inferido dos próprios lançamentos (ver business-profile.ts). Vem antes do
+  // segmento genérico porque é específico deste negócio: diz quais descrições são a
+  // RECEITA-FIM (serviço/produto vendido), evitando que serviços prestados sejam
+  // classificados como despesa quando a direção é "unknown".
+  return `PERFIL DO NEGÓCIO (inferido dos lançamentos — use para distinguir receita de despesa):\n${businessProfile.trim()}\n\n`;
+}
+
 export function buildUserPrompt(
   entries: EntryForClassification[],
   segment?: string,
   tenantFacts?: TenantFact[],
+  businessProfile?: string,
 ): string {
+  const profileBlock = buildBusinessProfileBlock(businessProfile);
   const segmentLine = segment
     ? `Segmento da empresa: ${segment}. Use o vocabulário típico do setor ao classificar (ex: mensalidades → receita_bruta para SaaS; CMV → custos_diretos para varejo).\n\n`
     : "";
   const factsBlock = tenantFacts && tenantFacts.length > 0 ? buildTenantFactsBlock(tenantFacts) : "";
-  return `${factsBlock}${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
+  return `${factsBlock}${profileBlock}${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
 }

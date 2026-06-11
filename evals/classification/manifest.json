@@ -19,7 +19,7 @@
     "adversarial": ">=0.10"
   },
   "min_cases_per_outcome": 10,
-  "total_cases": 35,
+  "total_cases": 37,
   "models_under_test": [
     "gpt-4.1-mini",
     "claude-haiku-4-5"

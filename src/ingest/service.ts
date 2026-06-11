@@ -27,17 +27,26 @@ export function shouldSkipClassification(entries: RawLedger[]): boolean {
 const DIRECTION_SIGN_SHARE_THRESHOLD = 0.25;
 
 /**
- * Decide, por lançamento, se a direção é INFERIDA (não-confiável): veio do fallback
- * "positivo = credit" num arquivo que não usa sinais sistematicamente. Lançamentos
- * inferidos são persistidos com directionInferred=true e o classificador LLM pode
- * corrigir a direção pela natureza da categoria (ver classification/classifier.ts).
- * Entries sem directionSource (parsers legados) são tratadas como confiáveis.
+ * Decide, por lançamento, se a direção é INFERIDA (não-confiável). Duas origens
+ * contam como inferência:
+ * - "fallback": positivo sem marcador, num arquivo que não usa sinais sistematicamente.
+ * - "description": direção deduzida do texto pela heurística (PR #174). É boa para o
+ *   free tier (WhatsApp, sem LLM), mas no tier pago o LLM, com contexto do negócio,
+ *   tem a palavra final — então também é corrigível. Sem isto, a heurística travava
+ *   a direção e o classificador não podia consertar (ex.: pró-labore como receita).
+ * Lançamentos inferidos são persistidos com directionInferred=true e o classificador
+ * envia direction="unknown" + corrige pela natureza da categoria (ver direction-fix.ts).
+ * Entries sem directionSource (parsers legados) ou com sinal real são confiáveis.
  */
 export function computeDirectionInferred(entries: RawLedger[]): boolean[] {
   if (entries.length === 0) return [];
   const signCount = entries.filter((e) => e.directionSource === "sign").length;
   const fileHasSystematicSigns = signCount / entries.length >= DIRECTION_SIGN_SHARE_THRESHOLD;
-  return entries.map((e) => e.directionSource === "fallback" && !fileHasSystematicSigns);
+  return entries.map(
+    (e) =>
+      e.directionSource === "description" ||
+      (e.directionSource === "fallback" && !fileHasSystematicSigns),
+  );
 }
 
 export function filterEntriesByReferenceMonth(

@@ -4,7 +4,8 @@ import { callLlm } from "@/llm/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { buildSystemPrompt, buildUserPrompt } from "@/classification/prompts.js";
 import { DRE_CATEGORIES } from "@/classification/taxonomy.js";
-import { resolveDirectionFix } from "@/classification/direction-fix.js";
+import { resolveDirectionFix, needsDirectionReview } from "@/classification/direction-fix.js";
+import { inferBusinessProfile } from "@/classification/business-profile.js";
 import { enqueueDreNarrative } from "@/queue/index.js";
 import { mapWithConcurrency } from "@/shared/concurrency.js";
 import { logger } from "@/observability/logger.js";
@@ -57,6 +58,11 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
   });
   const segment = tenant?.industrySegment ?? undefined;
 
+  // Perfil do negócio inferido das descrições (1 chamada curta, antes dos batches):
+  // diz ao classificador quais lançamentos são a receita-fim deste negócio. Sem ele,
+  // serviços vendidos (ex.: "cobertura jornalística" numa produtora) viram despesa.
+  const businessProfile = await inferBusinessProfile(entries, { tenantId, traceId: undefined });
+
   const systemPrompt = buildSystemPrompt();
 
   // Batches processados em PARALELO (pool com limite): são independentes entre
@@ -68,7 +74,7 @@ export async function classifyAnalysis(analysisId: string, tenantId: string): Pr
   }
 
   const lowConfidencePerBatch = await mapWithConcurrency(batches, batchConcurrency(), (batch, batchIdx) =>
-    classifyBatch({ db, batch, batchIdx, systemPrompt, segment, analysisId, tenantId }),
+    classifyBatch({ db, batch, batchIdx, systemPrompt, segment, businessProfile, analysisId, tenantId }),
   );
   const lowConfidenceCount = lowConfidencePerBatch.reduce((sum, n) => sum + n, 0);
 
@@ -109,10 +115,11 @@ async function classifyBatch(args: {
   batchIdx: number;
   systemPrompt: string;
   segment: string | undefined;
+  businessProfile: string | undefined;
   analysisId: string;
   tenantId: string;
 }): Promise<number> {
-  const { db, batch, batchIdx, systemPrompt, segment, analysisId, tenantId } = args;
+  const { db, batch, batchIdx, systemPrompt, segment, businessProfile, analysisId, tenantId } = args;
 
   const userPrompt = buildUserPrompt(
     batch.map((e) => ({
@@ -125,6 +132,8 @@ async function classifyBatch(args: {
       direction:   e.directionInferred ? "unknown" : e.direction,
     })),
     segment,
+    undefined,
+    businessProfile,
   );
 
   let parsed: z.infer<typeof ClassificationResponseSchema>;
@@ -185,6 +194,16 @@ async function classifyBatch(args: {
       );
     }
 
+    // Salvaguarda: direção CONFIÁVEL que contradiz a natureza da categoria com alta
+    // confiança → não sobrescreve, mas marca para revisão (ex.: pró-labore como entrada).
+    const reviewByDirection = needsDirectionReview(entry, category, result.confidence);
+    if (reviewByDirection) {
+      logger.warn(
+        { analysisId, entryId: result.entryId, direction: entry.direction, category, confidence: result.confidence },
+        "Classifier: categoria contradiz direção confiável — marcado para revisão",
+      );
+    }
+
     // updateMany com where composto: id + analysisId + tenantId.
     // Se algum não bater, 0 linhas são afetadas (não levanta exceção).
     updates.push(
@@ -193,7 +212,7 @@ async function classifyBatch(args: {
         data: {
           predictedCategory:        category,
           classificationConfidence: result.confidence,
-          correctionSource:         isLowConfidence ? "needs_review" : null,
+          correctionSource:         isLowConfidence || reviewByDirection ? "needs_review" : null,
           ...directionFix,
         },
       }),

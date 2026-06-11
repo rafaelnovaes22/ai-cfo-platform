@@ -172,6 +172,12 @@ function setupHappyPath(): void {
         provider: "openai", model: "gpt-4.1-mini", inputTokens: 400, outputTokens: 100, costCents: 1, traceId: "t6",
       };
     }
+    if (task === "business-profile") {
+      return {
+        content: "Comércio/serviços com vendas via NF; receita-fim = vendas; despesas = fornecedor, aluguel, salário, luz.",
+        provider: "google", model: "gemini-2.5-flash-lite", inputTokens: 200, outputTokens: 60, costCents: 1, traceId: "t0",
+      };
+    }
     throw new Error(`Mock não cobre task: ${task}`);
   });
 }
@@ -215,7 +221,7 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.actionPlan!.actions.filter((a) => a.horizon === "short").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("invoca callLlm exatamente 6 vezes (normalize + clarity + classification + narrative + action + QA)", async () => {
+  it("invoca callLlm exatamente 7 vezes (normalize + clarity + business-profile + classification + narrative + action + QA)", async () => {
     setupHappyPath();
     const graph = buildMonthlyAnalysisGraph();
 
@@ -232,13 +238,14 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
       expect.arrayContaining([
         "normalization",
         "clarity-judge",
+        "business-profile",
         "dre-classification",
         "narrative-synthesis",
         "action-planning",
         "financial-qa-review",
       ]),
     );
-    expect(tasksInvoked).toHaveLength(6);
+    expect(tasksInvoked).toHaveLength(7);
   });
 
   it("propaga tenantId em todas as chamadas LLM (C8 — sem leakage de tenant)", async () => {

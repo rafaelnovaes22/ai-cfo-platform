@@ -9,6 +9,7 @@ const tenantFindUniqueMock = vi.fn();
 const transactionMock = vi.fn();
 const enqueueDreNarrativeMock = vi.fn();
 const callLlmMock = vi.fn();
+const inferBusinessProfileMock = vi.fn();
 
 vi.mock("@/persistence/prisma.js", () => ({
   getPrisma: () => ({
@@ -31,6 +32,12 @@ vi.mock("@/queue/index.js", () => ({
   enqueueDreNarrative: (...args: unknown[]) => enqueueDreNarrativeMock(...args),
 }));
 
+// Perfil do negócio é inferido por 1 chamada LLM própria; mockado aqui para isolar
+// os testes do classificador (contagem de batches, paralelismo). Tem teste próprio.
+vi.mock("@/classification/business-profile.js", () => ({
+  inferBusinessProfile: (...args: unknown[]) => inferBusinessProfileMock(...args),
+}));
+
 import { classifyAnalysis } from "@/classification/classifier.js";
 
 beforeEach(() => {
@@ -40,6 +47,8 @@ beforeEach(() => {
   transactionMock.mockReset();
   enqueueDreNarrativeMock.mockReset();
   callLlmMock.mockReset();
+  inferBusinessProfileMock.mockReset();
+  inferBusinessProfileMock.mockResolvedValue(undefined);
   ledgerUpdateManyMock.mockResolvedValue({ count: 1 });
   tenantFindUniqueMock.mockResolvedValue({ industrySegment: null });
   // $transaction(array de PrismaPromises) → resolve todas (batch transaction)

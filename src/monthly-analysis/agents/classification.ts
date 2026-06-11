@@ -26,6 +26,9 @@ export interface MonthlyAgentRunOptions {
   traceId?: string;
   segment?: string;
   tenantFacts?: TenantFact[];
+  // Perfil do negócio inferido das descrições (ver business-profile.ts). Vai a
+  // todos os lotes para classificar receita-fim vs despesa com contexto do ramo.
+  businessProfile?: string;
 }
 
 export type DreClassificationAgentInput = EntryForClassification;
@@ -133,7 +136,7 @@ export async function runDreClassificationAgentWithTelemetry(
   const response = await callLlm({
     task: "dre-classification",
     systemPrompt: buildDreSystemPrompt(),
-    userPrompt: buildDreUserPrompt(entries, options.segment, options.tenantFacts),
+    userPrompt: buildDreUserPrompt(entries, options.segment, options.tenantFacts, options.businessProfile),
     tenantId: options.tenantId,
     traceId: options.traceId,
     jsonMode: true,

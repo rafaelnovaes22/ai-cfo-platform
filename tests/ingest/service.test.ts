@@ -84,6 +84,17 @@ describe("ingest/service computeDirectionInferred (confiabilidade da direção p
     expect(computeDirectionInferred(entries)).toEqual([false, false, false, false]);
   });
 
+  it("direção da heurística por descrição (#174) é inferida — o LLM tem a palavra final no tier pago", () => {
+    // "description" = direção deduzida do texto. No free tier (sem LLM) vale direto;
+    // no tier pago, marcar como inferida deixa o classificador corrigir (ex.: pró-labore).
+    const entries = [
+      entry({ directionSource: "description", direction: "debit" }),
+      entry({ directionSource: "description", direction: "credit" }),
+      entry({ directionSource: "explicit", direction: "debit" }),
+    ];
+    expect(computeDirectionInferred(entries)).toEqual([true, true, false]);
+  });
+
   it("direção explícita nunca é marcada como inferida", () => {
     const entries = [
       entry({ directionSource: "explicit", direction: "debit" }),
@@ -94,16 +105,6 @@ describe("ingest/service computeDirectionInferred (confiabilidade da direção p
 
   it("entries sem directionSource (parsers legados) são tratadas como confiáveis", () => {
     expect(computeDirectionInferred([entry(), entry()])).toEqual([false, false]);
-  });
-
-  it("direção inferida pela descrição (heurística) é confiável, não vira directionInferred", () => {
-    // O service reclassifica fallback → "description" quando a descrição é
-    // inequívoca (energia/aluguel/DAS). Essa direção não precisa do LLM corrigir.
-    const entries = [
-      entry({ directionSource: "description", direction: "debit" }),
-      entry({ directionSource: "fallback", direction: "credit" }),
-    ];
-    expect(computeDirectionInferred(entries)).toEqual([false, true]);
   });
 
   it("lista vazia devolve lista vazia", () => {

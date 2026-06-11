@@ -8,6 +8,7 @@ export type LegacyLlmTask =
 
 export type AgenticLlmTask =
   | "normalization"
+  | "business-profile"
   | "clarity-judge"
   | "dre-classification"
   | "anomaly-detection"

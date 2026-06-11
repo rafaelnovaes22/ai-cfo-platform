@@ -15,3 +15,25 @@ export function resolveDirectionFix(
   if (nature === null || nature === entry.direction) return null;
   return { direction: nature };
 }
+
+// Acima deste limiar de confiança, uma categoria cuja natureza contradiz a direção
+// CONFIÁVEL do extrato é forte indício de erro no dado ou na classificação.
+export const DIRECTION_SAFEGUARD_CONFIDENCE = 0.8;
+
+/**
+ * Salvaguarda: quando a direção é CONFIÁVEL (não-inferida — veio com sinal/coluna
+ * Tipo do extrato) mas a categoria predita tem natureza OPOSTA com confiança alta,
+ * algo está errado (ex.: pró-labore marcado como entrada num extrato com sinal).
+ * A direção confiável não é sobrescrita (resolveDirectionFix retorna null aqui),
+ * mas o lançamento é marcado para revisão humana em vez de gravado silenciosamente.
+ */
+export function needsDirectionReview(
+  entry: { direction: string; directionInferred: boolean },
+  category: string,
+  confidence: number,
+): boolean {
+  if (entry.directionInferred) return false; // inferida → resolveDirectionFix já corrige
+  const nature = CATEGORY_NATURE[category as DreCategory] ?? null;
+  if (nature === null || nature === entry.direction) return false;
+  return confidence >= DIRECTION_SAFEGUARD_CONFIDENCE;
+}
