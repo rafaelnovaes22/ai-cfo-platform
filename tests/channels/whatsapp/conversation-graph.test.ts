@@ -11,6 +11,7 @@ afterEach(() => {
 import { classifyWaIntent } from "@/channels/whatsapp/conversation-graph/intent-classifier.js";
 import { decideWhatsappConversation } from "@/channels/whatsapp/conversation-graph/index.js";
 import {
+  buildPostCashflowState,
   encodeOutcomeMetrics,
   formatDeterministicCashflowExplanation,
   type CashflowMetrics,
@@ -232,6 +233,35 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
     expect(decision.intent).toBe("EXPLAIN_LAST_OUTCOME");
     expect(decision.usedSlm).toBe(false);
     expect(decision.responseText).toContain("Resultado positivo de R$ 6.450");
+  });
+
+  it("após o ingest terminar, o estado encerra o processamento (não fica preso em wait_ingest)", () => {
+    const before = baseState({
+      stage: "INGESTING_STATEMENT",
+      pendingAction: "wait_ingest",
+    });
+
+    const after = buildPostCashflowState(before, negativeMetrics(), "2026-06-11T10:56:00.000Z");
+
+    expect(after.stage).toBe("SHOWING_CASHFLOW");
+    expect(after.pendingAction).toBe("choose_next_step");
+    expect(after.lastOutcome?.type).toBe("cashflow_statement");
+    expect(after.lastOutcome?.dataRef).toBe(encodeOutcomeMetrics(negativeMetrics()));
+  });
+
+  it("pergunta seguinte ao resultado ('o que mais?') não responde que ainda está processando", async () => {
+    // Reproduz o bug visto em produção (2026-06-11): após entregar o caixa, uma
+    // pergunta aberta caía no formatContinuePrompt e respondia "estou processando".
+    const postIngest = buildPostCashflowState(
+      baseState({ stage: "INGESTING_STATEMENT", pendingAction: "wait_ingest" }),
+      negativeMetrics(),
+    );
+
+    const decision = await decideWhatsappConversation(textMsg("o que mais?"), postIngest);
+
+    expect(decision.responseText?.toLowerCase()).not.toContain("processando");
+    // Oferece o caminho real: explicar o resultado ou próximo passo.
+    expect(decision.responseText?.toLowerCase()).toContain("resultado");
   });
 
   it("classificador marca pergunta aberta explicativa como candidata a SLM só quando há contexto", () => {

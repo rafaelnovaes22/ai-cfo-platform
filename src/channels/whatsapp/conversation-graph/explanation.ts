@@ -6,6 +6,7 @@
 
 import type { CashflowResponse } from "@/cashflow/types.js"
 import { firstName } from "./responses.js"
+import type { WaConversationState } from "./state.js"
 
 export interface CashflowMetrics {
   creditsCents: number
@@ -59,6 +60,34 @@ export function decodeOutcomeMetrics(dataRef: string | undefined): CashflowMetri
     return parsed as CashflowMetrics
   } catch {
     return null
+  }
+}
+
+/**
+ * Estado conversacional após o ingest terminar e o caixa ser entregue.
+ * Grava o lastOutcome (números reais) e, crucialmente, encerra o estágio de
+ * processamento: stage vira SHOWING_CASHFLOW e o pendingAction "wait_ingest"
+ * vira "choose_next_step". Sem isto, uma pergunta seguinte ("o que mais?") caía
+ * no formatContinuePrompt e respondia "ainda estou processando" mesmo com o
+ * resultado já entregue. Transições não relacionadas do usuário (race do
+ * background) são preservadas.
+ */
+export function buildPostCashflowState(
+  conversation: WaConversationState,
+  metrics: CashflowMetrics,
+  now: string = new Date().toISOString(),
+): WaConversationState {
+  return {
+    ...conversation,
+    stage: "SHOWING_CASHFLOW",
+    pendingAction:
+      conversation.pendingAction === "wait_ingest" ? "choose_next_step" : conversation.pendingAction,
+    lastOutcome: {
+      type: "cashflow_statement",
+      summary: buildCashflowOutcomeSummary(metrics),
+      dataRef: encodeOutcomeMetrics(metrics),
+      createdAt: now,
+    },
   }
 }
 

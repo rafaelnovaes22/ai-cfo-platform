@@ -23,7 +23,7 @@ import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
 import { decideWhatsappConversation } from "./conversation-graph/index.js"
 import { buildConversationState, withConversationState, getConversationState } from "./conversation-graph/state.js"
 import type { WaConversationState } from "./conversation-graph/state.js"
-import { cashflowToMetrics, encodeOutcomeMetrics, buildCashflowOutcomeSummary } from "./conversation-graph/explanation.js"
+import { cashflowToMetrics, buildPostCashflowState } from "./conversation-graph/explanation.js"
 import type { CashflowResponse } from "@/cashflow/types.js"
 import type { WaIncomingMessage, WaSession, WaSessionStep, IWhatsAppSessionStore, IWhatsAppAdapter } from "./types.js"
 
@@ -176,15 +176,7 @@ async function persistCashflowOutcome(
   if (!conversation) return
 
   const metrics = cashflowToMetrics(cashflow)
-  const updated: WaConversationState = {
-    ...conversation,
-    lastOutcome: {
-      type: "cashflow_statement",
-      summary: buildCashflowOutcomeSummary(metrics),
-      dataRef: encodeOutcomeMetrics(metrics),
-      createdAt: new Date().toISOString(),
-    },
-  }
+  const updated = buildPostCashflowState(conversation, metrics)
   await store.set(withConversationState(current, updated))
 }
 
