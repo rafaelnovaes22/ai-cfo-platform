@@ -41,7 +41,7 @@ export const whatsappConfigRoutes: FastifyPluginAsync = async (app) => {
   // do magic link; aqui validamos e gravamos o número no tenant logado (opt-in LGPD).
   f.post("/whatsapp/link", {
     schema: {
-      body: z.object({ token: z.string().min(1) }),
+      body: z.object({ token: z.string().min(1).max(1000) }),
       response: { 200: WhatsappConfigResponse },
     },
     preHandler: [requireAuth],

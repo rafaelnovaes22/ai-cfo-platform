@@ -13,9 +13,17 @@ const MessagesQuery = z.object({
   direction: DirectionEnum.optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
-  cursor: z.string().optional(),
+  cursor: z.string().max(500).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-})
+}).refine(
+  // Janela máxima de 12 meses quando ambos são informados (evita scan de décadas).
+  (q) => {
+    if (!q.from || !q.to) return true
+    const ms = new Date(q.to).getTime() - new Date(q.from).getTime()
+    return ms <= 366 * 24 * 60 * 60 * 1000
+  },
+  { message: "Janela máxima entre from e to: 12 meses" },
+)
 
 const MessageItem = z.object({
   id: z.string(),

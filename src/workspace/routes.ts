@@ -56,7 +56,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
   });
 
   f.delete("/workspace/members/:userId", {
-    schema: { params: z.object({ userId: z.string() }), response: { 204: z.null() } },
+    schema: { params: z.object({ userId: z.string().uuid() }), response: { 204: z.null() } },
     preHandler: [requireAuth, requireRole("admin")],
     handler: async (req, reply) => {
       await workspaceService.removeMember(req.auth!.tenantId, req.params.userId, req.auth!.userId);

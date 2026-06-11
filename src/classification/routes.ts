@@ -33,7 +33,7 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
   // Retorna lançamentos de baixa confiança — envelope {data, meta} (contrato OpenAPI).
   f.get("/classification/:analysisId/review", {
     schema: {
-      params: z.object({ analysisId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid() }),
       response: {
         200: z.object({
           data: z.array(ReviewEntrySchema),
@@ -77,7 +77,7 @@ export const classificationRoutes: FastifyPluginAsync = async (app) => {
   // Corrige a categoria de um lançamento (flywheel de treinamento)
   f.patch("/classification/entries/:entryId/correct", {
     schema: {
-      params: z.object({ entryId: z.string() }),
+      params: z.object({ entryId: z.string().uuid() }),
       body: CorrectBody,
       response: {
         200: z.object({

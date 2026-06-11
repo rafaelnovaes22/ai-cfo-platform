@@ -60,7 +60,7 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
   // DRE agregada
   f.get("/analysis/:analysisId/dre", {
     schema: {
-      params: z.object({ analysisId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid() }),
       response: { 200: z.record(z.unknown()), ...defaultErrorResponses },
     },
     preHandler: [requireAuth],
@@ -78,7 +78,7 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
   // Cards de narrativa — em SHADOW o cliente NÃO vê (C4: gerada mas não entregue).
   f.get("/analysis/:analysisId/narrative", {
     schema: {
-      params: z.object({ analysisId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid() }),
       response: { 200: z.array(CardSchema), ...defaultErrorResponses },
     },
     preHandler: [requireAuth],
@@ -101,7 +101,7 @@ export const dreNarrativeRoutes: FastifyPluginAsync = async (app) => {
   // Feedback do cliente em modo ASSISTED
   f.patch("/analysis/:analysisId/narrative/:cardId/feedback", {
     schema: {
-      params: z.object({ analysisId: z.string(), cardId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid(), cardId: z.string().uuid() }),
       body: z.object({
         approved: z.boolean(),
         comment: z.string().max(500).optional(),

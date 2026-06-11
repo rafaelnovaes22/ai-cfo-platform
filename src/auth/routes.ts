@@ -20,7 +20,17 @@ import {
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const f = app.withTypeProvider<ZodTypeProvider>();
 
+  // Brute force: login/register têm teto próprio bem abaixo do global de
+  // 100/min (o comentário do server.ts prometia isto, mas não existia).
+  const strictRateLimit = {
+    rateLimit: {
+      max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+      timeWindow: "1 minute" as const,
+    },
+  };
+
   f.post("/auth/register", {
+    config: strictRateLimit,
     schema: { body: RegisterBody, response: { 201: TokenResponse } },
     handler: async (req, reply) => {
       const tokens = await authService.register(req.body);
@@ -29,6 +39,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   f.post("/auth/login", {
+    config: strictRateLimit,
     schema: { body: LoginBody, response: { 200: TokenResponse } },
     handler: async (req, reply) => {
       const tokens = await authService.login(req.body.email, req.body.password);
