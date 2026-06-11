@@ -94,6 +94,15 @@ export function formatContextualFallback(conversation?: WaConversationState | nu
   return formatStatementRequest()
 }
 
+export function formatSocialAck(conversation?: WaConversationState | null): string {
+  // Agradecimento/elogio não pode receber resposta robótica pedindo extrato.
+  const name = firstName(conversation?.userName)
+  return (
+    `De nada${name ? `, *${name}*` : ""}! 👊\n` +
+    `Estou por aqui quando precisar. É só chamar para ver o caixa, pedir a análise do mês ou tirar dúvida sobre um resultado.`
+  )
+}
+
 export function formatHumanSupportHint(): string {
   return (
     `Posso te orientar por aqui. Se precisar de suporte humano, acesse o app ou fale com o time Acme.\n\n` +

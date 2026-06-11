@@ -10,6 +10,7 @@ import {
   formatHumanSupportHint,
   formatLegacyMenuChoiceHint,
   formatSlmDisabledExplanation,
+  formatSocialAck,
   formatStatementHowTo,
   formatStatementRequest,
 } from "./responses.js"
@@ -161,6 +162,14 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
       }
       return { conversation, route: "SEND_TEXT", responseText: deterministic, usedSlm: false }
     }
+
+    case "SOCIAL_ACK":
+      return {
+        conversation,
+        route: "SEND_TEXT",
+        responseText: formatSocialAck(conversation),
+        usedSlm: false,
+      }
 
     case "NEGATION":
       return {

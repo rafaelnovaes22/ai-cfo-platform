@@ -25,6 +25,7 @@ export type WaIntent =
   | "AUTH_HELP"
   | "CONFIRMATION"
   | "NEGATION"
+  | "SOCIAL_ACK"
   | "HUMAN_SUPPORT"
   | "UNKNOWN"
 
