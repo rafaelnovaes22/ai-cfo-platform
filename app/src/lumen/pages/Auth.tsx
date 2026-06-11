@@ -94,8 +94,10 @@ export default function Auth() {
         parsed.data.email,
         parsed.data.password
       );
-      toast.success("Conta criada com sucesso!");
-      navigate("/", { replace: true });
+      // Cadastro = captação de lead. O acesso ao painel é liberado só para
+      // assinante; o SubscriberRoute decide o destino (app ou tela de lead).
+      toast.success("Cadastro recebido!");
+      navigate(from, { replace: true });
     } catch (err) {
       const msg =
         err instanceof ApiProblem

@@ -246,6 +246,9 @@ export interface paths {
               role: string;
               name: string;
               email: string;
+              plan: string;
+              subscriptionStatus: string;
+              isSubscriber: boolean;
             };
           };
         };

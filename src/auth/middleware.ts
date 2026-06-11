@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { verifyAccessToken } from "@/auth/jwt.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { problemDetail } from "@/http/problem-detail.js";
+import { isSubscriber } from "@/auth/subscription-access.js";
 
 // Respostas de erro padronizadas em ProblemDetail (RFC 7807) — o frontend lê
 // `title`/`detail`, e as rotas que declaram defaultErrorResponses validam contra
@@ -178,6 +179,39 @@ export function requireWrite(roles: string[], scopes: string[]) {
     if (s.includes("*")) return;
     if (!scopes.some((x) => s.includes(x))) {
       await sendForbidden(reply, `API token requer scope ${scopes.join(" ou ")}.`);
+    }
+  };
+}
+
+/**
+ * Gate de acesso ao app web: só assinante pago ativo passa. Lead (plan
+ * student/trial) recebe 403 — a conta existe (lead capturado), mas o painel é
+ * exclusivo de assinante. API tokens de integração passam (acesso programático
+ * não é "site"). Encadear após requireAuth.
+ */
+export function requireSubscriber() {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!req.auth) {
+      await sendUnauthorized(reply, "Não autenticado");
+      return;
+    }
+    // Integrações (api_token) não passam pelo gate de "site".
+    if (req.auth.kind === "api_token") return;
+
+    const db = getPrisma();
+    const subscription = await db.subscription.findUnique({
+      where: { tenantId: req.auth.tenantId },
+      select: { plan: true, status: true },
+    });
+    if (!isSubscriber(subscription?.plan, subscription?.status)) {
+      await reply.status(403).send(
+        problemDetail({
+          type: "https://api.aicfo.com.br/errors/subscriber-only",
+          title: "Acesso exclusivo para assinantes",
+          status: 403,
+          detail: "O painel do Aicfo é exclusivo para assinantes. Sua conta foi registrada.",
+        }),
+      );
     }
   };
 }

@@ -11,6 +11,7 @@ import Auth from "./lumen/pages/Auth.tsx";
 import ResetPassword from "./lumen/pages/ResetPassword.tsx";
 import { AuthProvider } from "./lumen/auth/AuthContext.tsx";
 import { ProtectedRoute } from "./lumen/auth/ProtectedRoute.tsx";
+import { SubscriberRoute } from "./lumen/auth/SubscriberRoute.tsx";
 import { AnalysisProvider } from "./lumen/data/useAnalyses.ts";
 import NotFound from "./pages/NotFound.tsx";
 import { useEffect } from "react";
@@ -46,9 +47,9 @@ const Router = () => {
       />
       <Route
         element={
-          <ProtectedRoute>
+          <SubscriberRoute>
             <AppLayout />
-          </ProtectedRoute>
+          </SubscriberRoute>
         }
       >
         <Route path="/" element={<Dashboard />} />

@@ -4,6 +4,7 @@ import { z } from "zod";
 import * as authService from "@/auth/service.js";
 import * as passwordReset from "@/auth/password-reset.js";
 import { requireAuth } from "@/auth/middleware.js";
+import { isSubscriber } from "@/auth/subscription-access.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import {
   RegisterBody,
@@ -62,12 +63,21 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         select: { name: true, email: true },
       });
       if (!user) throw Object.assign(new Error("Usuário não encontrado"), { statusCode: 404 });
+      const subscription = await db.subscription.findUnique({
+        where: { tenantId: req.auth!.tenantId },
+        select: { plan: true, status: true },
+      });
+      const plan = subscription?.plan ?? "trial";
+      const subscriptionStatus = subscription?.status ?? "active";
       return reply.send({
         userId: req.auth!.userId,
         tenantId: req.auth!.tenantId,
         role: req.auth!.role,
         name: user.name,
         email: user.email,
+        plan,
+        subscriptionStatus,
+        isSubscriber: isSubscriber(plan, subscriptionStatus),
       });
     },
   });
