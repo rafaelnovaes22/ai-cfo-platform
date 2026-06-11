@@ -4,16 +4,20 @@ export function firstName(name: string | undefined): string {
   return name?.trim().split(/\s+/)[0] ?? ""
 }
 
+// Voz do Aicfo no WhatsApp: CFO-IA, parceiro do dono de PME. Direto, adulto,
+// confiante. A lista de formatos aceitos (PDF, Excel ou CSV) aparece só onde faz
+// sentido no estágio (saudação inicial e how-to de envio), nunca em toda resposta
+// — repetir "envie um extrato em PDF, Excel ou CSV" soa como bot travado.
+
 export function formatConversationalWelcome(name: string | undefined): string {
   const greeting = firstName(name)
   return (
     `Olá${greeting ? `, *${greeting}*` : ""}! 👋\n` +
-    `Sou o Aicfo, seu CFO-IA.\n\n` +
-    `Para começar, me envie um *extrato* da conta em PDF, Excel ou CSV. ` +
-    `Eu calculo seu fluxo de caixa do período e te explico o resultado.\n\n` +
-    `Se preferir, pode me perguntar algo como:\n` +
+    `Sou o Aicfo, seu CFO-IA. Leio o extrato da sua conta e te mostro o caixa do período em segundos: quanto entrou, quanto saiu e o resultado.\n\n` +
+    `Para começar, me envie um *extrato* em PDF, Excel ou CSV. 📎\n\n` +
+    `Ou fale comigo do seu jeito, por exemplo:\n` +
     `• “como envio o extrato?”\n` +
-    `• “quero saber meu caixa”\n` +
+    `• “quanto sobrou esse mês?”\n` +
     `• “me explica o resultado”`
   )
 }
@@ -31,54 +35,56 @@ export function formatCapabilitiesHelp(name: string | undefined): string {
     `• “quero ver meu caixa”\n` +
     `• “como envio o extrato?”\n` +
     `• “me explica esse resultado”\n\n` +
-    `Para começar agora, me envie um extrato da sua conta aqui no chat. 📎`
+    `Quando quiser começar, é só me mandar um extrato aqui no chat. 📎`
   )
 }
 
 export function formatStatementRequest(): string {
+  // ASK_CASHFLOW sem dados na sessão. Menciona "extrato" (sem repetir os formatos,
+  // que já aparecem na saudação e no how-to).
   return (
-    `Consigo te ajudar com o fluxo de caixa.\n\n` +
-    `Para calcular com dados reais, me envie um *extrato* da conta em PDF, Excel ou CSV. ` +
-    `Assim eu leio entradas, saídas e resultado do período automaticamente.`
+    `Te mostro o caixa na hora, mas preciso dos números primeiro. 📊\n\n` +
+    `Me manda um *extrato* da conta aqui no chat e eu calculo entradas, saídas e resultado do período automaticamente.`
   )
 }
 
 export function formatStatementHowTo(): string {
+  // O how-to é o lugar certo para listar os formatos aceitos.
   return (
     `É só anexar aqui um extrato em *PDF, Excel ou CSV*. 📎\n\n` +
-    `Quando eu receber o arquivo, calculo o fluxo de caixa do período: entradas, saídas e resultado.`
+    `Assim que o arquivo chegar, eu calculo o fluxo de caixa do período: entradas, saídas e resultado.`
   )
 }
 
 export function formatContinuePrompt(conversation?: WaConversationState | null): string {
   if (conversation?.pendingAction === "wait_ingest") {
-    return `Continuo sim. Já recebi o arquivo e estou processando. Assim que terminar, te devolvo o fluxo de caixa do período.`
+    return `Continuo sim. Já recebi o arquivo e estou processando. Assim que terminar, te devolvo o caixa do período.`
   }
 
   if (conversation?.lastOutcome?.summary) {
     return (
       `Continuo sim. O último ponto foi: ${conversation.lastOutcome.summary}\n\n` +
-      `Posso te ajudar a explicar o resultado ou indicar o próximo passo.`
+      `Posso explicar o resultado ou indicar o próximo passo. É só dizer.`
     )
   }
 
   if (conversation?.passiveContext?.summary) {
     return (
       `Continuo sim. Sobre a última atualização: ${conversation.passiveContext.summary}\n\n` +
-      `Se quiser, posso explicar ou orientar o próximo passo.`
+      `Se quiser, eu explico ou oriento o próximo passo.`
     )
   }
 
   return (
-    `Continuo sim. O próximo passo é você me enviar um *extrato* da conta por aqui.\n` +
-    `Com ele eu calculo o fluxo de caixa real e te devolvo entradas, saídas e resultado do período.`
+    `Continuo sim. O próximo passo é me enviar um *extrato* da conta por aqui.\n` +
+    `Com ele eu calculo o caixa real e te devolvo entradas, saídas e resultado do período.`
   )
 }
 
 export function formatLegacyMenuChoiceHint(): string {
   return (
-    `Pra calcular seu caixa agora, preciso de um extrato.\n\n` +
-    `Me envie um PDF, Excel ou CSV por aqui que eu calculo o período automaticamente.`
+    `Para calcular seu caixa, eu preciso de um extrato.\n\n` +
+    `Me envie um aqui pelo chat que eu processo o período automaticamente.`
   )
 }
 
@@ -91,7 +97,13 @@ export function formatContextualFallback(conversation?: WaConversationState | nu
     return formatContinuePrompt(conversation)
   }
 
-  return formatStatementRequest()
+  // Sem contexto e sem intenção reconhecida: assume que não entendeu, em vez de
+  // despejar o pedido de extrato como se fosse resposta.
+  return (
+    `Não tenho certeza se peguei o que você quis dizer. 🤔\n\n` +
+    `Eu sou bom em uma coisa: ler seu extrato e te mostrar o caixa do período. ` +
+    `Se quiser, me manda um extrato, ou pergunta “o que você faz?” que eu te explico.`
+  )
 }
 
 export function formatSocialAck(conversation?: WaConversationState | null): string {
@@ -103,10 +115,26 @@ export function formatSocialAck(conversation?: WaConversationState | null): stri
   )
 }
 
+export function formatNegationAck(): string {
+  // NEGATION ("agora não", "depois eu vejo"). Sem empurrar formatos.
+  return `Tranquilo. Quando quiser ver seu caixa, é só me chamar por aqui. 👍`
+}
+
+export function formatOutOfScope(): string {
+  // Coisas que o Aicfo não faz (emitir nota, pagar boleto, contabilidade).
+  // Reconhece com honestidade e redireciona para o outcome real. Sem listar formatos.
+  return (
+    `Isso aí foge do que eu faço. Emitir nota, pagar boleto e contabilidade ficam com seu contador. 🙂\n\n` +
+    `O meu forte é o *caixa*: eu leio seu extrato e te mostro quanto entrou, quanto saiu e o resultado do período. ` +
+    `Quer ver o seu?`
+  )
+}
+
 export function formatHumanSupportHint(): string {
   return (
-    `Posso te orientar por aqui. Se precisar de suporte humano, acesse o app ou fale com o time Acme.\n\n` +
-    `Enquanto isso, se quiser calcular o caixa, me envie um extrato em PDF, Excel ou CSV.`
+    `Posso resolver boa parte por aqui. 💬\n\n` +
+    `Se precisar mesmo de uma pessoa do time, acesse o app ou fale com o suporte Acme. ` +
+    `Enquanto isso, me diz o que você quer saber do seu caixa que eu já adianto.`
   )
 }
 
@@ -114,7 +142,7 @@ export function formatSlmDisabledExplanation(conversation?: WaConversationState 
   if (conversation?.lastOutcome?.summary) {
     return (
       `${conversation.lastOutcome.summary}\n\n` +
-      `Para uma explicação mais completa, posso analisar esse resultado em seguida. Por ora, o próximo passo recomendado é conferir entradas, saídas e resultado do período.`
+      `Posso destrinchar esse resultado com você. Por ora, vale conferir entradas, saídas e o resultado do período.`
     )
   }
   return formatStatementRequest()

@@ -81,6 +81,34 @@ const HUMAN_SUPPORT_TERMS = [
   "atendimento humano",
 ] as const;
 
+// Coisas que o Aicfo genuinamente NÃO faz. Frases específicas para não roubar
+// de ASK_CASHFLOW (que tem "imposto"/"folha" soltos): aqui só "imposto de renda"
+// e "declarar imposto", nunca "imposto" sozinho.
+const OUT_OF_SCOPE_TERMS = [
+  "nota fiscal",
+  "notas fiscais",
+  "emitir nota",
+  "emitir nf",
+  "emissao de nota",
+  "nfe",
+  "nfse",
+  "boleto",
+  "boletos",
+  "pagar boleto",
+  "contabilidade",
+  "contabil",
+  "escrituracao",
+  "imposto de renda",
+  "declarar imposto",
+  "declaracao de imposto",
+  "declaracao",
+  "abrir empresa",
+  "abrir cnpj",
+  "abrir mei",
+  "emprestimo",
+  "financiamento",
+] as const;
+
 const CAPABILITIES_TERMS = [
   "como funciona",
   "funciona",
@@ -378,6 +406,12 @@ export function classifyWaIntent(
 
   if (matchAny(padded, HUMAN_SUPPORT_TERMS)) {
     return result("HUMAN_SUPPORT");
+  }
+
+  // Fora de escopo antes de CAPABILITIES: "como funciona a emissão de nota
+  // fiscal?" deve dizer que não fazemos isso, não explicar o produto.
+  if (matchAny(padded, OUT_OF_SCOPE_TERMS)) {
+    return result("OUT_OF_SCOPE");
   }
 
   if (matchAny(padded, CAPABILITIES_TERMS)) {

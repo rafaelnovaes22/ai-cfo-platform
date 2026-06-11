@@ -9,6 +9,8 @@ import {
   formatConversationalWelcome,
   formatHumanSupportHint,
   formatLegacyMenuChoiceHint,
+  formatNegationAck,
+  formatOutOfScope,
   formatSlmDisabledExplanation,
   formatSocialAck,
   formatStatementHowTo,
@@ -171,11 +173,19 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
         usedSlm: false,
       }
 
+    case "OUT_OF_SCOPE":
+      return {
+        conversation,
+        route: "SEND_TEXT",
+        responseText: formatOutOfScope(),
+        usedSlm: false,
+      }
+
     case "NEGATION":
       return {
         conversation: { ...conversation, pendingAction: undefined },
         route: "SEND_TEXT",
-        responseText: `Tudo bem. Quando quiser calcular seu caixa, é só me enviar um extrato em PDF, Excel ou CSV.`,
+        responseText: formatNegationAck(),
         usedSlm: false,
       }
 

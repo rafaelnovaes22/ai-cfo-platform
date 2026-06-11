@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classifyWaIntent } from "@/channels/whatsapp/conversation-graph/intent-classifier.js";
+import { decideWhatsappConversation } from "@/channels/whatsapp/conversation-graph/index.js";
 import { encodeOutcomeMetrics } from "@/channels/whatsapp/conversation-graph/explanation.js";
 import type { WaIncomingMessage } from "@/channels/whatsapp/types.js";
 import type {
@@ -176,10 +177,16 @@ const SOCIAL_CASES: PersonaCase[] = [
   ["mesmo assim obrigado", "SOCIAL_ACK"],
 ];
 
+// Coisas que o Aicfo não faz (intent dedicada desde 2026-06-11). "imposto"
+// solto continua ASK_CASHFLOW; só "imposto de renda"/"declarar imposto" são OoS.
 const OUT_OF_SCOPE_CASES: PersonaCase[] = [
-  ["voce faz a contabilidade da minha empresa?", ["UNKNOWN", "CAPABILITIES_HELP"]],
-  ["consegue emitir nota fiscal?", ["UNKNOWN", "CAPABILITIES_HELP"]],
-  ["voce paga boleto?", "UNKNOWN"],
+  ["voce faz a contabilidade da minha empresa?", "OUT_OF_SCOPE"],
+  ["consegue emitir nota fiscal?", "OUT_OF_SCOPE"],
+  ["voce paga boleto?", "OUT_OF_SCOPE"],
+  ["preciso declarar meu imposto de renda", "OUT_OF_SCOPE"],
+  ["voces fazem emprestimo?", "OUT_OF_SCOPE"],
+  // Não pode roubar de ASK_CASHFLOW:
+  ["quanto paguei de imposto", "ASK_CASHFLOW"],
 ];
 
 // Falsos positivos de substring corrigidos em 2026-06-11: "foi"→"oi",
@@ -225,5 +232,53 @@ describe("intent classifier — persona aluno (sócio/CEO de PME R$1M+/ano)", ()
     const withoutCtx = classifyWaIntent(textMsg("não entendi"), freshState());
     expect(withoutCtx.intent).toBe("EXPLAIN_LAST_OUTCOME");
     expect(withoutCtx.confidence).toBe("medium");
+  });
+});
+
+// Régua de voz: o texto de resposta não pode soar como bot travado. A lista de
+// formatos ("PDF, Excel ou CSV") só pertence à saudação e ao how-to de envio.
+const FORMAT_LIST = /pdf, excel ou csv/i;
+
+describe("conversation graph — voz consistente (anti-repetição de formatos)", () => {
+  async function reply(text: string, state = freshState()): Promise<string> {
+    const decision = await decideWhatsappConversation(textMsg(text), state);
+    return decision.responseText ?? "";
+  }
+
+  it("agradecimento não recebe pedido de extrato", async () => {
+    const r = (await reply("obrigado, ajudou demais")).toLowerCase();
+    expect(r).not.toContain("extrato");
+    expect(r).not.toMatch(FORMAT_LIST);
+  });
+
+  it("fora de escopo redireciona para o caixa, sem listar formatos", async () => {
+    const r = await reply("voce paga boleto?");
+    expect(r.toLowerCase()).toContain("caixa");
+    expect(r).not.toMatch(FORMAT_LIST);
+  });
+
+  it("negação não empurra formatos", async () => {
+    const r = await reply("agora nao");
+    expect(r).not.toMatch(FORMAT_LIST);
+  });
+
+  it("mensagens fora da saudação/how-to não repetem a lista de formatos", async () => {
+    const semFormato = [
+      "voce paga boleto?",
+      "obrigado",
+      "agora nao",
+      "como ta meu caixa",
+      "qual o proximo passo",
+      "quero falar com uma pessoa",
+      "asdf qwer zxcv",
+    ];
+    for (const msg of semFormato) {
+      expect(await reply(msg)).not.toMatch(FORMAT_LIST);
+    }
+  });
+
+  it("saudação e how-to de envio ainda listam os formatos aceitos", async () => {
+    expect(await reply("oi")).toMatch(FORMAT_LIST);
+    expect(await reply("como envio o extrato?")).toMatch(FORMAT_LIST);
   });
 });
