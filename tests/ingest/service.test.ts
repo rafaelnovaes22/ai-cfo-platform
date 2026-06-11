@@ -96,6 +96,16 @@ describe("ingest/service computeDirectionInferred (confiabilidade da direção p
     expect(computeDirectionInferred([entry(), entry()])).toEqual([false, false]);
   });
 
+  it("direção inferida pela descrição (heurística) é confiável, não vira directionInferred", () => {
+    // O service reclassifica fallback → "description" quando a descrição é
+    // inequívoca (energia/aluguel/DAS). Essa direção não precisa do LLM corrigir.
+    const entries = [
+      entry({ directionSource: "description", direction: "debit" }),
+      entry({ directionSource: "fallback", direction: "credit" }),
+    ];
+    expect(computeDirectionInferred(entries)).toEqual([false, true]);
+  });
+
   it("lista vazia devolve lista vazia", () => {
     expect(computeDirectionInferred([])).toEqual([]);
   });

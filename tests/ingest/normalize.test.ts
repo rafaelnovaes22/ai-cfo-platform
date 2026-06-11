@@ -5,6 +5,7 @@ import {
   normalizeDirection,
   resolveDirection,
   detectColumns,
+  inferDirectionFromDescription,
 } from "@/ingest/normalize.js";
 
 describe("ingest/normalize — datas", () => {
@@ -133,5 +134,50 @@ describe("ingest/normalize — detectColumns", () => {
     expect(cols.dateIdx).toBe(-1);
     expect(cols.descIdx).toBe(-1);
     expect(cols.amountIdx).toBe(-1);
+  });
+});
+
+describe("ingest/normalize — inferDirectionFromDescription", () => {
+  it("despesas inequívocas que toda empresa paga viram débito", () => {
+    const despesas = [
+      "Energia eletrica Light",
+      "ALUGUEL ESTUDIO IMOBILIARIA VIEIRA",
+      "DAS Simples Nacional - abril",
+      "Pró-labore Cid Moreira",
+      "Vivo internet/telefone",
+      "Assinatura Adobe Creative Cloud",
+      "Tarifa bancária - manutenção conta",
+      "Uber - deslocamento cobertura",
+      "Água mineral + copa escritório",
+      "Honorários contábeis - Contabilidade Exata",
+      "bolsa estagiario maio",
+      "Pagamento freelancer repórter - João P.",
+    ];
+    for (const d of despesas) {
+      expect(inferDirectionFromDescription(d), d).toBe("debit");
+    }
+  });
+
+  it("entradas inequívocas viram crédito", () => {
+    expect(inferDirectionFromDescription("recebimento cliente")).toBe("credit");
+    expect(inferDirectionFromDescription("Venda de produto")).toBe("credit");
+    expect(inferDirectionFromDescription("PIX recebido - fulano")).toBe("credit");
+  });
+
+  it("acento e caixa são normalizados (pró-labore, ÁGUA)", () => {
+    expect(inferDirectionFromDescription("PRÓ-LABORE sócia")).toBe("debit");
+    expect(inferDirectionFromDescription("Conta de ÁGUA - Sabesp")).toBe("debit");
+  });
+
+  it("serviços ambíguos por ramo ficam null (preservam o fallback)", () => {
+    // A produtora PRESTA esses serviços (são receita dela), mas para outra empresa
+    // seriam despesa. Sem contexto de ramo, não se decide pela descrição.
+    expect(inferDirectionFromDescription("Cobertura evento corporativo - Sicoob")).toBeNull();
+    expect(inferDirectionFromDescription("Assessoria mensal - Loja Maravilha")).toBeNull();
+    expect(inferDirectionFromDescription("Pagamento")).toBeNull();
+  });
+
+  it("termos de ambos os lados resolvem para null", () => {
+    expect(inferDirectionFromDescription("recebimento de fornecedor")).toBeNull();
   });
 });

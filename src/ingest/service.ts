@@ -7,6 +7,7 @@ import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parsePdfStatement } from "@/ingest/parsers/pdf-statement.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
+import { inferDirectionFromDescription } from "@/ingest/normalize.js";
 import { createTrace } from "@/observability/tracing.js";
 import { logger } from "@/observability/logger.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
@@ -136,6 +137,21 @@ export async function ingest(params: {
       }
     }
   }
+  // Heurística determinística de direção por descrição (zero-token). Corrige o
+  // fallback "positivo = entrada" quando o extrato não traz coluna de tipo/sinal:
+  // despesas óbvias (energia, aluguel, DAS, pró-labore) deixam de virar receita.
+  // Crítico no free tier do aluno, que não passa pela classificação LLM.
+  let descriptionInferredCount = 0;
+  for (const entry of entries) {
+    if (entry.directionSource !== "fallback") continue;
+    const inferred = inferDirectionFromDescription(entry.description);
+    if (inferred) {
+      entry.direction = inferred;
+      entry.directionSource = "description";
+      descriptionInferredCount++;
+    }
+  }
+
   const { orphanCount } = parseResult;
   logger.info(
     {
@@ -146,6 +162,7 @@ export async function ingest(params: {
       entryCount: entries.length,
       orphanCount,
       outOfReferenceMonthCount,
+      descriptionInferredCount,
     },
     "Ingest parse concluído",
   );

@@ -116,6 +116,84 @@ export function normalizeDirection(
   return resolveDirection(raw, amountCents).direction;
 }
 
+// ── Direção por descrição (heurística determinística, zero-token) ────────────
+
+// Despesas que praticamente toda empresa PAGA, independente do ramo: contas,
+// ocupação, tributos, pessoal, telecom, software, transporte, consumo, marketing,
+// bancário. Termos inequívocos de SAÍDA — alta precisão sobre recall.
+const DEBIT_DESC_TERMS = [
+  // contas de consumo
+  "energia", "energia eletrica", "luz", "agua", "light", "enel", "cemig", "copel",
+  "sabesp", "eletropaulo", "saneamento", "gas",
+  // ocupação
+  "aluguel", "condominio", "iptu",
+  // telecom
+  "internet", "telefone", "telefonia", "vivo", "claro", "tim", "net virtua", "banda larga",
+  // tributos
+  "das", "simples nacional", "imposto", "impostos", "inss", "fgts", "darf", "iss",
+  "icms", "pis", "cofins", "tributo", "tributos", "guia",
+  // pessoal e terceiros (pagamentos que a empresa faz)
+  "pro labore", "prolabore", "salario", "salarios", "folha", "folha de pagamento",
+  "ferias", "rescisao", "vale transporte", "vale refeicao", "vale alimentacao",
+  "decimo terceiro", "13o", "comissao", "freelancer", "freela", "estagiario",
+  "estagiaria", "bolsa", "contador", "contabilidade", "contabeis", "curso",
+  "treinamento", "capacitacao",
+  // software / saas
+  "adobe", "hostgator", "hospedagem", "dominio", "microsoft", "office 365",
+  "google workspace", "aws", "dropbox", "canva", "figma", "licenca", "assinatura",
+  "saas", "spotify", "netflix",
+  // transporte
+  "uber", "99", "taxi", "ifood", "combustivel", "gasolina", "etanol", "posto",
+  "estacionamento", "pedagio",
+  // consumo / mercado
+  "mercado", "supermercado", "mercado livre", "mercadolivre", "alimentacao",
+  "restaurante", "lanche", "cafe", "copa", "padaria", "almoco", "jantar", "refeicao",
+  // marketing
+  "meta ads", "google ads", "facebook ads", "instagram ads", "impulsionamento",
+  "trafego", "anuncio", "anuncios", "marketing",
+  // bancário / financeiro
+  "tarifa", "tarifas", "tarifa bancaria", "juros", "multa", "anuidade", "iof",
+  // operacional
+  "fornecedor", "fornecedores", "manutencao", "conserto", "material", "materiais",
+  "frete", "correios", "sedex", "doacao",
+] as const;
+
+// Entradas inequívocas de dinheiro. Pequeno e conservador: serviços prestados
+// (edição, assessoria, cobertura) são ambíguos por ramo e ficam de fora — caem
+// no fallback "credit", que já acerta para eles.
+const CREDIT_DESC_TERMS = [
+  "recebimento", "recebimentos", "recebido", "recebida", "recebi",
+  "receita", "receitas", "venda", "vendas", "vendido",
+  "pix recebido", "deposito recebido", "transferencia recebida",
+  "faturamento", "mensalidade recebida", "honorarios recebidos",
+] as const;
+
+function normalizeDescription(description: string): string {
+  return ` ${description
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()} `;
+}
+
+/**
+ * Infere direção pela descrição quando o extrato não traz coluna de tipo/sinal.
+ * Determinística (zero-token): corrige o fallback "positivo = entrada", em que
+ * despesas óbvias (energia, aluguel, DAS, pró-labore) virariam receita. Retorna
+ * null quando ambíguo (termos de ambos os lados ou nenhum), preservando o
+ * fallback para o classificador LLM tratar no tier pago. Crítico no free tier
+ * do aluno, que não passa por classificação.
+ */
+export function inferDirectionFromDescription(description: string): "credit" | "debit" | null {
+  const norm = normalizeDescription(description);
+  const hasDebit = DEBIT_DESC_TERMS.some((t) => norm.includes(` ${t} `));
+  const hasCredit = CREDIT_DESC_TERMS.some((t) => norm.includes(` ${t} `));
+  if (hasDebit && !hasCredit) return "debit";
+  if (hasCredit && !hasDebit) return "credit";
+  return null;
+}
+
 // ── Detecção de coluna ─────────────────────────────────────────────────────
 
 const COL_DATE   = /data|date|dt|vencimento|competência|competencia/i;

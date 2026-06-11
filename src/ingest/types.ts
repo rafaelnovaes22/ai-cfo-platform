@@ -4,7 +4,10 @@
 // - "sign": sinal negativo no próprio valor (negativo = débito é fato)
 // - "fallback": valor positivo sem nenhum marcador — credit é CHUTE, não fato.
 //   O classificador LLM pode corrigir (ver computeDirectionInferred no service).
-export type DirectionSource = "explicit" | "sign" | "fallback";
+// - "description": direção inferida do texto do lançamento por heurística
+//   determinística (energia/aluguel/DAS → débito), aplicada ao fallback no
+//   service. Mais confiável que fallback; vale também no free tier (sem LLM).
+export type DirectionSource = "explicit" | "sign" | "fallback" | "description";
 
 export interface RawLedger {
   date: string;        // YYYY-MM-DD normalizado
