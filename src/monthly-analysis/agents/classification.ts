@@ -124,6 +124,29 @@ export async function runDreClassificationAgent(
   return data;
 }
 
+// Resolve o id alucinado de volta ao id real. O alias é `e{índiceOriginal}`, então
+// o match exato é robusto até a reordenação da resposta. Se o LLM corromper o token
+// curto, extrai o número (ex.: "e 7", "e7." → 7) e usa o índice; em último caso cai
+// na posição do array — que então bate no no-op seguro do write-back se ainda errar.
+function resolveRealEntryId(
+  rawAlias: unknown,
+  responseIndex: number,
+  realIdByAlias: Map<string, string>,
+  entries: DreClassificationAgentInput[],
+): string {
+  const token = String(rawAlias);
+  const exact = realIdByAlias.get(token);
+  if (exact !== undefined) return exact;
+  // Só pesca o número quando o token AINDA tem o shape do alias ("ref-1", "ref- 1",
+  // "ref-1."); num id alucinado os dígitos são ruído, então cai na posição.
+  const aliasShape = token.match(/^\s*ref-\s*(\d+)\b/i);
+  if (aliasShape) {
+    const byNumber = entries[Number(aliasShape[1])]?.entryId;
+    if (byNumber !== undefined) return byNumber;
+  }
+  return entries[responseIndex]?.entryId ?? token;
+}
+
 export async function runDreClassificationAgentWithTelemetry(
   entries: DreClassificationAgentInput[],
   options: MonthlyAgentRunOptions,
@@ -132,18 +155,27 @@ export async function runDreClassificationAgentWithTelemetry(
     return { data: [], response: NOOP_LLM_RESPONSE, latencyMs: 0 };
   }
 
+  // O LLM ecoava o entryId (UUID de 36 chars) e às vezes trocava dígitos: ~1
+  // lançamento/análise voltava com id alucinado, não casava no write-back
+  // (updateMany escopado) e perdia predictedCategory + ia para "não classificado"
+  // na DRE. Aliasamos para tokens curtos estáveis (ref-0, ref-1, …) antes de
+  // enviar e remapeamos no parse — número curto praticamente não aluciná.
+  const aliasedEntries = entries.map((entry, i) => ({ ...entry, entryId: `ref-${i}` }));
+  const realIdByAlias = new Map(entries.map((entry, i) => [`ref-${i}`, entry.entryId]));
+
   const start = Date.now();
   const response = await callLlm({
     task: "dre-classification",
     systemPrompt: buildDreSystemPrompt(),
-    userPrompt: buildDreUserPrompt(entries, options.segment, options.tenantFacts, options.businessProfile),
+    userPrompt: buildDreUserPrompt(aliasedEntries, options.segment, options.tenantFacts, options.businessProfile),
     tenantId: options.tenantId,
     traceId: options.traceId,
     jsonMode: true,
   });
 
-  const data = parseAgentJson(response.content, DreClassificationResultsSchema).map((result) => ({
+  const data = parseAgentJson(response.content, DreClassificationResultsSchema).map((result, i) => ({
     ...result,
+    entryId: resolveRealEntryId(result.entryId, i, realIdByAlias, entries),
     category: coerceDreCategory(result.category),
   }));
   return { data, response, latencyMs: Date.now() - start };

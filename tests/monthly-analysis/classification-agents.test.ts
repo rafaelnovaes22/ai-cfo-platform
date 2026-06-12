@@ -113,10 +113,12 @@ describe("monthly-analysis classification agents", () => {
   });
 
   it("runs DRE classifier with the agentic task and sanitizes unknown categories", async () => {
+    // O LLM responde com os aliases curtos (e0, e1, …) que o agente envia, não
+    // com o UUID real — o aliasing é o que evita a alucinação de id.
     callLlmMock.mockResolvedValue({
       content: JSON.stringify([
-        { entryId: "e1", category: "receita_bruta", confidence: 0.95 },
-        { entryId: "e2", category: "alucinada", confidence: 0.91 },
+        { entryId: "ref-0", category: "receita_bruta", confidence: 0.95 },
+        { entryId: "ref-1", category: "alucinada", confidence: 0.91 },
       ]),
       provider: "openai",
       model: "gpt-4.1-mini",
@@ -129,14 +131,14 @@ describe("monthly-analysis classification agents", () => {
     const result = await runDreClassificationAgent(
       [
         {
-          entryId: "e1",
+          entryId: "23f0ba89-940a-4dd4-af89-464278967942",
           date: "2026-04-10",
           description: "NF 123 CLIENTE ABC LTDA",
           amountCents: 1000,
           direction: "credit",
         },
         {
-          entryId: "e2",
+          entryId: "7a4b22f6-d2ac-40dd-a955-87d1c7c33be0",
           date: "2026-04-11",
           description: "LANÇAMENTO ESTRANHO",
           amountCents: 500,
@@ -146,9 +148,10 @@ describe("monthly-analysis classification agents", () => {
       { tenantId: "tenant-1" },
     );
 
+    // Remapeado de volta aos UUIDs reais a partir dos aliases.
     expect(result).toEqual([
-      { entryId: "e1", category: "receita_bruta", confidence: 0.95 },
-      { entryId: "e2", category: "nao_classificado", confidence: 0.91 },
+      { entryId: "23f0ba89-940a-4dd4-af89-464278967942", category: "receita_bruta", confidence: 0.95 },
+      { entryId: "7a4b22f6-d2ac-40dd-a955-87d1c7c33be0", category: "nao_classificado", confidence: 0.91 },
     ]);
     expect(callLlmMock).toHaveBeenCalledWith(expect.objectContaining({
       task: "dre-classification",
@@ -158,6 +161,45 @@ describe("monthly-analysis classification agents", () => {
     const request = callLlmMock.mock.calls[0]?.[0] as { systemPrompt: string; userPrompt: string };
     expect(request.systemPrompt).toContain("CATEGORIAS DRE PERMITIDAS");
     expect(request.userPrompt).toContain("NF 123 CLIENTE ABC LTDA");
+    // O UUID nunca chega ao LLM — só o alias curto, imune à troca de dígitos.
+    expect(request.userPrompt).not.toContain("23f0ba89-940a-4dd4-af89-464278967942");
+    expect(request.userPrompt).toContain("ref-0");
+  });
+
+  it("recupera o entryId real mesmo quando o LLM corrompe o alias (anti-alucinação)", async () => {
+    const realIds = [
+      "23f0ba89-940a-4dd4-af89-464278967942",
+      "7a4b22f6-d2ac-40dd-a955-87d1c7c33be0",
+      "0c14d058-efc3-41bb-ad85-42410886e284",
+    ];
+    // ref-0 ecoado certo; ref-1 com ruído ("ref- 1"); 3º totalmente alucinado (UUID inventado).
+    callLlmMock.mockResolvedValue({
+      content: JSON.stringify([
+        { entryId: "ref-0", category: "receita_bruta", confidence: 0.9 },
+        { entryId: "ref- 1", category: "despesas_pessoal", confidence: 0.8 },
+        { entryId: "23f0ba89-940a-4dd4-a46d-9726730dc222", category: "despesas_juridicas", confidence: 0.7 },
+      ]),
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 10,
+      outputTokens: 10,
+      costCents: 1,
+      traceId: null,
+    });
+
+    const result = await runDreClassificationAgent(
+      realIds.map((id, i) => ({
+        entryId: id,
+        date: "2026-04-10",
+        description: `LANC ${i}`,
+        amountCents: 1000,
+        direction: "debit",
+      })),
+      { tenantId: "tenant-1" },
+    );
+
+    // Todos remapeados ao id real: ref-0 exato, "ref- 1" pelo número, e o 3º pela posição.
+    expect(result.map((r) => r.entryId)).toEqual(realIds);
   });
 
   it("inclui segmento no userPrompt quando passado nas options", async () => {
