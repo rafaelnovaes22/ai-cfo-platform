@@ -4,7 +4,7 @@ import type { LlmTask } from "@/llm/types.js";
 
 const TASKS: { task: LlmTask; jsonMode: boolean; userPrompt: string }[] = [
   {
-    task: "classification",
+    task: "dre-classification",
     jsonMode: true,
     userPrompt: 'Classifique a entrada {"descricao":"Aluguel","valor":3500} no DRE. Responda JSON: {"category":"..."}.',
   },
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
       const res = await callGoogle(
         { provider: "google", model },
         {
-          task: "classification",
+          task: "dre-classification",
           systemPrompt: "Você é um assistente financeiro. Seja conciso.",
           userPrompt: 'Classifique a entrada {"descricao":"Aluguel","valor":3500} no DRE. Responda JSON: {"category":"..."}.',
           tenantId: "smoke-test",

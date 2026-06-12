@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { callLlm } from "@/llm/index.js";
 
 // Judge de CLAREZA — independente do classifier de categoria.
 // Olha SÓ a descrição (não vê o palpite de categoria) e decide se há
 // evidência específica o bastante pra classificação confiável.
+// O grafo LangGraph consome via _internals (clarity-judge agent, task "clarity-judge");
+// a entrada LLM própria deste módulo (judgeClarity, task "classification-judge")
+// morreu com o pipeline BullMQ legado.
 //
 // Por que existir: LLMs de chat (todos os 8 testados) são mal calibrados
 // em self-reported confidence. Esta camada substitui esse sinal por um
@@ -14,12 +16,6 @@ export type Clarity = "clear" | "partial" | "ambiguous";
 export interface JudgeInput {
   entryId: string;
   description: string;
-}
-
-export interface JudgeOutput {
-  entryId: string;
-  clarity: Clarity;
-  reason: string;
 }
 
 // Cap de confidence por veredito do judge.
@@ -94,23 +90,6 @@ Retorne SOMENTE o array JSON. Sem markdown, sem explicação fora do array.`;
 
 function buildUserPrompt(entries: JudgeInput[]): string {
   return `Avalie a clareza das seguintes descrições:\n${JSON.stringify(entries, null, 2)}`;
-}
-
-export async function judgeClarity(
-  entries: JudgeInput[],
-  tenantId: string,
-): Promise<JudgeOutput[]> {
-  if (entries.length === 0) return [];
-
-  const response = await callLlm({
-    task: "classification-judge",
-    systemPrompt: buildSystemPrompt(),
-    userPrompt: buildUserPrompt(entries),
-    tenantId,
-    jsonMode: true,
-  });
-
-  return JudgeResponseSchema.parse(JSON.parse(response.content));
 }
 
 // Helpers exportados pra reuso no eval runner sem invocar LLM (mocks).

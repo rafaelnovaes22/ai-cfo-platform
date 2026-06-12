@@ -1,17 +1,14 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   filterEntriesByReferenceMonth,
-  shouldSkipClassification,
   predominantMonth,
   computeDirectionInferred,
-  resolveOrchestrator,
 } from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
 
 vi.mock("@/persistence/prisma.js", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/queue/index.js", () => ({
-  enqueueClassification: vi.fn(),
-  enqueueDreNarrative: vi.fn(),
+  enqueueMonthlyAnalysisGraph: vi.fn(),
 }));
 vi.mock("@/ingest/parsers/excel.js", () => ({ parseExcel: vi.fn() }));
 vi.mock("@/ingest/parsers/text.js", () => ({ parseText: vi.fn() }));
@@ -30,56 +27,7 @@ function entry(overrides: Partial<RawLedger> = {}): RawLedger {
   };
 }
 
-describe("ingest/service resolveOrchestrator (LangGraph é o caminho único)", () => {
-  const original = process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
-  afterEach(() => {
-    if (original === undefined) delete process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
-    else process.env.LEGACY_BULLMQ_CHAIN_ENABLED = original;
-  });
-
-  it("default (sem config) → langgraph", () => {
-    delete process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
-    expect(resolveOrchestrator(undefined)).toBe("langgraph");
-  });
-
-  it("'langgraph' explícito → langgraph", () => {
-    expect(resolveOrchestrator("langgraph")).toBe("langgraph");
-  });
-
-  it("'bullmq' com flag OFF → langgraph (não enfileira em fila sem worker)", () => {
-    delete process.env.LEGACY_BULLMQ_CHAIN_ENABLED;
-    expect(resolveOrchestrator("bullmq")).toBe("langgraph");
-  });
-
-  it("'bullmq' com flag ON → bullmq (rollback de emergência)", () => {
-    process.env.LEGACY_BULLMQ_CHAIN_ENABLED = "true";
-    expect(resolveOrchestrator("bullmq")).toBe("bullmq");
-  });
-
-  it("valor desconhecido → langgraph (fail-safe para o caminho único)", () => {
-    expect(resolveOrchestrator("foobar")).toBe("langgraph");
-  });
-});
-
 describe("ingest/service pipeline routing", () => {
-  it("pula classificacao quando todas as entradas ja vieram categorizadas pela DRE", () => {
-    expect(shouldSkipClassification([
-      entry({ confirmedCategory: "receita_bruta" }),
-      entry({ confirmedCategory: "despesas_comerciais" }),
-    ])).toBe(true);
-  });
-
-  it("mantem classificacao quando alguma entrada ainda nao tem categoria confirmada", () => {
-    expect(shouldSkipClassification([
-      entry({ confirmedCategory: "receita_bruta" }),
-      entry(),
-    ])).toBe(false);
-  });
-
-  it("mantem classificacao para listas vazias", () => {
-    expect(shouldSkipClassification([])).toBe(false);
-  });
-
   it("mantem apenas lancamentos da competencia selecionada", () => {
     const result = filterEntriesByReferenceMonth([
       entry({ date: "2026-03-02", description: "Marco 1" }),

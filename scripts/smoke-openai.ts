@@ -9,7 +9,7 @@ async function main(): Promise<void> {
       const res = await callOpenAI(
         { provider: "openai", model },
         {
-          task: "classification",
+          task: "dre-classification",
           systemPrompt: "Você é um assistente. Responda em JSON.",
           userPrompt: 'Retorne {"ok":true}.',
           tenantId: "smoke",

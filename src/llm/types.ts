@@ -1,6 +1,7 @@
+// Tasks fora do grafo LangGraph: geração standalone usada por evals (dre-narrative,
+// action-plan), judge de evals e extração de PDF no ingest. As tasks da cadeia
+// BullMQ legada (classification, classification-judge) foram removidas com ela.
 export type LegacyLlmTask =
-  | "classification"
-  | "classification-judge"
   | "dre-narrative"
   | "action-plan"
   | "eval-judge"

@@ -34,9 +34,11 @@ export async function runExactMatchCategory(opts: RunOptions): Promise<RunSummar
 
   const systemPrompt = buildSystemPrompt();
   const promptHash = hashPrompt(systemPrompt);
+  // Task "dre-classification" = rota de produção (nó dre-classifier do grafo
+  // LangGraph). A task "classification" da cadeia BullMQ legada foi removida.
   const route = opts.modelOverride
     ? { provider: opts.modelOverride.provider, model: opts.modelOverride.model }
-    : resolveRoute("classification");
+    : resolveRoute("dre-classification");
 
   const results: CaseResult[] = [];
 
@@ -68,7 +70,7 @@ export async function runExactMatchCategory(opts: RunOptions): Promise<RunSummar
     let llmResponse;
     try {
       llmResponse = await dispatchLlm(opts.modelOverride ?? null, {
-        task: "classification",
+        task: "dre-classification",
         systemPrompt,
         userPrompt,
         tenantId: "eval-runner",

@@ -23,8 +23,8 @@ export async function dreClassifierNode(
     (state.rawEntries ?? []).filter((r) => r.directionInferred === true).map((r) => r.entryId),
   );
   // Categoria confirmada na origem (PDF de DRE do contador) é fato: pula o LLM e
-  // não entra no write-back — paridade com shouldSkipClassification do BullMQ.
-  // O aggregate-dre usa a confirmada com precedência (rawEntries → rows).
+  // não entra no write-back. O aggregate-dre usa a confirmada com precedência
+  // (rawEntries → rows).
   const confirmedIds = new Set(
     (state.rawEntries ?? [])
       .filter((r) => r.confirmedCategory != null && r.confirmedCategory !== "")

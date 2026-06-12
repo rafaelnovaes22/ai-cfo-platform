@@ -1,6 +1,6 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { Prisma } from "@prisma/client";
-import { enqueueClassification, enqueueDreNarrative, enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
+import { enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseCsv } from "@/ingest/parsers/csv.js";
 import { parseText } from "@/ingest/parsers/text.js";
@@ -16,30 +16,6 @@ import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
 const DEFAULT_MIN_INGEST_ENTRIES = 10;
 
 export type IngestSource = "excel" | "csv" | "text" | "pdf" | "manual";
-export type Orchestrator = "langgraph" | "bullmq";
-
-/**
- * Resolve o orquestrador da análise. LangGraph é o caminho único (orquestrador dos
- * agentes); BullMQ fica como camada de fila. A cadeia BullMQ legada (jobs
- * classification→dre-narrative→action-plan) só roda quando EXPLICITAMENTE pedida
- * E a flag LEGACY_BULLMQ_CHAIN_ENABLED está ligada — senão cairia num job sem
- * worker (os workers legados não são registrados com a flag off). Isso dá o
- * rollback de emergência (flag=true + orchestrator=bullmq) sem deploy.
- * @param requested valor de productConfig.monthlyAnalysis.orchestrator (per-tenant)
- *   ou de MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR (global); undefined = default.
- */
-export function resolveOrchestrator(requested: string | undefined): Orchestrator {
-  const legacyEnabled = process.env.LEGACY_BULLMQ_CHAIN_ENABLED === "true";
-  return requested === "bullmq" && legacyEnabled ? "bullmq" : "langgraph";
-}
-
-export function legacyBullmqChainEnabled(): boolean {
-  return process.env.LEGACY_BULLMQ_CHAIN_ENABLED === "true";
-}
-
-export function shouldSkipClassification(entries: RawLedger[]): boolean {
-  return entries.length > 0 && entries.every((entry) => entry.confirmedCategory != null);
-}
 
 // Um arquivo "usa sinais sistematicamente" quando ≥25% das linhas têm valor negativo.
 // Abaixo disso (ex: planilha do cliente com 1 estorno no meio de 77 positivos),
@@ -212,7 +188,7 @@ export async function ingest(params: {
   const db = getPrisma();
   const persistSpan = trace.span({ name: "persist", input: { entryCount: entries.length } });
 
-  const { analysis, minEntries, orchestrator } = await db.$transaction(async (tx) => {
+  const { analysis, minEntries } = await db.$transaction(async (tx) => {
     const tenant = await tx.tenant.findUniqueOrThrow({
       where: { id: tenantId },
       select: { productConfig: true },
@@ -221,10 +197,6 @@ export async function ingest(params: {
       Record<string, unknown> | undefined;
     const threshold =
       (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
-    const orchestrator = resolveOrchestrator(
-      (tenantConfig?.orchestrator as string | undefined) ??
-        process.env.MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR,
-    );
     const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
 
     const existing = await tx.monthlyAnalysis.findUnique({
@@ -252,13 +224,13 @@ export async function ingest(params: {
           traceId: null,
         },
       });
-      return { analysis: existing, minEntries: threshold, orchestrator };
+      return { analysis: existing, minEntries: threshold };
     }
 
     const created = await tx.monthlyAnalysis.create({
       data: { tenantId, referenceMonth: effectiveReferenceMonth, status: "pending", mode: subscription.mode },
     });
-    return { analysis: created, minEntries: threshold, orchestrator };
+    return { analysis: created, minEntries: threshold };
   });
 
   // 3. Bulk insert LedgerEntry
@@ -294,14 +266,11 @@ export async function ingest(params: {
       where: { id: analysis.id },
       data: { status: "generating" },
     });
-    if (orchestrator === "langgraph") {
-      await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId: trace.id });
-      logger.info({ analysisId: analysis.id, tenantId }, "Ingest: despachando para LangGraph");
-    } else if (shouldSkipClassification(entries)) {
-      await enqueueDreNarrative({ analysisId: analysis.id, tenantId, traceId: trace.id });
-    } else {
-      await enqueueClassification({ analysisId: analysis.id, tenantId, traceId: trace.id });
-    }
+    // LangGraph é o orquestrador único (#180); a cadeia BullMQ legada foi removida.
+    // Lançamentos com categoria confirmada na origem são pulados do LLM dentro do
+    // próprio grafo (dre-classifier lê confirmedCategory do estado).
+    await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId: trace.id });
+    logger.info({ analysisId: analysis.id, tenantId }, "Ingest: despachando para LangGraph");
   }
 
   await trace.update({

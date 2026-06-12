@@ -8,9 +8,7 @@ import type { LlmTask, RouteConfig } from "@/llm/types.js";
 // `eval-judge` usa gemini-2.5-flash (modelo maior) para independência de modelo em relação
 // aos geradores (gemini-2.5-flash-lite) — independência de modelo satisfaz C4 sem DPA Anthropic.
 const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
-  // Pipeline legado — compatibilidade.
-  "classification":       { provider: "google", model: "gemini-2.5-flash-lite" },
-  "classification-judge": { provider: "google", model: "gemini-2.5-flash-lite" },
+  // Fora do grafo — geração standalone usada por evals + extração de PDF do ingest.
   "dre-narrative":        { provider: "google", model: "gemini-2.5-flash" },
   "action-plan":          { provider: "google", model: "gemini-2.5-flash", thinkingBudget: 2048 },
   "eval-judge":           { provider: "google", model: "gemini-2.5-flash" },
@@ -34,9 +32,7 @@ const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
 // store: false no adapter garante que dados não são retidos para treino (LGPD).
 // thinkingBudget omitido — não suportado pela API OpenAI.
 const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
-  // Pipeline legado.
-  "classification":       { provider: "openai", model: "gpt-4.1-mini" },
-  "classification-judge": { provider: "openai", model: "gpt-4.1-mini" },
+  // Fora do grafo.
   "dre-narrative":        { provider: "openai", model: "gpt-4.1-mini" },
   "action-plan":          { provider: "openai", model: "gpt-4.1-mini" },
   "eval-judge":           { provider: "openai", model: "gpt-4.1-mini" },

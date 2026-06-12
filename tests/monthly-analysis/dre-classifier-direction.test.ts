@@ -230,3 +230,33 @@ describe("monthly-analysis/dre-classifier — categoria confirmada na origem (pa
     expect(result.dre?.receitaBruta).toBe(387000);
   });
 });
+
+describe("monthly-analysis/dre-classifier — segurança C8 (write-back escopado)", () => {
+  // Cobertura herdada do classifier.test.ts legado (removido com a cadeia BullMQ):
+  // um entryId alucinado pelo LLM não pode tocar lançamento de outra análise/tenant.
+  it("todo updateMany do flywheel é escopado por id+tenantId+analysisId (id forjado vira no-op)", async () => {
+    runChunkedMock.mockResolvedValue({
+      data: [
+        { entryId: "e1", category: "simples_nacional", confidence: 0.95 },
+        { entryId: "FORJADO-XXX", category: "receita_bruta", confidence: 0.99 }, // alucinado
+      ],
+      response: {},
+      latencyMs: 10,
+    });
+
+    await dreClassifierNode(baseState({
+      rawEntries: [raw("e1", "out", false)],
+      normalizedEntries: [normalized("e1", "out")],
+    }));
+
+    // O id forjado também vai ao updateMany, mas o where escopado garante que só
+    // pode casar dentro DESTA análise/tenant — em outro escopo é no-op (count 0).
+    expect(updateManyMock).toHaveBeenCalledTimes(2);
+    for (const call of updateManyMock.mock.calls) {
+      const where = (call[0] as { where: Record<string, unknown> }).where;
+      expect(where.tenantId).toBe("tenant-1");
+      expect(where.analysisId).toBe("analysis-1");
+      expect(where.id).toBeDefined();
+    }
+  });
+});
