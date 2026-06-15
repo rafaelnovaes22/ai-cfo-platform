@@ -314,12 +314,14 @@ async function handleIngestDocument(
   msg: WaIncomingMessage,
   session: WaSession,
   deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
-  plan: string,
 ): Promise<void> {
   const filename = msg.document?.filename ?? "arquivo"
-  const isStudent = plan === "student"
-  // Confirma recebimento imediatamente
-  await deps.adapter.sendText(msg.from, formatIngestReceived(filename, isStudent))
+  // Decisão de produto (2026-06-15): o WhatsApp é canal student-only. Todo extrato
+  // recebe o *fluxo de caixa* em texto (zero LLM), independente do plano — nunca a
+  // análise mensal, que vive no app (plano pago) e antes devolvia um link aqui em
+  // vez do caixa. Por isso o ingest roda sempre em modo cash-flow-only.
+  // TODO (evolução do pago): direcionar o cliente pago para a LP da Aicfo.
+  await deps.adapter.sendText(msg.from, formatIngestReceived(filename, true))
   await transitionTo(session, "INGEST_FLOW", deps.store, {
     context: {
       ...session.context,
@@ -327,12 +329,11 @@ async function handleIngestDocument(
       filename,
     },
   })
-  // Dispara ingest em background — student: parse+store (zero LLM) + caixa do extrato;
-  // pago: pipeline completo (classificação → DRE → plano de ação).
+  // Background: parse+store (zero LLM) + caixa do extrato, para todos os planos.
   if (msg.document?.id && session.tenantId) {
     ingestDocumentBackground(msg, session.tenantId, deps.adapter, {
-      skipAnalysis: isStudent,
-      keepAllEntries: isStudent,
+      skipAnalysis: true,
+      keepAllEntries: true,
       store: deps.store,
     })
   }
@@ -376,12 +377,10 @@ async function handleMenu(
 ): Promise<void> {
   const tenantId = session.tenantId as string
 
-  // Documento recebido → ingest permitido para todos os planos.
-  // Plano student: skipAnalysis=true (parse+store apenas, sem LLM).
-  // Planos pagos: pipeline completo (classificação → DRE → plano de ação).
+  // Documento recebido → fluxo de caixa do extrato (cash-flow-only) para todos.
+  // WhatsApp é canal student-only: nunca gera/anuncia a análise mensal aqui.
   if (isSupportedDocument(msg)) {
-    const plan = await getTenantPlan(tenantId)
-    await handleIngestDocument(msg, session, deps, plan)
+    await handleIngestDocument(msg, session, deps)
     return
   }
 
@@ -559,7 +558,7 @@ async function processMessageWithConversationGraph(
   switch (decision.route) {
     case "HANDLE_DOCUMENT": {
       const persisted = withConversationState(baseSession, applyConversationOutcome(decision))
-      await handleIngestDocument(msg, persisted, { store: deps.sessionStore, adapter: deps.adapter }, tenant.plan)
+      await handleIngestDocument(msg, persisted, { store: deps.sessionStore, adapter: deps.adapter })
       return
     }
 
