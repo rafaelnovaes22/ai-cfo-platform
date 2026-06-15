@@ -264,6 +264,50 @@ describe("whatsapp conversation graph — deterministic zero-token UX", () => {
     expect(decision.responseText?.toLowerCase()).toContain("resultado");
   });
 
+  it("estado inconsistente da race (caixa pronto + pendingAction wait_ingest) ainda devolve o caixa", async () => {
+    // Bug real do print (2026-06-15): o ingest roda em background e mensagens em
+    // rajada sobrescrevem a sessão, deixando lastOutcome com métricas E o
+    // pendingAction preso em "wait_ingest". A continuação deve mostrar o caixa,
+    // nunca "estou processando".
+    const inconsistent = baseState({
+      stage: "INGESTING_STATEMENT",
+      pendingAction: "wait_ingest",
+      lastOutcome: {
+        type: "cashflow_statement",
+        summary: "Resultado negativo de -R$ 45.000,00",
+        dataRef: encodeOutcomeMetrics(negativeMetrics()),
+        createdAt: "2026-06-15T10:56:00.000Z",
+      },
+    });
+
+    const decision = await decideWhatsappConversation(textMsg("o que mais?"), inconsistent);
+
+    expect(decision.responseText?.toLowerCase()).not.toContain("processando");
+    // Snapshot do caixa: entradas, saídas e resultado.
+    expect(decision.responseText?.toLowerCase()).toContain("entradas");
+    expect(decision.responseText?.toLowerCase()).toContain("saídas");
+    expect(decision.responseText?.toLowerCase()).toContain("resultado");
+    expect(decision.conversation.pendingAction).toBe("choose_next_step");
+  });
+
+  it("'sim'/confirmação após o caixa entregue devolve o caixa, não 'processando'", async () => {
+    const inconsistent = baseState({
+      stage: "INGESTING_STATEMENT",
+      pendingAction: "wait_ingest",
+      lastOutcome: {
+        type: "cashflow_statement",
+        summary: "Resultado negativo de -R$ 45.000,00",
+        dataRef: encodeOutcomeMetrics(negativeMetrics()),
+        createdAt: "2026-06-15T10:56:00.000Z",
+      },
+    });
+
+    const decision = await decideWhatsappConversation(textMsg("sim"), inconsistent);
+
+    expect(decision.responseText?.toLowerCase()).not.toContain("processando");
+    expect(decision.responseText?.toLowerCase()).toContain("resultado");
+  });
+
   it("classificador marca pergunta aberta explicativa como candidata a SLM só quando há contexto", () => {
     const withoutContext = classifyWaIntent(
       textMsg("isso está bom?"),

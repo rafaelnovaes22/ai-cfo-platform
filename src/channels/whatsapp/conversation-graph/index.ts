@@ -120,13 +120,27 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
     }
 
     case "ASK_NEXT_STEP":
-    case "CONFIRMATION":
+    case "CONFIRMATION": {
+      // Se já há um caixa calculado, qualquer continuação ("e agora?", "sim",
+      // "o que mais?") devolve o caixa — nunca "ainda estou processando". Isso
+      // também neutraliza a race do ingest em background, que pode deixar o
+      // pendingAction preso em "wait_ingest" mesmo com o resultado já entregue.
+      const metrics = decodeOutcomeMetrics(conversation.lastOutcome?.dataRef)
+      if (metrics) {
+        return {
+          conversation: { ...conversation, stage: "SHOWING_CASHFLOW", pendingAction: "choose_next_step" },
+          route: "SEND_TEXT",
+          responseText: formatCashflowSnapshot(metrics),
+          usedSlm: false,
+        }
+      }
       return {
         conversation: { ...conversation, pendingAction: conversation.pendingAction ?? "send_statement" },
         route: "SEND_TEXT",
         responseText: formatContinuePrompt(conversation),
         usedSlm: false,
       }
+    }
 
     case "ASK_STATUS":
       return { conversation, route: "STATUS", usedSlm: false }
@@ -191,13 +205,26 @@ function routeDeterministicNode(state: GraphState): Partial<GraphState> {
 
     case "UNKNOWN":
     case "AUTH_HELP":
-    default:
+    default: {
+      // Mensagem não reconhecida, mas já existe caixa processado: mostra o caixa
+      // em vez de pedir o extrato de novo ou dizer que ainda está processando.
+      // É o comportamento esperado depois que o extrato já foi entregue.
+      const metrics = decodeOutcomeMetrics(conversation.lastOutcome?.dataRef)
+      if (metrics) {
+        return {
+          conversation: { ...conversation, stage: "SHOWING_CASHFLOW", pendingAction: "choose_next_step" },
+          route: "SEND_TEXT",
+          responseText: formatCashflowSnapshot(metrics),
+          usedSlm: false,
+        }
+      }
       return {
         conversation: { ...conversation, stage: "AWAITING_STATEMENT", pendingAction: "send_statement" },
         route: "SEND_TEXT",
         responseText: formatContextualFallback(conversation),
         usedSlm: false,
       }
+    }
   }
 }
 
