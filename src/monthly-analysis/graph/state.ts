@@ -39,6 +39,9 @@ export interface MonthlyAnalysisState {
   normalizedEntries?: NormalizedLedgerEntry[];
   clarityResults?: ClarityResult[];
   classifiedEntries?: DreClassificationResult[];
+  // Perfil do negócio inferido das descrições (dre-classifier). industrySegment é
+  // sempre "geral" no self-serve; este texto dá o contexto setorial real à narrativa/plano.
+  businessProfile?: string;
 
   dre?: DreLines;
   // DRE em run-rate mensal por categoria (mês típico) — alimenta narrativa/plano,

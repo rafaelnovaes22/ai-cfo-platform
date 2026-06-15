@@ -16,6 +16,7 @@ export interface ActionPlanningPromptInput {
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
   segment?: string;
+  businessProfile?: string;
   taxRegime?: string;
   toneOfVoice?: string;
 }
@@ -72,10 +73,11 @@ PASSO 3 — O QUE NÃO É AÇÃO DE CFO (proibido no plano)
 - "Analisar/avaliar/verificar X" como ação isolada — CFO recomenda DECISÃO, não estudo (salvo se
   o estudo tiver entregável e número concretos).
 
-PASSO 4 — RACIOCÍNIO SETORIAL (use o segmento informado)
-Adapte as alavancas ao modelo de receita do SEGMENTO da empresa (campo Segmento no contexto).
-Pense em como aquele setor ganha e perde dinheiro. Exemplos de raciocínio (adapte ao segmento
-real, não copie literalmente):
+PASSO 4 — RACIOCÍNIO SETORIAL (use o PERFIL DO NEGÓCIO inferido)
+O campo Segmento costuma vir "geral" (self-serve não captura o setor). Use sobretudo o
+PERFIL DO NEGÓCIO inferido dos lançamentos (no contexto) para entender o que a empresa vende
+e como ela ganha/perde dinheiro, e adapte as alavancas a esse modelo de receita.
+Exemplos de raciocínio (adapte ao perfil real, não copie literalmente):
 - Mídia/jornalismo: recorrência de assinaturas (churn, LTV) × dependência de publicidade
   (concentração de anunciantes, sazonalidade); branded content e eventos como diversificação.
 - Serviços B2B: utilização da equipe, taxa-hora, pipeline e concentração de clientes.
@@ -89,12 +91,16 @@ HORIZONTES
 - medium → 30 a 90 dias (táticas, médio esforço)
 - long   → acima de 90 dias (estruturais)
 
-QUANTIDADE POR HORIZONTE: exatamente 3 ações short (curto prazo), mínimo 1 medium, mínimo 1 long. Máximo 3 por horizonte.
+QUANTIDADE POR HORIZONTE: 2 a 3 ações short (curto prazo), mínimo 1 medium, mínimo 1 long. Máximo 3 por horizonte.
 Total: entre 5 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
-O schema de saída rejeita planos com menos de 3 ações short ou menos de 5 ações totais.
+REGRA ANTI-ENCHIMENTO: só inclua a 3ª ação short se ela for MATERIAL (Passo 2). Se não houver
+uma 3ª alavanca de curto prazo material, fique com 2 short e realoque o esforço para medium/long
+(reserva, diversificação, precificação) — NUNCA invente um micro-corte (ex.: cortar R$ 200 de
+licença num negócio que lucra dezenas de milhares) só para completar a cota de short.
+O schema de saída rejeita planos com menos de 2 ações short ou menos de 5 ações totais.
 
 ORDENAÇÃO DAS AÇÕES SHORT (OBRIGATÓRIO)
-As 3 ações short DEVEM aparecer ordenadas em ordem decrescente de ROI estimado:
+As ações short DEVEM aparecer ordenadas em ordem decrescente de ROI estimado:
   ROI = impactCents ÷ effortScore  (effortLevel: low=1, medium=2, high=3)
   A ação com maior ROI aparece PRIMEIRO — o CEO vê a alavanca mais forte antes.
   Desempate: riskLevel crescente (low < medium < high).
@@ -229,11 +235,15 @@ export function buildUserPrompt(input: ActionPlanningPromptInput): string {
   const segment = input.segment ?? "geral";
   const taxRegime = input.taxRegime ?? "simples";
   const toneOfVoice = input.toneOfVoice ?? "formal";
+  const businessProfile = input.businessProfile?.trim()
+    ? input.businessProfile.trim()
+    : "(não inferido — use o DRE e as descrições para deduzir a natureza do negócio)";
 
   return `CONTEXTO DA EMPRESA
 - Segmento: ${segment}
 - Regime Tributário: ${taxRegime}
 - Tom de voz: ${toneOfVoice}
+- Perfil do negócio (inferido dos lançamentos): ${businessProfile}
 
 ${formatDreForPrompt(input.dre, referenceMonth)}
 

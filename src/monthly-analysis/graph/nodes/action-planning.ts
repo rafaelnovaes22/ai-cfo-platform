@@ -25,6 +25,7 @@ export async function actionPlanningNode(
     marginDiagnosis: state.marginDiagnosis,
     cashflowRisk: state.cashflowRisk,
     segment: state.segment,
+    businessProfile: state.businessProfile,
     taxRegime: state.taxRegime,
     toneOfVoice: state.toneOfVoice,
   };

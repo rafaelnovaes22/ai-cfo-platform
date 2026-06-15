@@ -210,6 +210,10 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.monthlyDre).toBeDefined();
     expect(result.monthlyDre!.receitaLiquida).toBe(460000);
 
+    // businessProfile inferido precisa propagar até narrativa/plano — channel registrado.
+    expect(result.businessProfile).toBeDefined();
+    expect(result.businessProfile).toContain("receita-fim");
+
     // Diagnoses (fan-out paralelo: anomaly + margin + cashflow)
     expect(Array.isArray(result.anomalies)).toBe(true);
     expect(result.marginDiagnosis).toBeDefined();

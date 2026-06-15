@@ -52,6 +52,7 @@ export const MonthlyAnalysisAnnotation = Annotation.Root({
   normalizedEntries: Annotation<NormalizedLedgerEntry[] | undefined>(),
   clarityResults: Annotation<ClarityResult[] | undefined>(),
   classifiedEntries: Annotation<DreClassificationResult[] | undefined>(),
+  businessProfile: Annotation<string | undefined>(),
 
   dre: Annotation<DreLines | undefined>(),
   monthlyDre: Annotation<DreLines | undefined>(),

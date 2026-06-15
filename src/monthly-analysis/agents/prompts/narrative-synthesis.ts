@@ -15,6 +15,7 @@ export interface NarrativeSynthesisAgentInput {
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
   segment?: string;
+  businessProfile?: string;
   taxRegime?: string;
   toneOfVoice?: string;
 }
@@ -85,6 +86,8 @@ JARGÃO POR REGIME TRIBUTÁRIO (use exclusivamente os termos do regime do tenant
 - taxRegime=lucroReal       → "IRPJ", "CSLL", "EBITDA" liberado.
 
 TERMINOLOGIA POR SEGMENTO (adapte o vocabulário dos cards ao setor)
+Quando o Segmento vier "geral" ou não informado, use o PERFIL DO NEGÓCIO inferido (no contexto)
+para entender o setor e o que é a receita-fim da empresa, e adapte o vocabulário a isso.
 - varejo:           Ao mencionar CMV, escreva "Custo dos Produtos Vendidos (o que foi pago aos fornecedores)". Margem Bruta = "o que sobrou após pagar os fornecedores".
 - industria-leve:   Use termos de manufatura: insumos, custo de produção. Prefira lucroOperacional; evite EBITDA.
 - servicos-b2b:     Foque em custo de mão-de-obra, utilização da equipe, faturamento por consultor.
@@ -168,9 +171,13 @@ export function buildUserPrompt(input: NarrativeSynthesisAgentInput): string {
   const segment = input.segment ?? "(não informado)";
   const taxRegime = input.taxRegime ?? "simples";
   const toneOfVoice = input.toneOfVoice ?? "formal";
+  const businessProfile = input.businessProfile?.trim()
+    ? input.businessProfile.trim()
+    : "(não inferido)";
 
   return `CONTEXTO DA EMPRESA
 - Segmento: ${segment}
+- Perfil do negócio (inferido dos lançamentos): ${businessProfile}
 - Regime Tributário: ${taxRegime}
 - Tom de voz desejado: ${toneOfVoice}
 

@@ -168,8 +168,11 @@ export type ActionPlanItemDraft = z.infer<typeof ActionPlanItemDraftSchema>;
 
 export const ActionPlanDraftSchema = z.object({
   actions: z.array(ActionPlanItemDraftSchema).min(5),
-}).refine(({ actions }) => actions.filter((a) => a.horizon === "short").length >= 3, {
-  message: "Mínimo 3 ações short obrigatório",
+  // Mín 2 short (não 3): forçar uma 3ª short numa empresa saudável e estável produzia
+  // micro-corte imaterial só para completar a cota. Com 2, o "espaço" migra para
+  // medium/long, onde moram as alavancas estruturais (reserva, diversificação).
+}).refine(({ actions }) => actions.filter((a) => a.horizon === "short").length >= 2, {
+  message: "Mínimo 2 ações short obrigatório",
   path: ["actions"],
 }).refine(({ actions }) => actions.filter((a) => a.horizon === "medium").length >= 1, {
   message: "Mínimo 1 ação medium obrigatório",

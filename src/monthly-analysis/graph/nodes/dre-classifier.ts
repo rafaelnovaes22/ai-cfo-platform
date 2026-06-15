@@ -173,6 +173,7 @@ export async function dreClassifierNode(
     classifiedEntries: finalClassifications,
     costs,
     traces,
+    ...(businessProfile ? { businessProfile } : {}),
     ...(correctedNormalizedEntries ? { normalizedEntries: correctedNormalizedEntries } : {}),
   };
 }
