@@ -118,7 +118,9 @@ function parseInputBlock(file: CaseFile): ClassificationInput {
     tenantContext = parseInlineObject(fields.tenant_context);
   }
 
-  return { description, direction, date, amountCents, tenantContext };
+  const businessProfile = fields.business_profile ? unquote(fields.business_profile) : undefined;
+
+  return { description, direction, date, amountCents, tenantContext, businessProfile };
 }
 
 function parseGroundTruthBlock(file: CaseFile): ClassificationGroundTruth {

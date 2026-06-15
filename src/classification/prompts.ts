@@ -31,6 +31,13 @@ REGRAS DE CATEGORIA
 - direction="unknown": o arquivo de origem NÃO informou se o lançamento é entrada ou saída.
   Classifique APENAS pela semântica da descrição — contas/impostos/fornecedores/folha são
   despesas mesmo sem sinal. NÃO assuma que é receita.
+- SERVIÇO-FIM × SERVIÇO CONTRATADO (decisivo quando há PERFIL DO NEGÓCIO): se a descrição
+  corresponde a um tipo de serviço/produto que o PERFIL identifica como a RECEITA-FIM da
+  empresa, classifique como "receita_bruta" MESMO com direction="unknown" e mesmo que a
+  descrição contenha "comercial", "serviço" ou "produção". Nome de um CLIENTE/empresa na
+  descrição (ex.: "... - Supermercados X", "... - Prefeitura Y") reforça que é venda, não custo.
+  Só use "custo_servicos" quando for claramente um serviço CONTRATADO de terceiros pela empresa
+  (ex.: "freelancer", "freela", "pagamento a fornecedor/prestador").
 
 REGRAS DE CONFIDENCE
 confidence deve refletir sua certeza real. Use confidence ≤ 0.65 em QUALQUER um dos casos abaixo:
@@ -60,6 +67,12 @@ Saída:   [{"entryId":"a4","category":"simples_nacional","confidence":0.97}]
 
 Entrada: [{"entryId":"a5","date":"2026-04-10","description":"Conta de energia - Light","amountCents":134000,"direction":"unknown"}]
 Saída:   [{"entryId":"a5","category":"despesas_administrativas","confidence":0.9}]
+
+EXEMPLO — SERVIÇO-FIM É RECEITA (aplicar o PERFIL DO NEGÓCIO, mesmo com direction="unknown")
+Perfil: produtora de mídia/jornalismo; a receita vem de cobertura, locução, narração, edição e produção de conteúdo para clientes.
+Entrada: [{"entryId":"a6","date":"2026-04-30","description":"Locução comercial rádio - Supermercados Preço Bom","amountCents":730000,"direction":"unknown"}]
+Saída:   [{"entryId":"a6","category":"receita_bruta","confidence":0.85}]
+(É serviço PRESTADO ao cliente "Supermercados Preço Bom", não um custo. "comercial" aqui qualifica o tipo de locução, não indica despesa.)
 
 EXEMPLOS — BAIXA CONFIANÇA (regra 1: TED para sócio sem NF)
 Entrada: [{"entryId":"d1","date":"2026-04-30","description":"TED PARA JOAO SILVA SOCIO R$ 10.000","amountCents":1000000,"direction":"debit"}]
@@ -113,7 +126,7 @@ function buildBusinessProfileBlock(businessProfile?: string): string {
   // segmento genérico porque é específico deste negócio: diz quais descrições são a
   // RECEITA-FIM (serviço/produto vendido), evitando que serviços prestados sejam
   // classificados como despesa quando a direção é "unknown".
-  return `PERFIL DO NEGÓCIO (inferido dos lançamentos — use para distinguir receita de despesa):\n${businessProfile.trim()}\n\n`;
+  return `PERFIL DO NEGÓCIO (inferido dos lançamentos — use para distinguir receita de despesa). Lançamentos que correspondem à RECEITA-FIM descrita aqui devem ser "receita_bruta", mesmo com direction="unknown" e mesmo contendo palavras como "comercial"/"serviço":\n${businessProfile.trim()}\n\n`;
 }
 
 export function buildUserPrompt(

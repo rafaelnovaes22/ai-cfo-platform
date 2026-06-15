@@ -56,15 +56,20 @@ export async function runExactMatchCategory(opts: RunOptions): Promise<RunSummar
       continue;
     }
 
-    const userPrompt = buildUserPrompt([
-      {
-        entryId: parsed.meta.caseId,
-        date: parsed.input.date,
-        description: parsed.input.description,
-        amountCents: parsed.input.amountCents,
-        direction: parsed.input.direction,
-      },
-    ]);
+    const userPrompt = buildUserPrompt(
+      [
+        {
+          entryId: parsed.meta.caseId,
+          date: parsed.input.date,
+          description: parsed.input.description,
+          amountCents: parsed.input.amountCents,
+          direction: parsed.input.direction,
+        },
+      ],
+      undefined,
+      undefined,
+      parsed.input.businessProfile,
+    );
 
     const t0 = Date.now();
     let llmResponse;
