@@ -72,6 +72,17 @@ export function groupIndicesByMonth(dates: string[]): Map<string, number[]> {
   return byMonth;
 }
 
+/**
+ * Mês corrente (YYYY-MM) no fuso de São Paulo — usado como referenceMonth da
+ * análise ("análise deste mês"). BRT evita virar o mês cedo demais (servidor UTC).
+ */
+export function currentMonthBRT(): string {
+  const parts = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }).split("/");
+  const mm = parts[1];
+  const yyyy = parts[2];
+  return mm && yyyy ? `${yyyy}-${mm}` : new Date().toISOString().slice(0, 7);
+}
+
 export function predominantMonth(entries: RawLedger[]): string | null {
   if (entries.length === 0) return null;
   const counts = new Map<string, number>();
@@ -186,10 +197,10 @@ export async function ingest(params: {
   // plano/DRE/narrativa saem CONSOLIDADOS. A navegação por mês de DRE/Lançamentos/
   // Caixa vem de filtro de competência sobre estes lançamentos (não de análises
   // separadas).
-  // referenceMonth (chave + rótulo) = mês da SOLICITAÇÃO (param — mês atual no upload
-  // web e no WhatsApp), não o mês predominante do extrato: o cliente pede em junho a
-  // análise de um extrato de mar/abr/mai e isso é a "análise de junho".
-  const referenceMonthKey = referenceMonth;
+  // referenceMonth (chave + rótulo) = MÊS CORRENTE em que a análise é feita (fuso SP),
+  // não o mês predominante do extrato nem o que o cliente escolheu no upload: o cliente
+  // pede em junho a análise de um extrato de mar/abr/mai e isso é a "análise de junho".
+  const referenceMonthKey = currentMonthBRT();
   const rows = entries.map((entry, i) => ({
     entry,
     dedupeHash: allDedupeHashes[i] ?? "",
