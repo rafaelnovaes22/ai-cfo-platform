@@ -64,16 +64,21 @@ export const NormalizedLedgerEntrySchema = z.object({
 export type NormalizedLedgerEntry = z.infer<typeof NormalizedLedgerEntrySchema>;
 
 export const ClarityResultSchema = z.object({
-  entryId: z.string(),
+  // entryId/reason com default: o Gemini às vezes omite campos em respostas grandes
+  // (77+ lançamentos). Clarity é advisory (cap por entryId) — um item com entryId ""
+  // é só ignorado em applyClarityCaps, em vez de derrubar a análise inteira (ZodError).
+  entryId: z.string().default(""),
   clarity: z.enum(["clear", "partial", "ambiguous"]),
-  reason: z.string().max(240),
+  reason: z.string().max(240).default(""),
 });
 export type ClarityResult = z.infer<typeof ClarityResultSchema>;
 export const ClarityResultsSchema = z.array(ClarityResultSchema);
 export type ClarityResults = z.infer<typeof ClarityResultsSchema>;
 
 export const DreClassificationResultSchema = z.object({
-  entryId: z.string(),
+  // entryId com default "": o Gemini às vezes omite; resolveRealEntryId cai no índice
+  // da resposta como fallback, então não quebra o mapeamento (e evita ZodError).
+  entryId: z.string().default(""),
   category: z.string(),
   confidence: z.number().min(0).max(1),
   rationale: z.string().max(240).optional(),

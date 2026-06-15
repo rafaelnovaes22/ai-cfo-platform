@@ -42,6 +42,22 @@ describe("monthly-analysis classification agent schemas", () => {
       { entryId: "e1", category: "receita_bruta", confidence: 1.2 },
     ])).toThrow();
   });
+
+  it("tolera entryId omitido pelo LLM (Gemini) — default '' em vez de derrubar a análise", () => {
+    // Bug real (2026-06-15): o Gemini omitia entryId em algum item de respostas
+    // grandes; o schema estrito lançava ZodError e marcava a análise como failed.
+    const clarity = ClarityResultsSchema.parse([
+      { clarity: "clear", reason: "sem entryId" }, // entryId ausente
+      { entryId: "e2", clarity: "partial" }, // reason ausente
+    ]);
+    expect(clarity[0]?.entryId).toBe("");
+    expect(clarity[1]?.reason).toBe("");
+
+    const dre = DreClassificationResultsSchema.parse([
+      { category: "receita_bruta", confidence: 0.9 }, // entryId ausente
+    ]);
+    expect(dre[0]?.entryId).toBe("");
+  });
 });
 
 describe("monthly-analysis classification agent helpers", () => {
