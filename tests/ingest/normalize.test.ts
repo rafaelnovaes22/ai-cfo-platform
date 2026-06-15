@@ -216,6 +216,20 @@ describe("ingest/normalize — inferDirectionFromDescription", () => {
     }
   });
 
+  it("despesas de viagem corporativa viram débito (bug 2026-06-15: caía no fallback credit)", () => {
+    // "Diária viagem cobertura - Belo Horizonte" não tinha termo na lista → fallback
+    // credit → caixa do WhatsApp contava como entrada, divergindo do web (despesa).
+    expect(inferDirectionFromDescription("Diária viagem cobertura - Belo Horizonte")).toBe("debit");
+    expect(inferDirectionFromDescription("Hospedagem hotel BH - 2 diárias")).toBe("debit");
+    expect(inferDirectionFromDescription("Passagem aérea São Paulo")).toBe("debit");
+  });
+
+  it("viagem em receita de mídia continua null quando há termo de crédito", () => {
+    // guard: "cobertura/viagem" só viram crédito junto de venda/recebimento — senão a
+    // ambiguidade é resolvida para débito (deslocamento). Aqui há "recebimento" → null.
+    expect(inferDirectionFromDescription("recebimento cobertura viagem cliente")).toBeNull();
+  });
+
   it("entradas inequívocas viram crédito", () => {
     expect(inferDirectionFromDescription("recebimento cliente")).toBe("credit");
     expect(inferDirectionFromDescription("Venda de produto")).toBe("credit");

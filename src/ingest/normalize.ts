@@ -197,6 +197,11 @@ const DEBIT_DESC_TERMS = [
   // transporte
   "uber", "99", "taxi", "ifood", "combustivel", "gasolina", "etanol", "posto",
   "estacionamento", "pedagio",
+  // viagem corporativa (despesa de deslocamento — diária, hospedagem, passagem).
+  // "cobertura"/"viagem" aparecem em receita de mídia, mas só viram crédito junto
+  // de um termo de CREDIT_DESC_TERMS; sozinhas com "diaria"/"hotel" são saída.
+  "viagem", "viagens", "diaria", "diarias", "hotel", "pousada",
+  "passagem", "passagens",
   // consumo / mercado
   "mercado", "supermercado", "mercado livre", "mercadolivre", "alimentacao",
   "restaurante", "lanche", "cafe", "copa", "padaria", "almoco", "jantar", "refeicao",
