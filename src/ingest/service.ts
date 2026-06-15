@@ -183,35 +183,37 @@ export async function ingest(params: {
   const minEntries = (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
   const subscription = await db.subscription.findUniqueOrThrow({ where: { tenantId } });
 
-  // dedupeHashes computados sobre TODOS os lançamentos do arquivo (occurrence-index
-  // global por lote) para consistência antes de agrupar por mês.
   const directionInferredFlags = computeDirectionInferred(entries);
   const allDedupeHashes = computeDedupeHashes(entries);
-  const monthGroups = groupIndicesByMonth(entries.map((e) => e.date));
 
-  const months: IngestMonthResult[] = [];
-  for (const [referenceMonthOfBatch, indices] of [...monthGroups.entries()].sort()) {
-    const rows = indices.map((i) => ({
-      entry: entries[i]!,
-      dedupeHash: allDedupeHashes[i] ?? "",
-      inferred: directionInferredFlags[i] ?? false,
-    }));
-    const result = await persistMonth({
-      db,
-      tenantId,
-      referenceMonth: referenceMonthOfBatch,
-      rows,
-      minEntries,
-      subscriptionMode: subscription.mode,
-      skipAnalysis: params.skipAnalysis === true,
-      traceId: trace.id,
-    });
-    months.push({ referenceMonth: referenceMonthOfBatch, analysisId: result.analysisId, entryCount: rows.length });
-  }
-  persistSpan.end({ output: { monthCount: months.length, entryCount: entries.length } });
+  // UMA análise por extrato/período (decisão de produto 2026-06-15): todos os
+  // lançamentos do extrato ficam numa única MonthlyAnalysis. Assim a classificação
+  // cobre TODOS os meses juntos (meses pequenos não ficam sem classificação) e o
+  // plano/DRE/narrativa saem CONSOLIDADOS. A navegação por mês de DRE/Lançamentos/
+  // Caixa vem de filtro de competência sobre estes lançamentos (não de análises
+  // separadas). referenceMonth = mês predominante, só como chave (tenantId, mês).
+  const referenceMonthKey = predominantMonth(entries) ?? fallbackReferenceMonth;
+  const rows = entries.map((entry, i) => ({
+    entry,
+    dedupeHash: allDedupeHashes[i] ?? "",
+    inferred: directionInferredFlags[i] ?? false,
+  }));
+  const result = await persistMonth({
+    db,
+    tenantId,
+    referenceMonth: referenceMonthKey,
+    rows,
+    minEntries,
+    subscriptionMode: subscription.mode,
+    skipAnalysis: params.skipAnalysis === true,
+    traceId: trace.id,
+  });
+  const months: IngestMonthResult[] = [
+    { referenceMonth: referenceMonthKey, analysisId: result.analysisId, entryCount: rows.length },
+  ];
+  persistSpan.end({ output: { analysisId: result.analysisId, entryCount: entries.length } });
 
-  // Mês principal (mais lançamentos) para compat com consumidores de um único mês.
-  const principal = months.reduce((a, b) => (b.entryCount > a.entryCount ? b : a), months[0]!);
+  const principal = months[0]!;
   // Range real do extrato (para o caixa do WhatsApp agregar o período inteiro).
   const sortedDates = entries.map((e) => e.date).sort();
   const startDate = sortedDates[0];
