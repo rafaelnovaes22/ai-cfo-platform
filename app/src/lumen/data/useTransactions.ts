@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useAnalyses } from "./useAnalyses.ts";
+import { CATEGORY_LABELS } from "./categoryLabels.ts";
 
 export type TransactionType = "income" | "expense";
 export type TransactionSource = "manual" | "spreadsheet" | "pdf" | "pasted" | "ai";
@@ -40,32 +41,6 @@ export type NewTransaction = {
   source?: TransactionSource;
   notes?: string | null;
   analysis_id?: string;
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  receita_bruta: "Receita Bruta",
-  receita_financeira: "Receita Financeira",
-  outras_receitas: "Outras Receitas",
-  deducoes_receita: "Deduções de Receita",
-  cpv_cmv: "CPV / CMV",
-  custo_servicos: "Custo de Serviços",
-  despesas_pessoal: "Pessoal e Benefícios",
-  prolabore: "Pró-labore",
-  despesas_administrativas: "Despesas Administrativas",
-  despesas_comerciais: "Comercial e Marketing",
-  despesas_ti: "TI e Ferramentas",
-  despesas_viagem: "Viagens",
-  despesas_juridicas: "Jurídico",
-  despesas_financeiras: "Despesas Financeiras",
-  simples_nacional: "Simples Nacional",
-  irpj_csll: "IRPJ / CSLL",
-  capex: "Investimento (CAPEX)",
-  emprestimos_entrada: "Empréstimos (entrada)",
-  amortizacao_dividas: "Amortização de Dívidas",
-  transferencia_interna: "Transferência Interna",
-  depreciacao: "Depreciação",
-  outras_despesas: "Outras Despesas",
-  nao_classificado: "Não Classificado",
 };
 
 export const BACKEND_CATEGORIES = Object.entries(CATEGORY_LABELS).map(([key, label]) => ({

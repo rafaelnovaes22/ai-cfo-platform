@@ -5,11 +5,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { formatBRL } from "../data/analytics.ts";
+import { categoryLabel } from "../data/categoryLabels.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import DemoRibbon from "@/components/DemoRibbon.tsx";
 import IncomeOutcomeChart from "@/components/IncomeOutcomeChart.tsx";
 import { useCashFlow } from "../data/useCashFlow.ts";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 type CashFlowItem = {
@@ -27,16 +28,11 @@ type CashFlowMonth = {
 
 type CashFlowData = Record<MonthKey, CashFlowMonth>;
 
-const categoryMap = {
-  despesas_administrativas: "Despesas Administrativas",
-  despesas_comerciais: "Despesas Comerciais",
-  despesas_financeiras: "Despesas Financeiras",
-  despesas_juridicas: "Despesas Juridicas",
-  despesas_pessoal: "Despesas Pessoal",
-  despesas_ti: "Despesas Ti",
-  prolabore: "Prolabore",
-  receita_bruta: "Receita Bruta",
-  simples_nacional: "Simples Nacional",
+// "2026-04-01" → "01/04/2026" (sem new Date, evita shift de timezone).
+const fmtDateBR = (iso?: string): string => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return d && m && y ? `${d}/${m}/${y}` : iso;
 };
 
 export const getDateByGranularity = (period: string, granularity: string) => {
@@ -54,20 +50,37 @@ export const getDateByGranularity = (period: string, granularity: string) => {
   return period;
 };
 
+// A janela do caixa é derivada da granularidade + mês selecionado (activeAnalysis):
+// diário/semanal → o mês; mensal/trimestral → o ano do mês. Aproveita as 4 visões
+// em vez de um período fixo de 12 meses que ignorava o seletor.
+function periodForGranularity(
+  refMonth: string | undefined,
+  granularity: string,
+): { startDate: string; endDate: string } {
+  const base = refMonth ?? new Date().toISOString().slice(0, 7);
+  const [y, m] = base.split("-").map(Number);
+  const year = y ?? new Date().getFullYear();
+  if (granularity === "daily" || granularity === "weekly") {
+    const month = m ?? 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    const mm = String(month).padStart(2, "0");
+    return { startDate: `${year}-${mm}-01`, endDate: `${year}-${mm}-${String(lastDay).padStart(2, "0")}` };
+  }
+  // mensal / trimestral → ano inteiro do mês selecionado
+  return { startDate: `${year}-01-01`, endDate: `${year}-12-31` };
+}
+
 export default function CashFlow() {
-  const today = new Date();
-  const twelveMonthsAgo = new Date(
-    today.getFullYear(),
-    today.getMonth() - 12,
-    1
-  );
   const { activeAnalysis } = useAnalyses();
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters]: any = useState({
-    startDate: twelveMonthsAgo.toISOString().slice(0, 10),
-    endDate: today.toISOString().slice(0, 10),
-    granularity: "monthly",
-  });
+  const [granularity, setGranularity] = useState("daily");
+  const refMonth = activeAnalysis?.referenceMonth;
+
+  const filters = useMemo(() => {
+    const { startDate, endDate } = periodForGranularity(refMonth, granularity);
+    return { startDate, endDate, granularity };
+  }, [refMonth, granularity]);
+
   const { cashflow, refresh } = useCashFlow(filters);
   const { summary, chart, table, period } = cashflow;
 
@@ -89,8 +102,8 @@ export default function CashFlow() {
     return { entries: entriesTable, exits: exitsTable };
   };
 
-  const handlePeriodChange = (granularity: string) => {
-    setFilters((prev) => ({ ...prev, granularity }));
+  const handlePeriodChange = (newGranularity: string) => {
+    setGranularity(newGranularity);
   };
 
   const getColumns = () => {
@@ -183,12 +196,12 @@ export default function CashFlow() {
             <div className="col-span-1 grid grid-cols-1 md:grid-cols-2 gap-4">
               <DataCard
                 icon={CircleDollarSign}
-                title="Saldo Inicial (01/01/2026)"
+                title={`Saldo inicial${period?.startDate ? ` (${fmtDateBR(period.startDate)})` : ""}`}
                 amount={(summary.openingBalanceCents ?? 0) / 100}
               />
               <DataCard
                 icon={Wallet}
-                title="Saldo acumulado (30/01/2026)"
+                title={`Saldo acumulado${period?.endDate ? ` (${fmtDateBR(period.endDate)})` : ""}`}
                 amount={(summary.closingBalanceCents ?? 0) / 100}
               />
               <DataCard
@@ -344,7 +357,7 @@ function Row({
         }`}
       >
         {" "}
-        {categoryMap[data.category] || data.category}
+        {categoryLabel(data.category)}
       </td>
       <td
         className={`px-5 py-3.5 font-semibold bg-gray-100 dark:bg-[#0b0918] group-hover:bg-[#15152f]/5 text-right ${data.totalCents < 0 ? "text-[#ff9191]" : "text-[#29c89b]"}`}

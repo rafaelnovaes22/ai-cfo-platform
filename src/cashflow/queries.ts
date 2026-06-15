@@ -194,17 +194,21 @@ export async function queryOpeningBalance(
 ): Promise<number | null> {
   const db = getPrisma();
 
-  // Busca o openingBalanceCents da análise mensal imediatamente anterior ao startDate
-  const refMonth = startDate.toISOString().slice(0, 7); // "YYYY-MM"
-  const analysis = await db.monthlyAnalysis.findFirst({
-    where: {
-      tenantId,
-      referenceMonth: { lt: refMonth },
-      openingBalanceCents: { not: null },
-    },
-    orderBy: { referenceMonth: "desc" },
-    select: { openingBalanceCents: true },
-  });
-
-  return analysis?.openingBalanceCents ?? null;
+  // Saldo de abertura = acumulado de TUDO que o cliente já enviou antes do período
+  // (entradas − saídas). Não dependemos de um saldo bancário informado nem de
+  // MonthlyAnalysis.openingBalanceCents (que nunca era preenchido → saldo sempre 0).
+  // Se não há lançamentos anteriores, retorna 0 (início real do histórico).
+  const rows = await db.$queryRaw<{ direction: string; total: bigint | null }[]>`
+    SELECT "direction", SUM("amountCents") AS total
+    FROM "LedgerEntry"
+    WHERE "tenantId" = ${tenantId} AND "date" < ${startDate}
+    GROUP BY "direction"
+  `;
+  if (rows.length === 0) return 0;
+  let opening = 0;
+  for (const r of rows) {
+    const total = Number(r.total ?? 0);
+    opening += r.direction === "credit" ? total : -total;
+  }
+  return opening;
 }
