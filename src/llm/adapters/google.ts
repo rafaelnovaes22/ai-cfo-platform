@@ -5,7 +5,9 @@ import { join } from "path";
 import type { LlmRequest, LlmResponse, RouteConfig } from "@/llm/types.js";
 import { calculateCostCents } from "@/llm/cost.js";
 
-// Vertex AI — dados processados em southamerica-east1 (LGPD).
+// Vertex AI — região via GOOGLE_CLOUD_LOCATION. O Gemini 2.5 não existe em
+// southamerica-east1 (404); usamos us-central1 com SCCs do Google DPA (ADR-019,
+// transferência internacional amparada — Art. 33 LGPD; Vertex não treina com os dados).
 // Auth: GOOGLE_APPLICATION_CREDENTIALS_JSON (Railway) ou ADC (local).
 let _client: GoogleGenAI | null = null;
 
@@ -24,9 +26,10 @@ function getClient(): GoogleGenAI {
     const apiKey = process.env.GOOGLE_API_KEY;
 
     if (project) {
-      // PROD: Vertex AI (southamerica-east1) — dados não saem do Brasil, sem treino.
+      // PROD: Vertex AI. Região via env; default us-central1, onde o Gemini 2.5
+      // está disponível (ADR-019). Vertex não usa os dados para treino.
       setupCredentials();
-      const location = process.env.GOOGLE_CLOUD_LOCATION ?? "southamerica-east1";
+      const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
       _client = new GoogleGenAI({ vertexai: true, project, location });
     } else if (apiKey) {
       // DEV local: Google AI Studio via API key (só para testes/evals).

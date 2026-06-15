@@ -3,8 +3,9 @@ import type { LlmTask, RouteConfig } from "@/llm/types.js";
 // Roteamento por tarefa — único lugar que define qual provider/modelo usar.
 // Para trocar modelo de uma tarefa: editar aqui, sem tocar nos nós LangGraph/agentes.
 //
-// Todos os providers são Google (Vertex AI southamerica-east1) para conformidade LGPD:
-// dados não saem do Brasil e não são usados para treino de modelos externos.
+// Todos os providers são Google (Vertex AI). Região us-central1 (ADR-019: o Gemini
+// 2.5 não está em southamerica-east1; transferência internacional amparada por SCCs
+// do Google DPA — Art. 33 LGPD; Vertex não usa os dados para treino).
 // `eval-judge` usa gemini-2.5-flash (modelo maior) para independência de modelo em relação
 // aos geradores (gemini-2.5-flash-lite) — independência de modelo satisfaz C4 sem DPA Anthropic.
 const TASK_ROUTES: Record<LlmTask, RouteConfig> = {
