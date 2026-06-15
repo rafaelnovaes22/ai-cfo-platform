@@ -61,10 +61,10 @@
     --ink: 20 14% 12%;
     --ink-soft: 25 12% 28%;
 
-    --shadow-soft: 0 1px 2px hsl(20 14% 12% / 0.04),
-      0 2px 8px hsl(20 14% 12% / 0.04);
-    --shadow-card: 0 1px 3px hsl(20 14% 12% / 0.05),
-      0 4px 16px hsl(20 14% 12% / 0.04);
+    --shadow-soft:
+      0 1px 2px hsl(20 14% 12% / 0.04), 0 2px 8px hsl(20 14% 12% / 0.04);
+    --shadow-card:
+      0 1px 3px hsl(20 14% 12% / 0.05), 0 4px 16px hsl(20 14% 12% / 0.04);
   }
 }
 
@@ -166,7 +166,7 @@
   }
 
   .auth-input {
-    @apply h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] text-ink outline-none transition-colors focus:border-ink;
+    @apply h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] outline-none transition-colors focus:border-ink;
   }
 
   .scrollbar-thin {
