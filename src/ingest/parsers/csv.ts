@@ -1,4 +1,4 @@
-import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns, detectMonthFirst } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 // Parser CSV dedicado (texto puro), deliberadamente separado do xlsx. Motivos:
@@ -118,6 +118,9 @@ function buildEntries(dataRows: string[][], detected: ReturnType<typeof detectCo
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
+  // Orientação dia/mês detectada uma vez para o arquivo inteiro (consistência).
+  const monthFirst = detectMonthFirst(dataRows.map((c) => c[dateIdx]));
+
   for (const cells of dataRows) {
     if (cells.length === 0) continue; // linha em branco
 
@@ -125,7 +128,7 @@ function buildEntries(dataRows: string[][], detected: ReturnType<typeof detectCo
     const rawDescStr = (cells[descIdx] ?? "").trim();
     if (!rawDateStr && !rawDescStr) continue; // linha sem data e sem descrição
 
-    const date = rawDateStr ? normalizeDate(rawDateStr) : null;
+    const date = rawDateStr ? normalizeDate(rawDateStr, monthFirst) : null;
 
     let rawCents: number | null;
     let rawDirStr: string | null;
@@ -168,10 +171,12 @@ function parsePositional(dataRows: string[][]): ParseResult {
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
+  const monthFirst = detectMonthFirst(dataRows.map((c) => c[0]));
+
   for (const cells of dataRows) {
     if (cells.length === 0 || cells.every((c) => !c.trim())) continue;
 
-    const date = normalizeDate((cells[0] ?? "").trim());
+    const date = normalizeDate((cells[0] ?? "").trim(), monthFirst);
     const desc = (cells[1] ?? "").trim();
     const rawCents = normalizeAmountCents(cells[2] ?? "");
 

@@ -1,5 +1,5 @@
 // Parser para texto colado (clipboard) — TSV ou CSV simples
-import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns, detectMonthFirst } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 function splitRow(line: string): string[] {
@@ -31,6 +31,10 @@ export function parseText(raw: string): ParseResult {
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
+  // Orientação dia/mês detectada uma vez para o conteúdo colado (consistência).
+  const dateColIdx = dateIdx >= 0 ? dateIdx : 0;
+  const monthFirst = detectMonthFirst(dataLines.map((line) => splitRow(line)[dateColIdx]));
+
   for (const line of dataLines) {
     const cells = splitRow(line);
 
@@ -58,7 +62,7 @@ export function parseText(raw: string): ParseResult {
       rawCents = normalizeAmountCents(cells[2] ?? "");
     }
 
-    const date = normalizeDate(rawDate);
+    const date = normalizeDate(rawDate, monthFirst);
     if (!date || rawCents === null || !rawDesc.trim()) { orphanCount++; continue; }
 
     const resolved = resolveDirection(rawDir, rawCents);

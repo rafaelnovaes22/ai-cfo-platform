@@ -5,6 +5,7 @@ import {
   normalizeDirection,
   resolveDirection,
   detectColumns,
+  detectMonthFirst,
   inferDirectionFromDescription,
 } from "@/ingest/normalize.js";
 
@@ -30,6 +31,48 @@ describe("ingest/normalize — datas", () => {
     expect(normalizeDate("31/02/2026")).toBeNull(); // 31 de fevereiro
     expect(normalizeDate("texto livre")).toBeNull();
     expect(normalizeDate("")).toBeNull();
+  });
+
+  it("aceita ano de 2 dígitos com / e - (assume século 2000)", () => {
+    expect(normalizeDate("30/04/26")).toBe("2026-04-30");
+    expect(normalizeDate("01-12-26")).toBe("2026-12-01");
+  });
+
+  it("código contábil com ponto (1.1.01) NÃO é tratado como data", () => {
+    // Ano de 2 dígitos só com / ou -; ponto exige ano de 4 dígitos.
+    expect(normalizeDate("1.1.01")).toBeNull();
+    expect(normalizeDate("1.2.03")).toBeNull();
+    expect(normalizeDate("15.07.2026")).toBe("2026-07-15"); // ponto + ano 4 dígitos ainda vale
+  });
+
+  it("desambigua por campo > 12 dentro da própria linha", () => {
+    // 2º campo 16 > 12 → só pode ser dia → 1º campo é mês (MM/DD)
+    expect(normalizeDate("4/16/26")).toBe("2026-04-16");
+    // 1º campo 16 > 12 → só pode ser dia (DD/MM)
+    expect(normalizeDate("16/04/26")).toBe("2026-04-16");
+  });
+
+  it("data ambígua usa a orientação do arquivo (monthFirst)", () => {
+    expect(normalizeDate("5/10/26", false)).toBe("2026-10-05"); // DD/MM (default BR)
+    expect(normalizeDate("5/10/26", true)).toBe("2026-05-10"); // MM/DD (americano)
+  });
+});
+
+describe("ingest/normalize — detectMonthFirst (orientação por lote)", () => {
+  it("detecta MM/DD quando algum 2º campo > 12 e nenhum 1º campo > 12", () => {
+    expect(detectMonthFirst(["5/10/26", "4/16/26", "5/20/26"])).toBe(true);
+  });
+
+  it("detecta DD/MM (false) quando algum 1º campo > 12", () => {
+    expect(detectMonthFirst(["16/04/26", "5/10/26"])).toBe(false);
+  });
+
+  it("ambíguo (todos campos ≤ 12) → false (default BR)", () => {
+    expect(detectMonthFirst(["5/10/26", "3/8/26"])).toBe(false);
+  });
+
+  it("ignora valores não-data e vazios", () => {
+    expect(detectMonthFirst([null, undefined, "texto", "4/16/26"])).toBe(true);
   });
 });
 

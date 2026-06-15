@@ -7,42 +7,84 @@ import type { DirectionSource } from "@/ingest/types.js";
 // Groups[1..3] são garantidos pela regex; com noUncheckedIndexedAccess TS exige defaults.
 const g = (m: RegExpMatchArray, i: number): string => m[i] ?? "";
 
-const DATE_PATTERNS: Array<{ regex: RegExp; parse: (m: RegExpMatchArray) => string }> = [
-  // DD/MM/YYYY ou DD-MM-YYYY ou DD.MM.YYYY
-  {
-    regex: /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/,
-    parse: (m) => `${g(m, 3)}-${g(m, 2).padStart(2, "0")}-${g(m, 1).padStart(2, "0")}`,
-  },
-  // YYYY-MM-DD
-  {
-    regex: /^(\d{4})-(\d{2})-(\d{2})$/,
-    parse: (m) => `${g(m, 1)}-${g(m, 2)}-${g(m, 3)}`,
-  },
-  // MM/DD/YYYY (formato americano — menos comum no BR, mas aparece em exports)
-  {
-    regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-    parse: (m) => {
-      // Sem distinção real entre MM/DD e DD/MM — assume DD/MM (default BR). Drift histórico documentado.
-      return `${g(m, 3)}-${g(m, 2).padStart(2, "0")}-${g(m, 1).padStart(2, "0")}`;
-    },
-  },
-];
+// dia/mês com / ou - e ano de 2 OU 4 dígitos (DD/MM/YY, DD-MM-YYYY, MM/DD/YY…).
+const SLASH_DATE = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/;
+// dia/mês com . exige ano de 4 dígitos: evita que código contábil "1.1.01" vire data.
+const DOT_DATE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
+// ISO YYYY-MM-DD.
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-export function normalizeDate(raw: string): string | null {
-  const s = raw.trim();
-  for (const { regex, parse } of DATE_PATTERNS) {
-    const m = s.match(regex);
-    if (m) {
-      const iso = parse(m);
-      const d = new Date(`${iso}T00:00:00Z`);
-      if (isNaN(d.getTime())) continue;
-      // Validação estrita: rejeita overflow (ex.: 31/02 vira 03/03 em JS).
-      // Compara dia/mês/ano após round-trip via Date UTC.
-      const isoBack = d.toISOString().slice(0, 10);
-      if (isoBack === iso) return iso;
-    }
+// Ano de 2 dígitos → assume século 2000 ("26" → "2026").
+const expandYear = (y: string): string => (y.length === 2 ? `20${y}` : y);
+
+// Extrai [campo1, campo2, ano4] de uma data dia/mês (DD/MM ou MM/DD); null se não casar.
+function dayMonthParts(s: string): [string, string, string] | null {
+  const m = s.match(SLASH_DATE) ?? s.match(DOT_DATE);
+  return m ? [g(m, 1), g(m, 2), expandYear(g(m, 3))] : null;
+}
+
+// Valida via round-trip UTC; rejeita overflow (ex.: 31/02 vira 03/03 em JS).
+function validateIso(iso: string): string | null {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10) === iso ? iso : null;
+}
+
+/**
+ * Detecta se um conjunto de datas usa mês-primeiro (MM/DD, formato americano).
+ * Varre todas: um campo > 12 só pode ser dia, o que fixa a ordem. Se há evidência
+ * de mês-primeiro e nenhuma de dia-primeiro → true. Empate/ambíguo → false (default
+ * BR, DD/MM). Resolve o caso em que TODAS as datas do arquivo são ambíguas por linha.
+ */
+export function detectMonthFirst(raws: Array<string | null | undefined>): boolean {
+  let dayFirst = false;
+  let monthFirst = false;
+  for (const raw of raws) {
+    if (!raw) continue;
+    const parts = dayMonthParts(String(raw).trim());
+    if (!parts) continue;
+    const a = Number(parts[0]);
+    const b = Number(parts[1]);
+    if (a > 12 && b <= 12) dayFirst = true; // 1º campo só pode ser dia → DD/MM
+    if (b > 12 && a <= 12) monthFirst = true; // 2º campo só pode ser dia → MM/DD
   }
-  return null;
+  return monthFirst && !dayFirst;
+}
+
+/**
+ * Normaliza uma data para ISO (YYYY-MM-DD). Aceita ISO, DD/MM e MM/DD com ano de
+ * 2 ou 4 dígitos. Desambigua por linha quando um campo > 12; quando ambos ≤ 12,
+ * usa `monthFirst` (orientação do arquivo, ver detectMonthFirst). Default BR (DD/MM).
+ */
+export function normalizeDate(raw: string, monthFirst = false): string | null {
+  const s = raw.trim();
+
+  const iso = s.match(ISO_DATE);
+  if (iso) return validateIso(`${g(iso, 1)}-${g(iso, 2)}-${g(iso, 3)}`);
+
+  const parts = dayMonthParts(s);
+  if (!parts) return null;
+  const [f1, f2, year] = parts;
+  const n1 = Number(f1);
+  const n2 = Number(f2);
+
+  let day: string;
+  let month: string;
+  if (n1 > 12 && n2 <= 12) {
+    day = f1;
+    month = f2; // 1º campo só pode ser dia
+  } else if (n2 > 12 && n1 <= 12) {
+    month = f1;
+    day = f2; // 2º campo só pode ser dia → 1º é mês
+  } else if (monthFirst) {
+    month = f1;
+    day = f2;
+  } else {
+    day = f1;
+    month = f2;
+  }
+
+  return validateIso(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`);
 }
 
 // ── Valores ────────────────────────────────────────────────────────────────
