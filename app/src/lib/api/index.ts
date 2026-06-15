@@ -313,6 +313,14 @@ export const analyses = {
     ),
 };
 
+export const cashflow = {
+  list: async (parameters) => {
+    const query = new URLSearchParams(parameters);
+    return await apiFetch<any>(`/cashflow/?${query.toString()}`);
+  },
+  summary: () => apiFetch<any>("/cashflow/summary"),
+};
+
 export const exportApi = {
   // Baixa o PDF como binário (Blob) e dispara o download no navegador.
   // Antes usava apiFetch<void>, que fazia res.json() sobre o stream PDF e quebrava.
@@ -345,5 +353,6 @@ export const api = {
   analyses,
   notificationConfig,
   whatsapp,
+  cashflow,
   export: exportApi,
 };
