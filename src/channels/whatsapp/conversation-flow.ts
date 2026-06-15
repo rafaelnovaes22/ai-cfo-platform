@@ -124,33 +124,22 @@ async function transitionTo(
 
 /**
  * Calcula e envia o fluxo de caixa do período exato do extrato recém-ingerido.
- * O range vem das datas reais dos lançamentos (min/max), não de um mês fixo —
- * é o "conforme o extrato enviado". Sem LLM: pura agregação determinística.
+ * O range (startDate/endDate) vem das datas reais do extrato — "conforme o extrato
+ * enviado". Como um extrato pode cruzar meses (múltiplas análises), o range é do
+ * IngestResult, não de um único analysisId. getCashflow agrega por tenant+período.
  */
 async function sendStatementCashflow(
   phone: string,
   tenantId: string,
-  analysisId: string,
+  startDate: string,
+  endDate: string,
   adapter: IWhatsAppAdapter,
 ): Promise<CashflowResponse | null> {
-  const prisma = getPrisma()
-  const range = await prisma.ledgerEntry.aggregate({
-    where: { analysisId },
-    _min: { date: true },
-    _max: { date: true },
-  })
-  const min = range._min.date
-  const max = range._max.date
-  if (!min || !max) {
-    logger.warn({ tenantId, analysisId }, "whatsapp:ingest — sem range de datas; não há caixa a enviar")
-    return null
-  }
-
   const requestId = randomUUID()
   const cashflow = await getCashflow({
     tenantId,
-    startDate: min.toISOString().slice(0, 10),
-    endDate: max.toISOString().slice(0, 10),
+    startDate,
+    endDate,
     granularity: "daily",
     requestId,
   })
@@ -181,15 +170,15 @@ async function persistCashflowOutcome(
 }
 
 /**
- * Executa o ingest em background sem bloquear a resposta ao usuário.
- * Quando keepAllEntries=true (fluxo do aluno), já devolve o fluxo de caixa do
- * extrato automaticamente — o aluno não precisa pedir.
+ * Executa o ingest em background sem bloquear a resposta ao usuário. WhatsApp é
+ * canal student-only (cash-flow-only): havendo lançamentos, devolve o fluxo de caixa
+ * do extrato automaticamente, usando o range real do extrato (pode cruzar meses).
  */
 function ingestDocumentBackground(
   msg: WaIncomingMessage,
   tenantId: string,
   adapter: IWhatsAppAdapter,
-  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean; store?: IWhatsAppSessionStore },
+  opts: { skipAnalysis?: boolean; store?: IWhatsAppSessionStore },
 ): void {
   ingestDoc(msg, tenantId, adapter, opts).then(async (result) => {
     if ("error" in result) {
@@ -200,8 +189,8 @@ function ingestDocumentBackground(
       return
     }
     logger.info({ tenantId, analysisId: result.analysisId, entryCount: result.entryCount }, "whatsapp:ingest — concluído")
-    if (opts.keepAllEntries && result.entryCount > 0) {
-      const cashflow = await sendStatementCashflow(msg.from, tenantId, result.analysisId, adapter)
+    if (result.entryCount > 0 && result.startDate && result.endDate) {
+      const cashflow = await sendStatementCashflow(msg.from, tenantId, result.startDate, result.endDate, adapter)
       if (cashflow && opts.store) {
         await persistCashflowOutcome(opts.store, msg.from, cashflow)
       }
@@ -333,7 +322,6 @@ async function handleIngestDocument(
   if (msg.document?.id && session.tenantId) {
     ingestDocumentBackground(msg, session.tenantId, deps.adapter, {
       skipAnalysis: true,
-      keepAllEntries: true,
       store: deps.store,
     })
   }

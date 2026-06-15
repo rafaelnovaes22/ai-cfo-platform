@@ -29,10 +29,23 @@ export interface ParseResult {
   referenceMonth?: string; // YYYY-MM detectado do documento, quando aplicável
 }
 
+export interface IngestMonthResult {
+  referenceMonth: string; // YYYY-MM
+  analysisId: string;
+  entryCount: number;
+}
+
 export interface IngestResult {
+  // analysisId/referenceMonth apontam para o mês principal (mais lançamentos),
+  // mantidos para compat com consumidores que esperam um único mês.
   analysisId: string;
   referenceMonth: string;
-  entryCount: number;
+  entryCount: number; // total do extrato (soma de todos os meses)
   orphanCount: number;
   outcome: IngestOutcome;
+  // Um extrato pode cruzar meses: uma MonthlyAnalysis por mês de competência.
+  months?: IngestMonthResult[];
+  // Range real das datas do extrato (YYYY-MM-DD) — usado pelo caixa do WhatsApp.
+  startDate?: string;
+  endDate?: string;
 }

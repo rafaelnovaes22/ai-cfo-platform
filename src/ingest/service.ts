@@ -1,5 +1,5 @@
 import { getPrisma } from "@/persistence/prisma.js";
-import { Prisma } from "@prisma/client";
+import { Prisma, SubscriptionMode } from "@prisma/client";
 import { enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseCsv } from "@/ingest/parsers/csv.js";
@@ -11,7 +11,7 @@ import { inferDirectionFromDescription } from "@/ingest/normalize.js";
 import { computeDedupeHashes } from "@/ingest/dedupe.js";
 import { createTrace } from "@/observability/tracing.js";
 import { logger } from "@/observability/logger.js";
-import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
+import type { RawLedger, IngestResult, IngestMonthResult, IngestOutcome, ParseResult } from "@/ingest/types.js";
 
 // Default — pode ser sobrescrito por tenant em productConfig.monthlyAnalysis.minEntries (C8).
 const DEFAULT_MIN_INGEST_ENTRIES = 10;
@@ -62,6 +62,21 @@ export function filterEntriesByReferenceMonth(
  * keepAllEntries=true — o extrato pode cruzar meses, mas a MonthlyAnalysis precisa
  * de uma chave (tenantId, referenceMonth). Empate resolve pelo primeiro mês visto.
  */
+/**
+ * Agrupa os índices dos lançamentos por mês de competência (YYYY-MM da data).
+ * Base da distribuição multi-mês: cada grupo vira uma MonthlyAnalysis própria.
+ */
+export function groupIndicesByMonth(dates: string[]): Map<string, number[]> {
+  const byMonth = new Map<string, number[]>();
+  dates.forEach((date, i) => {
+    const ym = date.slice(0, 7);
+    const bucket = byMonth.get(ym) ?? [];
+    bucket.push(i);
+    byMonth.set(ym, bucket);
+  });
+  return byMonth;
+}
+
 export function predominantMonth(entries: RawLedger[]): string | null {
   if (entries.length === 0) return null;
   const counts = new Map<string, number>();
@@ -88,7 +103,6 @@ export async function ingest(params: {
   text?: string;          // para clipboard
   entries?: unknown[];    // para manual
   skipAnalysis?: boolean; // true = parse+store apenas, sem enfileirar LLM (ex: plano student)
-  keepAllEntries?: boolean; // true = não recorta por competência; ingere o extrato inteiro (ex: fluxo de caixa do aluno)
 }): Promise<IngestResult> {
   const { tenantId, referenceMonth, source } = params;
 
@@ -115,34 +129,12 @@ export async function ingest(params: {
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
-  // keepAllEntries (fluxo de caixa do aluno a partir de extrato): ingere todos os
-  // lançamentos do arquivo, sem recortar por competência — o período exibido vem do
-  // range real das datas. A competência-container usa o mês predominante só como chave.
-  let effectiveReferenceMonth = params.keepAllEntries
-    ? predominantMonth(parseResult.entries) ?? parseResult.referenceMonth ?? referenceMonth
-    : parseResult.referenceMonth ?? referenceMonth;
-  let { entries, ignoredCount: outOfReferenceMonthCount } = params.keepAllEntries
-    ? { entries: parseResult.entries, ignoredCount: 0 }
-    : filterEntriesByReferenceMonth(parseResult.entries, effectiveReferenceMonth);
-
-  // Guarda contra perda total silenciosa: se o mês efetivo (detectado no arquivo
-  // ou escolhido pelo usuário) não casa NENHUM lançamento mas há lançamentos,
-  // recai no mês predominante real dos dados em vez de descartar tudo.
-  if (!params.keepAllEntries && entries.length === 0 && parseResult.entries.length > 0) {
-    const fallbackMonth = predominantMonth(parseResult.entries);
-    if (fallbackMonth && fallbackMonth !== effectiveReferenceMonth) {
-      const refiltered = filterEntriesByReferenceMonth(parseResult.entries, fallbackMonth);
-      if (refiltered.entries.length > 0) {
-        logger.warn(
-          { tenantId, requested: effectiveReferenceMonth, fallback: fallbackMonth, recovered: refiltered.entries.length },
-          "Ingest: mês efetivo descartou tudo; recaindo no mês predominante dos lançamentos",
-        );
-        entries = refiltered.entries;
-        outOfReferenceMonthCount = refiltered.ignoredCount;
-        effectiveReferenceMonth = fallbackMonth;
-      }
-    }
-  }
+  // Um extrato pode cruzar meses. Ingerimos TODOS os lançamentos do arquivo e os
+  // distribuímos por mês de competência — uma MonthlyAnalysis por mês (ver loop de
+  // persistência abaixo), sem recorte. O referenceMonth do param/arquivo serve só de
+  // fallback para log/trace. Substitui o antigo keepAllEntries/recorte de mês único.
+  const entries = parseResult.entries;
+  const fallbackReferenceMonth = parseResult.referenceMonth ?? referenceMonth;
   // Heurística determinística de direção por descrição (zero-token). Corrige o
   // fallback "positivo = entrada" quando o extrato não traz coluna de tipo/sinal:
   // despesas óbvias (energia, aluguel, DAS, pró-labore) deixam de virar receita.
@@ -163,11 +155,9 @@ export async function ingest(params: {
     {
       source,
       requestedReferenceMonth: referenceMonth,
-      referenceMonth: effectiveReferenceMonth,
       tenantId,
       entryCount: entries.length,
       orphanCount,
-      outOfReferenceMonthCount,
       descriptionInferredCount,
     },
     "Ingest parse concluído",
@@ -175,35 +165,105 @@ export async function ingest(params: {
 
   if (entries.length === 0) {
     await trace.update({
-      metadata: {
-        outcome: "failed",
-        reason: "no_entries",
-        orphanCount,
-        outOfReferenceMonthCount,
-      },
+      metadata: { outcome: "failed", reason: "no_entries", orphanCount },
     });
-    return buildResult("failed", tenantId, effectiveReferenceMonth, 0, orphanCount);
+    return buildResult("failed", tenantId, fallbackReferenceMonth, 0, orphanCount);
   }
 
-  // 2. Upsert MonthlyAnalysis + ler threshold por tenant (C8) na mesma transação
+  // 2. Distribuir por mês de competência: uma MonthlyAnalysis por mês do extrato.
   const db = getPrisma();
   const persistSpan = trace.span({ name: "persist", input: { entryCount: entries.length } });
 
-  const { analysis, minEntries } = await db.$transaction(async (tx) => {
-    const tenant = await tx.tenant.findUniqueOrThrow({
-      where: { id: tenantId },
-      select: { productConfig: true },
-    });
-    const tenantConfig = (tenant.productConfig as Record<string, unknown> | null)?.monthlyAnalysis as
-      Record<string, unknown> | undefined;
-    const threshold =
-      (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
-    const subscription = await tx.subscription.findUniqueOrThrow({ where: { tenantId } });
+  const tenant = await db.tenant.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { productConfig: true },
+  });
+  const tenantConfig = (tenant.productConfig as Record<string, unknown> | null)?.monthlyAnalysis as
+    Record<string, unknown> | undefined;
+  const minEntries = (tenantConfig?.minEntries as number | undefined) ?? DEFAULT_MIN_INGEST_ENTRIES;
+  const subscription = await db.subscription.findUniqueOrThrow({ where: { tenantId } });
 
+  // dedupeHashes computados sobre TODOS os lançamentos do arquivo (occurrence-index
+  // global por lote) para consistência antes de agrupar por mês.
+  const directionInferredFlags = computeDirectionInferred(entries);
+  const allDedupeHashes = computeDedupeHashes(entries);
+  const monthGroups = groupIndicesByMonth(entries.map((e) => e.date));
+
+  const months: IngestMonthResult[] = [];
+  for (const [referenceMonthOfBatch, indices] of [...monthGroups.entries()].sort()) {
+    const rows = indices.map((i) => ({
+      entry: entries[i]!,
+      dedupeHash: allDedupeHashes[i] ?? "",
+      inferred: directionInferredFlags[i] ?? false,
+    }));
+    const result = await persistMonth({
+      db,
+      tenantId,
+      referenceMonth: referenceMonthOfBatch,
+      rows,
+      minEntries,
+      subscriptionMode: subscription.mode,
+      skipAnalysis: params.skipAnalysis === true,
+      traceId: trace.id,
+    });
+    months.push({ referenceMonth: referenceMonthOfBatch, analysisId: result.analysisId, entryCount: rows.length });
+  }
+  persistSpan.end({ output: { monthCount: months.length, entryCount: entries.length } });
+
+  // Mês principal (mais lançamentos) para compat com consumidores de um único mês.
+  const principal = months.reduce((a, b) => (b.entryCount > a.entryCount ? b : a), months[0]!);
+  // Range real do extrato (para o caixa do WhatsApp agregar o período inteiro).
+  const sortedDates = entries.map((e) => e.date).sort();
+  const startDate = sortedDates[0];
+  const endDate = sortedDates[sortedDates.length - 1];
+  const outcome: IngestOutcome = entries.length >= minEntries ? "completed" : "partial";
+
+  await trace.update({
+    metadata: {
+      outcome,
+      requestedReferenceMonth: referenceMonth,
+      months: months.map((m) => `${m.referenceMonth}:${m.entryCount}`),
+      entryCount: entries.length,
+      orphanCount,
+      minEntries,
+    },
+  });
+  await trace.end({ outcome, entryCount: entries.length });
+
+  return {
+    analysisId: principal.analysisId,
+    referenceMonth: principal.referenceMonth,
+    entryCount: entries.length,
+    orphanCount,
+    outcome,
+    months,
+    startDate,
+    endDate,
+  };
+}
+
+/**
+ * Persiste os lançamentos de UM mês de competência: upsert da MonthlyAnalysis
+ * (tenantId, referenceMonth), insert dedupado e disparo da análise LLM quando o mês
+ * tem lançamentos suficientes e não é cash-flow-only. Cada mês em sua própria
+ * transação de upsert — um mês que falhe não derruba os outros.
+ */
+async function persistMonth(args: {
+  db: ReturnType<typeof getPrisma>;
+  tenantId: string;
+  referenceMonth: string;
+  rows: { entry: RawLedger; dedupeHash: string; inferred: boolean }[];
+  minEntries: number;
+  subscriptionMode: SubscriptionMode;
+  skipAnalysis: boolean;
+  traceId?: string;
+}): Promise<{ analysisId: string; inserted: number }> {
+  const { db, tenantId, referenceMonth, rows, minEntries, subscriptionMode, skipAnalysis, traceId } = args;
+
+  const analysis = await db.$transaction(async (tx) => {
     const existing = await tx.monthlyAnalysis.findUnique({
-      where: { tenantId_referenceMonth: { tenantId, referenceMonth: effectiveReferenceMonth } },
+      where: { tenantId_referenceMonth: { tenantId, referenceMonth } },
     });
-
     if (existing) {
       await tx.ledgerEntry.deleteMany({ where: { analysisId: existing.id } });
       await tx.narrativeCard.deleteMany({ where: { analysisId: existing.id } });
@@ -215,7 +275,7 @@ export async function ingest(params: {
           generatedAt: null,
           deliveredAt: null,
           approvedAt: null,
-          mode: subscription.mode,
+          mode: subscriptionMode,
           dreJson: Prisma.DbNull,
           narrativeJson: Prisma.DbNull,
           actionPlanJson: Prisma.DbNull,
@@ -225,32 +285,26 @@ export async function ingest(params: {
           traceId: null,
         },
       });
-      return { analysis: existing, minEntries: threshold };
+      return existing;
     }
-
-    const created = await tx.monthlyAnalysis.create({
-      data: { tenantId, referenceMonth: effectiveReferenceMonth, status: "pending", mode: subscription.mode },
+    return tx.monthlyAnalysis.create({
+      data: { tenantId, referenceMonth, status: "pending", mode: subscriptionMode },
     });
-    return { analysis: created, minEntries: threshold };
   });
 
-  // 3. Bulk insert LedgerEntry — dedupado por conteúdo.
-  // skipDuplicates + unique(tenantId, dedupeHash) impedem que reenviar o mesmo
-  // extrato (ou um que sobreponha período já enviado) duplique lançamentos. Sem
-  // isto, o cashflow (agrega por tenant+período) inflava a cada reenvio.
-  const directionInferredFlags = computeDirectionInferred(entries);
-  const dedupeHashes = computeDedupeHashes(entries);
+  // Insert dedupado: skipDuplicates + unique(tenantId, dedupeHash) impedem que
+  // reenviar o mesmo extrato (ou um que sobreponha período) duplique lançamentos.
   const created = await db.ledgerEntry.createMany({
     skipDuplicates: true,
-    data: entries.map((e: RawLedger, i: number) => ({
+    data: rows.map(({ entry: e, dedupeHash, inferred }) => ({
       tenantId,
       analysisId: analysis.id,
       date: new Date(e.date),
       description: e.description,
       amountCents: e.amountCents,
       direction: e.direction,
-      directionInferred: directionInferredFlags[i] ?? false,
-      dedupeHash: dedupeHashes[i],
+      directionInferred: inferred,
+      dedupeHash,
       ...(e.confirmedCategory != null ? {
         predictedCategory:        e.confirmedCategory,
         confirmedCategory:        e.confirmedCategory,
@@ -259,55 +313,23 @@ export async function ingest(params: {
       } : {}),
     })),
   });
-  const skippedDuplicates = entries.length - created.count;
-  if (skippedDuplicates > 0) {
+  const skipped = rows.length - created.count;
+  if (skipped > 0) {
     logger.info(
-      { tenantId, analysisId: analysis.id, inserted: created.count, skippedDuplicates },
+      { tenantId, referenceMonth, analysisId: analysis.id, inserted: created.count, skippedDuplicates: skipped },
       "Ingest: lançamentos duplicados ignorados (já enviados antes)",
     );
   }
-  persistSpan.end({ output: { analysisId: analysis.id, minEntries, inserted: created.count } });
 
-  // 4. Determinar outcome e enfileirar classificação se possível
-  const outcome = entries.length >= minEntries ? "completed" : "partial";
-
-  // skipAnalysis=true: apenas parse+store, sem LLM — usado por planos que não geram análise (ex: student).
-  // Dados ficam disponíveis imediatamente para GET /cashflow/summary (direction+amountCents+date).
-  if (outcome === "completed" && !params.skipAnalysis) {
-    // Marca generating ANTES de enfileirar: se o job rodar e concluir muito rápido,
-    // um update de status feito depois reverteria o resultado de volta para generating.
-    await db.monthlyAnalysis.update({
-      where: { id: analysis.id },
-      data: { status: "generating" },
-    });
-    // LangGraph é o orquestrador único (#180); a cadeia BullMQ legada foi removida.
-    // Lançamentos com categoria confirmada na origem são pulados do LLM dentro do
-    // próprio grafo (dre-classifier lê confirmedCategory do estado).
-    await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId: trace.id });
-    logger.info({ analysisId: analysis.id, tenantId }, "Ingest: despachando para LangGraph");
+  // Dispara a análise LLM do mês quando há lançamentos suficientes e não é
+  // cash-flow-only (student/WhatsApp). Cada mês do extrato gera sua própria análise.
+  if (rows.length >= minEntries && !skipAnalysis) {
+    await db.monthlyAnalysis.update({ where: { id: analysis.id }, data: { status: "generating" } });
+    await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId });
+    logger.info({ analysisId: analysis.id, tenantId, referenceMonth }, "Ingest: despachando para LangGraph");
   }
 
-  await trace.update({
-    metadata: {
-      outcome,
-      analysisId: analysis.id,
-      requestedReferenceMonth: referenceMonth,
-      referenceMonth: effectiveReferenceMonth,
-      entryCount: entries.length,
-      orphanCount,
-      outOfReferenceMonthCount,
-      minEntries,
-    },
-  });
-  await trace.end({ outcome, entryCount: entries.length });
-
-  return {
-    analysisId: analysis.id,
-    referenceMonth: effectiveReferenceMonth,
-    entryCount: entries.length,
-    orphanCount,
-    outcome,
-  };
+  return { analysisId: analysis.id, inserted: created.count };
 }
 
 async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResult> {

@@ -3,6 +3,7 @@ import {
   filterEntriesByReferenceMonth,
   predominantMonth,
   computeDirectionInferred,
+  groupIndicesByMonth,
 } from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
 
@@ -115,5 +116,27 @@ describe("ingest/service predominantMonth (competência-container p/ extrato kee
       entry({ date: "2026-03-15" }),
       entry({ date: "2026-04-15" }),
     ])).toBe("2026-03");
+  });
+});
+
+describe("ingest/service groupIndicesByMonth (distribuição multi-mês do extrato)", () => {
+  it("agrupa os índices por mês de competência (extrato cruzando meses)", () => {
+    // Espelha o arquivo CID: março, abril e maio no mesmo extrato.
+    const dates = ["2026-03-17", "2026-04-01", "2026-04-30", "2026-05-10", "2026-03-20"];
+    const groups = groupIndicesByMonth(dates);
+    expect([...groups.keys()].sort()).toEqual(["2026-03", "2026-04", "2026-05"]);
+    expect(groups.get("2026-03")).toEqual([0, 4]);
+    expect(groups.get("2026-04")).toEqual([1, 2]);
+    expect(groups.get("2026-05")).toEqual([3]);
+  });
+
+  it("extrato de um único mês gera um só grupo", () => {
+    const groups = groupIndicesByMonth(["2026-04-01", "2026-04-15", "2026-04-30"]);
+    expect([...groups.keys()]).toEqual(["2026-04"]);
+    expect(groups.get("2026-04")).toEqual([0, 1, 2]);
+  });
+
+  it("lista vazia → mapa vazio", () => {
+    expect(groupIndicesByMonth([]).size).toBe(0);
   });
 });

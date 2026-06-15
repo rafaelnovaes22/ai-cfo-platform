@@ -31,12 +31,17 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         );
       }
 
-      const referenceMonth = (req.query as Record<string, string>)["referenceMonth"];
-      if (!referenceMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(referenceMonth)) {
+      // referenceMonth é OPCIONAL: o ingest distribui os lançamentos por mês de
+      // competência do próprio extrato (uma análise por mês). Quando informado,
+      // serve só de fallback para lançamentos sem data; ausente → usa o mês atual.
+      // Formato inválido (não-vazio e malformado) ainda é 400.
+      const referenceMonthRaw = (req.query as Record<string, string>)["referenceMonth"];
+      if (referenceMonthRaw && !/^\d{4}-(0[1-9]|1[0-2])$/.test(referenceMonthRaw)) {
         return reply.status(400).send(
-          problemDetail({ type: "https://api.aicfo.com.br/errors/bad-request", title: "Query ?referenceMonth=YYYY-MM obrigatório", status: 400 }),
+          problemDetail({ type: "https://api.aicfo.com.br/errors/bad-request", title: "Query ?referenceMonth deve ser YYYY-MM", status: 400 }),
         );
       }
+      const referenceMonth = referenceMonthRaw || new Date().toISOString().slice(0, 7);
 
       // Whitelist de extensões: antes, qualquer extensão desconhecida (.exe,
       // .zip, sem extensão) caía silenciosamente no parser CSV.
