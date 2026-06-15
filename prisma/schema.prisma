@@ -237,10 +237,16 @@ model LedgerEntry {
   confirmedCategory        String? // categoria final aceita
   correctionSource         String? // "rafael" | "client" | "auto-approved" | "needs_review"
 
+  // Chave de deduplicação por conteúdo (md5 de data|descrição|valor|direção + índice
+  // de ocorrência). Garante que reenviar o mesmo extrato não duplique lançamentos —
+  // o cashflow agrega por tenant+período e duplicatas inflavam o resultado. Ver src/ingest/dedupe.ts.
+  dedupeHash String?
+
   importedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@unique([tenantId, dedupeHash]) // bloqueia reinserção do mesmo lançamento (NULLs são distintos no Postgres)
   @@index([tenantId])
   @@index([analysisId])
   @@index([date])

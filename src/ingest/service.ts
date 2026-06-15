@@ -8,6 +8,7 @@ import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
 import { parsePdfStatement } from "@/ingest/parsers/pdf-statement.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { inferDirectionFromDescription } from "@/ingest/normalize.js";
+import { computeDedupeHashes } from "@/ingest/dedupe.js";
 import { createTrace } from "@/observability/tracing.js";
 import { logger } from "@/observability/logger.js";
 import type { RawLedger, IngestResult, ParseResult } from "@/ingest/types.js";
@@ -233,9 +234,14 @@ export async function ingest(params: {
     return { analysis: created, minEntries: threshold };
   });
 
-  // 3. Bulk insert LedgerEntry
+  // 3. Bulk insert LedgerEntry — dedupado por conteúdo.
+  // skipDuplicates + unique(tenantId, dedupeHash) impedem que reenviar o mesmo
+  // extrato (ou um que sobreponha período já enviado) duplique lançamentos. Sem
+  // isto, o cashflow (agrega por tenant+período) inflava a cada reenvio.
   const directionInferredFlags = computeDirectionInferred(entries);
-  await db.ledgerEntry.createMany({
+  const dedupeHashes = computeDedupeHashes(entries);
+  const created = await db.ledgerEntry.createMany({
+    skipDuplicates: true,
     data: entries.map((e: RawLedger, i: number) => ({
       tenantId,
       analysisId: analysis.id,
@@ -244,6 +250,7 @@ export async function ingest(params: {
       amountCents: e.amountCents,
       direction: e.direction,
       directionInferred: directionInferredFlags[i] ?? false,
+      dedupeHash: dedupeHashes[i],
       ...(e.confirmedCategory != null ? {
         predictedCategory:        e.confirmedCategory,
         confirmedCategory:        e.confirmedCategory,
@@ -252,7 +259,14 @@ export async function ingest(params: {
       } : {}),
     })),
   });
-  persistSpan.end({ output: { analysisId: analysis.id, minEntries } });
+  const skippedDuplicates = entries.length - created.count;
+  if (skippedDuplicates > 0) {
+    logger.info(
+      { tenantId, analysisId: analysis.id, inserted: created.count, skippedDuplicates },
+      "Ingest: lançamentos duplicados ignorados (já enviados antes)",
+    );
+  }
+  persistSpan.end({ output: { analysisId: analysis.id, minEntries, inserted: created.count } });
 
   // 4. Determinar outcome e enfileirar classificação se possível
   const outcome = entries.length >= minEntries ? "completed" : "partial";
