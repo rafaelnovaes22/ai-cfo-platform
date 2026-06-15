@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 // O nó dre-classifier deve: (1) enviar direction "unknown" ao LLM para entries com
-// direção inferida; (2) corrigir a direção (banco + estado) quando a categoria
-// prevista tem natureza contrária. Regressão da planilha CID & CID — arquivo sem
-// coluna Tipo preenchida e sem sinais fazia toda despesa virar receita.
+// direção inferida; (2) NUNCA alterar a direção (entrada/saída) pela categoria LLM —
+// o caixa é determinístico e segue o parsing do extrato. Só marca needs_review
+// quando a direção CONFIÁVEL do extrato contradiz uma categoria de alta confiança.
 
 const runChunkedMock = vi.fn();
 const updateManyMock = vi.fn();
@@ -118,7 +118,9 @@ describe("monthly-analysis/dre-classifier — direção inferida", () => {
     expect(inputs[0]?.direction).toBe("in");
   });
 
-  it("flipa direção no banco e no estado quando categoria de despesa contradiz credit inferido", async () => {
+  it("NÃO altera a direção inferida mesmo com categoria contrária (caixa determinístico)", async () => {
+    // Antes (#164/#190) a categoria flipava a direção inferida. Agora o caixa é fato
+    // do extrato: a direção segue o parsing, a categoria LLM alimenta só o DRE.
     runChunkedMock.mockResolvedValue({
       data: [{ entryId: "e1", category: "simples_nacional", confidence: 0.95 }],
       response: {},
@@ -130,20 +132,18 @@ describe("monthly-analysis/dre-classifier — direção inferida", () => {
       normalizedEntries: [normalized("e1", "in")],
     }));
 
-    // Write-back no banco com direção corrigida (escopado a tenant+analysis).
-    const updateWithDirection = updateManyMock.mock.calls
-      .map((c) => c[0] as { where: Record<string, unknown>; data: Record<string, unknown> })
-      .find((c) => c.data.direction !== undefined);
-    expect(updateWithDirection).toBeDefined();
-    expect(updateWithDirection?.data.direction).toBe("debit");
-    expect(updateWithDirection?.where).toMatchObject({
-      id: "e1",
-      tenantId: "tenant-1",
-      analysisId: "analysis-1",
-    });
+    // Nenhum write-back grava `direction` — nem para direção inferida.
+    const updatesWithDirection = updateManyMock.mock.calls
+      .map((c) => c[0] as { data: Record<string, unknown> })
+      .filter((c) => c.data.direction !== undefined);
+    expect(updatesWithDirection).toHaveLength(0);
 
-    // Estado corrigido para os nós downstream (financial-diagnosis, cashflow-risk).
-    expect(result.normalizedEntries?.[0]?.direction).toBe("out");
+    // A categoria predita É gravada (DRE), mas a direção do estado fica intocada.
+    const catUpdate = updateManyMock.mock.calls
+      .map((c) => c[0] as { data: Record<string, unknown> })
+      .find((c) => c.data.predictedCategory === "simples_nacional");
+    expect(catUpdate).toBeDefined();
+    expect(result.normalizedEntries === undefined || result.normalizedEntries[0]?.direction === "in").toBe(true);
   });
 
   it("NÃO flipa quando a direção é confiável, mesmo com categoria contrária", async () => {

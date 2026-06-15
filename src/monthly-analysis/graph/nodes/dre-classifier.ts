@@ -89,30 +89,26 @@ export async function dreClassifierNode(
     outputPayload: finalClassifications,
   });
 
-  // Correção de direção inferida: quando a categoria prevista tem natureza
-  // contrária à direção chutada no parse, a categoria vence. Direção confiável
-  // (extrato com sinal, coluna Tipo, manual) NUNCA é sobrescrita.
-  const directionFixById = new Map<string, "credit" | "debit">();
-  // Salvaguarda: direção confiável que contradiz a natureza da categoria com alta
-  // confiança não é sobrescrita, mas é marcada para revisão humana.
+  // PRINCÍPIO: o caixa é fato contábil, não pode ser probabilístico. A direção
+  // (entrada/saída) vem do parsing DETERMINÍSTICO do extrato (sinal/coluna Tipo >
+  // heurística zero-token > fallback) e NUNCA é alterada pela classificação LLM.
+  // A categoria do LLM alimenta apenas o DRE (aggregate-dre agrega por categoria,
+  // não por direção) — assim o saldo é reproduzível: o mesmo extrato → o mesmo
+  // caixa, sem oscilar quando o modelo muda a categoria de um lançamento ambíguo.
+  // Mantemos só a salvaguarda: direção CONFIÁVEL do extrato (não inferida) que uma
+  // categoria de alta confiança contradiz é marcada para revisão humana — sem
+  // sobrescrever o fato do documento.
   const reviewByDirection = new Set<string>();
   for (const c of finalClassifications) {
+    if (inferredById.has(c.entryId)) continue; // direção inferida: parsing determinístico manda
     const nature = CATEGORY_NATURE[c.category as DreCategory] ?? null;
     const current = (state.normalizedEntries ?? []).find((e) => e.entryId === c.entryId)?.direction;
     const contradicts = nature !== null && current !== undefined && NATURE_TO_FLOW[nature] !== current;
-    if (!contradicts) continue;
-
-    if (inferredById.has(c.entryId)) {
-      directionFixById.set(c.entryId, nature!);
-      logger.info(
-        { analysisId: state.analysisId, entryId: c.entryId, to: nature, category: c.category },
-        "monthly-analysis.dre-classifier: direção inferida corrigida pela natureza da categoria",
-      );
-    } else if (c.confidence >= DIRECTION_SAFEGUARD_CONFIDENCE) {
+    if (contradicts && c.confidence >= DIRECTION_SAFEGUARD_CONFIDENCE) {
       reviewByDirection.add(c.entryId);
       logger.warn(
         { analysisId: state.analysisId, entryId: c.entryId, category: c.category, confidence: c.confidence },
-        "monthly-analysis.dre-classifier: categoria contradiz direção confiável — marcado para revisão",
+        "monthly-analysis.dre-classifier: categoria contradiz direção confiável do extrato — marcado para revisão",
       );
     }
   }
@@ -125,12 +121,10 @@ export async function dreClassifierNode(
       const db = getPrisma();
       const results = await Promise.allSettled(
         finalClassifications.map((c) => {
-          const directionFix = directionFixById.has(c.entryId)
-            ? { direction: directionFixById.get(c.entryId) }
-            : {};
           const reviewFix = reviewByDirection.has(c.entryId)
             ? { correctionSource: "needs_review" }
             : {};
+          // Nunca grava `direction`: o caixa segue o parsing determinístico do extrato.
           return db.ledgerEntry.updateMany({
             // analysisId escopa o write-back à análise atual: um entryId alucinado
             // pelo LLM não pode sobrescrever lançamento de outra análise do tenant.
@@ -138,7 +132,6 @@ export async function dreClassifierNode(
             data: {
               predictedCategory: c.category,
               classificationConfidence: c.confidence,
-              ...directionFix,
               ...reviewFix,
             },
           });
@@ -159,21 +152,12 @@ export async function dreClassifierNode(
     }
   }
 
-  // Propaga a direção corrigida para os nós downstream (financial-diagnosis,
-  // cashflow-risk) — o estado é a fonte deles, não o banco.
-  const correctedNormalizedEntries =
-    directionFixById.size > 0
-      ? (state.normalizedEntries ?? []).map((e) => {
-          const nature = directionFixById.get(e.entryId);
-          return nature ? { ...e, direction: NATURE_TO_FLOW[nature] } : e;
-        })
-      : undefined;
-
+  // A direção persistida (e a do estado downstream) é a determinística do parsing —
+  // não há mais correção de direção pela categoria LLM, então nada a propagar aqui.
   return {
     classifiedEntries: finalClassifications,
     costs,
     traces,
     ...(businessProfile ? { businessProfile } : {}),
-    ...(correctedNormalizedEntries ? { normalizedEntries: correctedNormalizedEntries } : {}),
   };
 }
