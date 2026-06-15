@@ -150,6 +150,22 @@ describe("action-planning agent prompts", () => {
     expect(prompt).toMatch(/severity\s*==\s*"high"/);
   });
 
+  it("system prompt raciocina como CFO: postura, alocação de capital, materialidade e proibições", () => {
+    const prompt = buildSystemPrompt();
+    // Passo 1 — postura financeira condiciona o foco (saudável → alocar; estressada → preservar)
+    expect(prompt).toContain("POSTURA FINANCEIRA");
+    expect(prompt).toContain("ALOCAÇÃO DE CAPITAL");
+    expect(prompt).toContain("PRESERVAÇÃO DE CAIXA");
+    expect(prompt).toMatch(/reserva de caixa|runway/i);
+    expect(prompt).toMatch(/diversifica/i);
+    // Passo 2 — gate de materialidade (não micro-otimização)
+    expect(prompt).toContain("MATERIALIDADE");
+    // Passo 3 — higiene de dados / classificar lançamentos não é ação de CFO
+    expect(prompt.toLowerCase()).toContain("classificar lançamentos");
+    // Passo 4 — raciocínio setorial
+    expect(prompt).toMatch(/segmento/i);
+  });
+
   it("system prompt inclui regra de ordenação ROI das ações short", () => {
     const prompt = buildSystemPrompt();
     expect(prompt).toContain("ORDENAÇÃO DAS AÇÕES SHORT");
