@@ -41,6 +41,9 @@ export interface MonthlyAnalysisState {
   classifiedEntries?: DreClassificationResult[];
 
   dre?: DreLines;
+  // DRE em run-rate mensal por categoria (mês típico) — alimenta narrativa/plano,
+  // que raciocinam em termos mensais; o `dre` acima é o total do período (exibido).
+  monthlyDre?: DreLines;
   anomalies?: Anomaly[];
   marginDiagnosis?: MarginDiagnosis;
   cashflowRisk?: CashflowRisk;

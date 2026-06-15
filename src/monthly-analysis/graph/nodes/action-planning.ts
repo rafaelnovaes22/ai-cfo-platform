@@ -15,8 +15,11 @@ export async function actionPlanningNode(
       "action_planning: precondição violada — dre/diagnósticos ausentes",
     );
   }
+  // DRE em run-rate mensal por categoria (mês típico): o plano recomenda valores
+  // mensais (ex.: "reduza o pró-labore mensal para X"), então não pode usar o total
+  // de N meses do extrato como se fosse mensal. Fallback ao total se ausente.
   const input = {
-    dre: state.dre,
+    dre: state.monthlyDre ?? state.dre,
     anomalies: state.anomalies ?? [],
     narrativeCards: state.narrativeCards,
     marginDiagnosis: state.marginDiagnosis,

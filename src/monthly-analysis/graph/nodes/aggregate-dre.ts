@@ -1,4 +1,4 @@
-import { aggregateDre } from "@/dre-narrative/aggregator.js";
+import { aggregateDre, aggregateMonthlyRunRateDre } from "@/dre-narrative/aggregator.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 // Determinístico — sem LLM e sem decisão. Combina entries normalizadas +
@@ -21,9 +21,12 @@ export async function aggregateDreNode(
   const rows = (state.normalizedEntries ?? []).map((entry) => ({
     amountCents: entry.amountCents,
     direction: entry.direction,
+    month: entry.date.slice(0, 7),
     predictedCategory: classificationsById.get(entry.entryId) ?? null,
     confirmedCategory: confirmedById.get(entry.entryId) ?? null,
   }));
 
-  return { dre: aggregateDre(rows) };
+  // dre = total do período (exibido); monthlyDre = run-rate mensal por categoria
+  // (mês típico) que alimenta narrativa/plano. Ver aggregateMonthlyRunRateDre.
+  return { dre: aggregateDre(rows), monthlyDre: aggregateMonthlyRunRateDre(rows) };
 }
