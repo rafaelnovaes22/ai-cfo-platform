@@ -87,6 +87,7 @@ export async function callGoogle(config: RouteConfig, req: LlmRequest, signal?: 
         config: {
           systemInstruction: req.systemPrompt,
           responseMimeType: req.jsonMode ? "application/json" : "text/plain",
+          ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
           ...(config.thinkingBudget
             ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
             : {}),

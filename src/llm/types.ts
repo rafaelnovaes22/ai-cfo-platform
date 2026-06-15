@@ -27,6 +27,11 @@ export interface RouteConfig {
   provider: LlmProvider;
   model: string;
   thinkingBudget?: number;
+  // Temperatura de amostragem. Omitido = default do provider (Gemini ≈ 1.0, alto).
+  // Tarefas determinísticas (classificação, extração, diagnóstico, julgamento) usam
+  // 0 para o mesmo extrato gerar sempre a mesma saída — sem isso, itens ambíguos
+  // oscilam entre reingestões e o saldo do caixa muda.
+  temperature?: number;
 }
 
 export interface LlmRequest {

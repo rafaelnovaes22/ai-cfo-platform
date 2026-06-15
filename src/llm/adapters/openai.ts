@@ -33,6 +33,7 @@ export async function callOpenAI(config: RouteConfig, req: LlmRequest, signal?: 
       { role: "system", content: req.systemPrompt },
       { role: "user", content: req.userPrompt },
     ],
+    ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
     store: false, // LGPD: não armazenar inputs/outputs nos servidores da OpenAI
   }, { signal });
 
