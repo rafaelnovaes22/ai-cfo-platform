@@ -58,13 +58,8 @@ export function filterEntriesByReferenceMonth(
 }
 
 /**
- * Mês (YYYY-MM) com mais lançamentos. Usado como competência-container quando
- * keepAllEntries=true — o extrato pode cruzar meses, mas a MonthlyAnalysis precisa
- * de uma chave (tenantId, referenceMonth). Empate resolve pelo primeiro mês visto.
- */
-/**
  * Agrupa os índices dos lançamentos por mês de competência (YYYY-MM da data).
- * Base da distribuição multi-mês: cada grupo vira uma MonthlyAnalysis própria.
+ * Helper para análises por competência (ex.: DRE por mês na Fase 2).
  */
 export function groupIndicesByMonth(dates: string[]): Map<string, number[]> {
   const byMonth = new Map<string, number[]>();
@@ -129,12 +124,11 @@ export async function ingest(params: {
     return buildResult("failed", tenantId, referenceMonth, 0, 0);
   }
 
-  // Um extrato pode cruzar meses. Ingerimos TODOS os lançamentos do arquivo e os
-  // distribuímos por mês de competência — uma MonthlyAnalysis por mês (ver loop de
-  // persistência abaixo), sem recorte. O referenceMonth do param/arquivo serve só de
-  // fallback para log/trace. Substitui o antigo keepAllEntries/recorte de mês único.
+  // Uma análise por extrato, com TODOS os lançamentos. O mês de análise é o mês da
+  // SOLICITAÇÃO (param referenceMonth — mês atual no upload web e no WhatsApp), NÃO o
+  // mês predominante do extrato nem o mês do documento: um extrato pode cobrir vários
+  // meses e a análise é rotulada pelo mês em que o cliente a pediu.
   const entries = parseResult.entries;
-  const fallbackReferenceMonth = parseResult.referenceMonth ?? referenceMonth;
   // Heurística determinística de direção por descrição (zero-token). Corrige o
   // fallback "positivo = entrada" quando o extrato não traz coluna de tipo/sinal:
   // despesas óbvias (energia, aluguel, DAS, pró-labore) deixam de virar receita.
@@ -167,7 +161,7 @@ export async function ingest(params: {
     await trace.update({
       metadata: { outcome: "failed", reason: "no_entries", orphanCount },
     });
-    return buildResult("failed", tenantId, fallbackReferenceMonth, 0, orphanCount);
+    return buildResult("failed", tenantId, referenceMonth, 0, orphanCount);
   }
 
   // 2. Distribuir por mês de competência: uma MonthlyAnalysis por mês do extrato.
@@ -191,8 +185,11 @@ export async function ingest(params: {
   // cobre TODOS os meses juntos (meses pequenos não ficam sem classificação) e o
   // plano/DRE/narrativa saem CONSOLIDADOS. A navegação por mês de DRE/Lançamentos/
   // Caixa vem de filtro de competência sobre estes lançamentos (não de análises
-  // separadas). referenceMonth = mês predominante, só como chave (tenantId, mês).
-  const referenceMonthKey = predominantMonth(entries) ?? fallbackReferenceMonth;
+  // separadas).
+  // referenceMonth (chave + rótulo) = mês da SOLICITAÇÃO (param — mês atual no upload
+  // web e no WhatsApp), não o mês predominante do extrato: o cliente pede em junho a
+  // análise de um extrato de mar/abr/mai e isso é a "análise de junho".
+  const referenceMonthKey = referenceMonth;
   const rows = entries.map((entry, i) => ({
     entry,
     dedupeHash: allDedupeHashes[i] ?? "",
