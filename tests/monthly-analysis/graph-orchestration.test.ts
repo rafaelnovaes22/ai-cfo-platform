@@ -205,6 +205,11 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.dre).toBeDefined();
     expect(result.dre!.receitaLiquida).toBe(460000); // 4 × 100000+120000+110000+130000 = 460000
 
+    // monthlyDre (mês típico) precisa propagar pelo grafo — channel registrado no
+    // Annotation. Com 1 só competência (abril), run-rate = o próprio total.
+    expect(result.monthlyDre).toBeDefined();
+    expect(result.monthlyDre!.receitaLiquida).toBe(460000);
+
     // Diagnoses (fan-out paralelo: anomaly + margin + cashflow)
     expect(Array.isArray(result.anomalies)).toBe(true);
     expect(result.marginDiagnosis).toBeDefined();
