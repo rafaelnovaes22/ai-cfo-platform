@@ -45,6 +45,21 @@ describe("ingest/normalize — datas", () => {
     expect(normalizeDate("15.07.2026")).toBe("2026-07-15"); // ponto + ano 4 dígitos ainda vale
   });
 
+  it("DD/MM sem ano usa o defaultYear (ano do mês de referência)", () => {
+    expect(normalizeDate("01/09", false, "2026")).toBe("2026-09-01");
+    expect(normalizeDate("31-12", false, "2025")).toBe("2025-12-31");
+    expect(normalizeDate("4/16", true, "2026")).toBe("2026-04-16"); // MM/DD americano sem ano
+  });
+
+  it("DD/MM sem ano e sem defaultYear continua null (não inventa ano)", () => {
+    expect(normalizeDate("01/09")).toBeNull();
+    expect(normalizeDate("01/09", false)).toBeNull();
+  });
+
+  it("defaultYear não sobrescreve ano presente no dado", () => {
+    expect(normalizeDate("30/04/2024", false, "2026")).toBe("2024-04-30");
+  });
+
   it("desambigua por campo > 12 dentro da própria linha", () => {
     // 2º campo 16 > 12 → só pode ser dia → 1º campo é mês (MM/DD)
     expect(normalizeDate("4/16/26")).toBe("2026-04-16");

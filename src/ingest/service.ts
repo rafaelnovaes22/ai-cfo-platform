@@ -364,7 +364,8 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
       return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
     }
     case "text":
-      return parseText(params.text!);
+      // Datas coladas sem ano ("01/09") assumem o ano do mês de referência (YYYY-MM).
+      return parseText(params.text!, params.referenceMonth.slice(0, 4));
     case "manual":
       return parseManual(params.entries!);
   }

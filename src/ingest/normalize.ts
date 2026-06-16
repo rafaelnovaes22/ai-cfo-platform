@@ -8,7 +8,9 @@ import type { DirectionSource } from "@/ingest/types.js";
 const g = (m: RegExpMatchArray, i: number): string => m[i] ?? "";
 
 // dia/mês com / ou - e ano de 2 OU 4 dígitos (DD/MM/YY, DD-MM-YYYY, MM/DD/YY…).
-const SLASH_DATE = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/;
+// O ano é opcional: extrato/planilha colada costuma trazer só "01/09". Sem ano,
+// normalizeDate usa o `defaultYear` (ano do mês de referência escolhido no modal).
+const SLASH_DATE = /^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2}|\d{4}))?$/;
 // dia/mês com . exige ano de 4 dígitos: evita que código contábil "1.1.01" vire data.
 const DOT_DATE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
 // ISO YYYY-MM-DD.
@@ -17,10 +19,13 @@ const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 // Ano de 2 dígitos → assume século 2000 ("26" → "2026").
 const expandYear = (y: string): string => (y.length === 2 ? `20${y}` : y);
 
-// Extrai [campo1, campo2, ano4] de uma data dia/mês (DD/MM ou MM/DD); null se não casar.
+// Extrai [campo1, campo2, ano4] de uma data dia/mês (DD/MM ou MM/DD); ano = "" quando
+// ausente (só DD/MM). null se não casar.
 function dayMonthParts(s: string): [string, string, string] | null {
   const m = s.match(SLASH_DATE) ?? s.match(DOT_DATE);
-  return m ? [g(m, 1), g(m, 2), expandYear(g(m, 3))] : null;
+  if (!m) return null;
+  const rawYear = g(m, 3);
+  return [g(m, 1), g(m, 2), rawYear ? expandYear(rawYear) : ""];
 }
 
 // Valida via round-trip UTC; rejeita overflow (ex.: 31/02 vira 03/03 em JS).
@@ -53,10 +58,11 @@ export function detectMonthFirst(raws: Array<string | null | undefined>): boolea
 
 /**
  * Normaliza uma data para ISO (YYYY-MM-DD). Aceita ISO, DD/MM e MM/DD com ano de
- * 2 ou 4 dígitos. Desambigua por linha quando um campo > 12; quando ambos ≤ 12,
- * usa `monthFirst` (orientação do arquivo, ver detectMonthFirst). Default BR (DD/MM).
+ * 2 ou 4 dígitos — ou SEM ano, caso em que usa `defaultYear` (ano do mês de
+ * referência). Desambigua por linha quando um campo > 12; quando ambos ≤ 12, usa
+ * `monthFirst` (orientação do arquivo, ver detectMonthFirst). Default BR (DD/MM).
  */
-export function normalizeDate(raw: string, monthFirst = false): string | null {
+export function normalizeDate(raw: string, monthFirst = false, defaultYear?: string): string | null {
   const s = raw.trim();
 
   const iso = s.match(ISO_DATE);
@@ -64,7 +70,9 @@ export function normalizeDate(raw: string, monthFirst = false): string | null {
 
   const parts = dayMonthParts(s);
   if (!parts) return null;
-  const [f1, f2, year] = parts;
+  const [f1, f2, parsedYear] = parts;
+  const year = parsedYear || (defaultYear ?? "");
+  if (!year) return null; // DD/MM sem ano e sem defaultYear: não há como montar a data
   const n1 = Number(f1);
   const n2 = Number(f2);
 

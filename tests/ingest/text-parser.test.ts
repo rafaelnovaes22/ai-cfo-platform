@@ -34,6 +34,26 @@ describe("ingest/parsers/text — clipboard TSV/CSV", () => {
     expect(r.entries[0]?.amountCents).toBe(500_000);
   });
 
+  it("paste sem ano usa o defaultYear (espelha o placeholder do textarea)", () => {
+    const raw = [
+      "Data\tDescrição\tValor",
+      "01/09\tCliente Vértice MRR\t14200",
+      "02/09\tMeta Ads\t-22840",
+    ].join("\n");
+    const r = parseText(raw, "2026");
+    expect(r.orphanCount).toBe(0);
+    expect(r.entries).toHaveLength(2);
+    expect(r.entries[0]).toMatchObject({ date: "2026-09-01", direction: "credit" });
+    expect(r.entries[1]).toMatchObject({ date: "2026-09-02", direction: "debit" });
+  });
+
+  it("paste sem ano e sem defaultYear vira órfão (não inventa ano)", () => {
+    const raw = "Data\tDescrição\tValor\n01/09\tX\t100,00\n02/09\tY\t200,00";
+    const r = parseText(raw);
+    expect(r.entries).toHaveLength(0);
+    expect(r.orphanCount).toBe(2);
+  });
+
   it("retorna vazio se < 2 linhas", () => {
     expect(parseText("").entries).toHaveLength(0);
     expect(parseText("apenas header").entries).toHaveLength(0);

@@ -8,7 +8,7 @@ function splitRow(line: string): string[] {
   return line.split(";").map((c) => c.trim()); // separador BR padrão
 }
 
-export function parseText(raw: string): ParseResult {
+export function parseText(raw: string, defaultYear?: string): ParseResult {
   const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return { entries: [], orphanCount: 0 };
 
@@ -62,7 +62,7 @@ export function parseText(raw: string): ParseResult {
       rawCents = normalizeAmountCents(cells[2] ?? "");
     }
 
-    const date = normalizeDate(rawDate, monthFirst);
+    const date = normalizeDate(rawDate, monthFirst, defaultYear);
     if (!date || rawCents === null || !rawDesc.trim()) { orphanCount++; continue; }
 
     const resolved = resolveDirection(rawDir, rawCents);
