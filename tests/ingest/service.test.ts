@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   filterEntriesByReferenceMonth,
   predominantMonth,
+  lastClosedMonth,
   computeDirectionInferred,
   groupIndicesByMonth,
 } from "@/ingest/service.js";
@@ -116,6 +117,36 @@ describe("ingest/service predominantMonth (competência-container p/ extrato kee
       entry({ date: "2026-03-15" }),
       entry({ date: "2026-04-15" }),
     ])).toBe("2026-03");
+  });
+});
+
+describe("ingest/service lastClosedMonth (rótulo da análise = último mês fechado)", () => {
+  it("retorna o mês mais recente do extrato anterior ao mês corrente", () => {
+    // Extrato mar/abr/mai pedido em junho → rótulo = maio (último mês fechado).
+    expect(lastClosedMonth([
+      entry({ date: "2026-03-15" }),
+      entry({ date: "2026-04-10" }),
+      entry({ date: "2026-05-28" }),
+    ], "2026-06")).toBe("2026-05");
+  });
+
+  it("exclui o mês corrente (aberto) ao escolher o rótulo", () => {
+    // Há lançamentos de junho (mês corrente), mas o último FECHADO é maio.
+    expect(lastClosedMonth([
+      entry({ date: "2026-05-20" }),
+      entry({ date: "2026-06-03" }),
+    ], "2026-06")).toBe("2026-05");
+  });
+
+  it("cai para o mês corrente quando só há lançamentos dele", () => {
+    expect(lastClosedMonth([
+      entry({ date: "2026-06-01" }),
+      entry({ date: "2026-06-15" }),
+    ], "2026-06")).toBe("2026-06");
+  });
+
+  it("cai para o mês corrente quando o extrato está vazio", () => {
+    expect(lastClosedMonth([], "2026-06")).toBe("2026-06");
   });
 });
 

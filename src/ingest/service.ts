@@ -83,6 +83,24 @@ export function currentMonthBRT(): string {
   return mm && yyyy ? `${yyyy}-${mm}` : new Date().toISOString().slice(0, 7);
 }
 
+/**
+ * Último mês fechado (YYYY-MM) presente no extrato: o mês mais recente com
+ * lançamentos que seja anterior ao mês corrente — o mês corrente está aberto e
+ * não conta como "fechado". É só o RÓTULO da análise (indica o período que ela
+ * representa), não a janela de dados (consolidada por analysisId). `current` é
+ * injetável para teste determinístico.
+ * Fallback: sem nenhum mês fechado (só lançamentos do mês corrente/futuros),
+ * usa o mês corrente — não há mês fechado a rotular.
+ */
+export function lastClosedMonth(entries: RawLedger[], current = currentMonthBRT()): string {
+  let best: string | null = null;
+  for (const e of entries) {
+    const m = e.date.slice(0, 7);
+    if (m < current && (best === null || m > best)) best = m;
+  }
+  return best ?? current;
+}
+
 export function predominantMonth(entries: RawLedger[]): string | null {
   if (entries.length === 0) return null;
   const counts = new Map<string, number>();
@@ -197,10 +215,12 @@ export async function ingest(params: {
   // plano/DRE/narrativa saem CONSOLIDADOS. A navegação por mês de DRE/Lançamentos/
   // Caixa vem de filtro de competência sobre estes lançamentos (não de análises
   // separadas).
-  // referenceMonth (chave + rótulo) = MÊS CORRENTE em que a análise é feita (fuso SP),
-  // não o mês predominante do extrato nem o que o cliente escolheu no upload: o cliente
-  // pede em junho a análise de um extrato de mar/abr/mai e isso é a "análise de junho".
-  const referenceMonthKey = currentMonthBRT();
+  // referenceMonth (chave + rótulo) = ÚLTIMO MÊS FECHADO presente no extrato — só
+  // indica o período que a análise representa, não filtra a janela de dados (que é
+  // consolidada por analysisId). O mês corrente está aberto, então não rotula: um
+  // extrato de mar/abr/mai pedido em junho vira a "análise de maio". Fallback p/ o
+  // mês corrente quando só há lançamentos dele.
+  const referenceMonthKey = lastClosedMonth(entries);
   const rows = entries.map((entry, i) => ({
     entry,
     dedupeHash: allDedupeHashes[i] ?? "",
