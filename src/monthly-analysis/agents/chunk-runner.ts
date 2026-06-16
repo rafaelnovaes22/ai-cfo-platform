@@ -17,7 +17,11 @@ export interface ChunkConfig {
 }
 
 const DEFAULT_CHUNK_SIZE = 15;
-const DEFAULT_CONCURRENCY = 4;
+// 6 cobre 1 onda para extratos de até ~90 lançamentos (chunkSize 15) — o caso
+// típico processa todos os lotes em paralelo em vez de 2 ondas. Era 4 (calibrado
+// p/ Vertex southamerica-east1); us-central1 (ADR-019) tem throughput maior e o
+// adapter já faz retry de 429/RESOURCE_EXHAUSTED. Ajuste fino via env.
+const DEFAULT_CONCURRENCY = 6;
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -66,10 +70,10 @@ function aggregateResponses(responses: LlmResponse[]): LlmResponse {
  * limite de concorrência), preservando a ordem e agregando a telemetria.
  *
  * Por quê: nós como normalize/clarity/dre-classifier geram output proporcional
- * ao nº de lançamentos numa única chamada LLM. No Vertex southamerica-east1
- * (throughput limitado pela LGPD/ADR-009), uma chamada de ~6k tokens de saída
- * leva ~90s. Dividir em lotes concorrentes reduz o wall-clock ao lote mais
- * lento (não à soma), sem mudar o contrato de saída por entryId.
+ * ao nº de lançamentos numa única chamada LLM — uma chamada de ~6k tokens de saída
+ * leva dezenas de segundos no Vertex. Dividir em lotes concorrentes reduz o
+ * wall-clock ao lote mais lento (não à soma), sem mudar o contrato de saída por
+ * entryId. A concorrência default cobre o caso típico em 1 onda (ver constantes).
  *
  * Garantias:
  * - items vazio → telemetria noop, sem chamar LLM.
