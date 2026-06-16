@@ -1,13 +1,7 @@
-import { callLlm } from "@/llm/index.js";
 import type { LlmResponse } from "@/llm/types.js";
 import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
-import { parseAgentJson, type MonthlyAgentRunOptions } from "@/monthly-analysis/agents/classification.js";
-import {
-  buildSystemPrompt,
-  buildUserPrompt,
-  type FinancialQaReviewAgentInput,
-} from "@/monthly-analysis/agents/prompts/financial-qa-review.js";
-import { QaReviewSchema, type ActionPlanItemDraft, type NarrativeCardDraft, type QaReview } from "@/monthly-analysis/schemas/agents.js";
+import { type MonthlyAgentRunOptions } from "@/monthly-analysis/agents/classification.js";
+import { type ActionPlanItemDraft, type NarrativeCardDraft, type QaReview } from "@/monthly-analysis/schemas/agents.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 export type { FinancialQaReviewAgentInput } from "@/monthly-analysis/agents/prompts/financial-qa-review.js";
@@ -22,8 +16,7 @@ export interface FinancialQaReviewRunOptions extends MonthlyAgentRunOptions {
  * Audita a análise mensal antes da publicação. Detecta number_mismatch, missing_doneWhen,
  * contradiction (narrativa vs. diagnóstico), missing_evidence (anomalia high sem ação) e
  * unfounded_claim. Não reescreve conteúdo — apenas emite issues estruturados e retryTargets.
- *
- * Falha rápido se o LLM devolver JSON malformado ou inválido contra QaReviewSchema.
+ * Determinístico: regras explícitas, sem LLM.
  */
 export async function runFinancialQaReviewAgent(
   state: Pick<
@@ -37,10 +30,9 @@ export async function runFinancialQaReviewAgent(
 }
 
 /**
- * Variante com telemetria. O pré-checador determinístico é a ÚNICA fonte de
- * bloqueio: se ele reprova, o LLM nem é chamado (retorna NOOP). Se ele aprova,
- * o LLM roda apenas como ADVISORY — seus issues viram `warning` e não reprovam
- * a publicação nem disparam retry.
+ * Variante com telemetria. 100% determinístico: o pré-checador é o gate único e
+ * auditável (sem LLM no caminho crítico). latencyMs=0 e response=NOOP — não há
+ * chamada de modelo.
  */
 export async function runFinancialQaReviewAgentWithTelemetry(
   state: Pick<
@@ -62,46 +54,15 @@ export async function runFinancialQaReviewAgentWithTelemetry(
     );
   }
 
-  const deterministicReview = runDeterministicFinancialQaReview(state);
-  if (!deterministicReview.publishable) {
-    return { data: deterministicReview, response: NOOP_LLM_RESPONSE, latencyMs: 0 };
-  }
-
-  const input: FinancialQaReviewAgentInput = {
-    dre: state.dre,
-    anomalies: state.anomalies,
-    marginDiagnosis: state.marginDiagnosis,
-    cashflowRisk: state.cashflowRisk,
-    narrativeCards: state.narrativeCards,
-    actionPlan: state.actionPlan,
-    referenceMonth: options.referenceMonth,
-    segment: options.segment,
-    taxRegime: options.taxRegime,
-  };
-
-  const start = Date.now();
-  const response = await callLlm({
-    task: "financial-qa-review",
-    systemPrompt: buildSystemPrompt(),
-    userPrompt: buildUserPrompt(input),
-    tenantId: options.tenantId,
-    traceId: options.traceId,
-    jsonMode: true,
-  });
-
-  // LLM revisor é ADVISORY (decisão 2026-06-03): o pré-checador determinístico
-  // acima é a ÚNICA fonte de bloqueio. Os issues do LLM entram como `warning`
-  // (telemetria/auditoria) e não reprovam a publicação nem disparam retry — caso
-  // contrário, falsos-positivos do LLM (ex.: CONTRADICTION em empresa saudável)
-  // prendem análises coerentes em needsReview. Como o determinístico já aprovou
-  // neste ponto, publishable=true e retryTargets=[].
-  const llmReview = parseAgentJson(response.content, QaReviewSchema);
-  const advisory: QaReview = {
-    publishable: true,
-    issues: llmReview.issues.map((issue) => ({ ...issue, severity: "warning" as const })),
-    retryTargets: [],
-  };
-  return { data: advisory, response, latencyMs: Date.now() - start };
+  // QA financeiro é 100% determinístico: regras explícitas e auditáveis são o gate
+  // único. O LLM advisory que rodava aqui foi removido — checava os MESMOS 6 códigos
+  // de forma probabilística, não bloqueava (advisory desde 2026-06-03) e custava ~40s
+  // no caminho crítico. Em financeiro a rede para o não-previsto é revisão humana
+  // (needsReview / SHADOW), não outro probabilístico. `options` fica reservado para
+  // um eventual advisory amostrado fora do caminho crítico.
+  void options;
+  const review = runDeterministicFinancialQaReview(state);
+  return { data: review, response: NOOP_LLM_RESPONSE, latencyMs: 0 };
 }
 
 type QaIssue = QaReview["issues"][number];
