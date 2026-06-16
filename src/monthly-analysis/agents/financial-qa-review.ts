@@ -337,11 +337,13 @@ function isDoneWhenMeasurable(doneWhen: string): boolean {
   // Verbo de resultado observável — família ampla por radical ("reduz" cobre
   // redução/reduzido/reduzindo; "implant" cobre implantado/implantação etc.).
   const hasResultVerb =
-    /assinad|registrad|medid|public|reduz|aplicad|implement|implant|renegoci|revisad|homologad|aprovad|comparad|recuperad|recebiment|economi|cancelad|cortad|atingid|alcanc|alcanç|abaixo|acima|excede|saldo|confirmad|vis[íi]vel/.test(text);
+    /assinad|registrad|medid|public|reduz|aplicad|implement|implant|renegoci|revisad|homologad|aprovad|comparad|recuperad|recebiment|economi|cancelad|cortad|atingid|alcanc|alcanç|abaixo|acima|excede|saldo|confirmad|vis[íi]vel|realizad|definid|formalizad|totalizand|lançad|lancad|gerand|document|estabelecid|criad/.test(text);
   // Âncora temporal/documento concreta — torna a meta verificável no tempo,
   // mesmo quando o verbo não estiver na lista (ex.: "...na próxima fatura").
+  // "mensal/mensais" são âncoras de recorrência comuns no plano (receita/aporte
+  // mensal) e não casam "mês|meses" — daí o termo próprio.
   const hasTemporalAnchor =
-    /m[êe]s|meses|fatura|folha|fechamento|pr[óo]xim|trimestre|semana|\bdias?\b|balanc|extrato|demonstrativ|contrato|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{4}-\d{2}/.test(text);
+    /m[êe]s|meses|mensal|mensais|fatura|folha|fechamento|pr[óo]xim|trimestre|semana|\bdias?\b|balanc|extrato|demonstrativ|contrato|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{4}-\d{2}/.test(text);
   return hasNumberOrDeadline && (hasResultVerb || hasTemporalAnchor);
 }
 
