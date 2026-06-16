@@ -526,6 +526,12 @@ describe("MISSING_DONEWHEN — regressão: doneWhen mensuráveis reais não repr
     "Contratos revisados e economias contratuais de pelo menos 15% aplicadas nas próximas faturas.",
     "Programa implantado com indicadores de redução de custos de pessoal em pelo menos 10% após 6 meses.",
     "DespesasPessoal + PróLabore não excedem R$ 69.200 no fechamento do mês seguinte",
+    // Capturados no LangSmith em 2026-06-16 (trace 019ed0d2): reprovados por
+    // falso-positivo (verbos realizad/totalizand/lançad/gerand fora da whitelist
+    // e "mensal/mensais" sem casar a âncora temporal), apesar de terem R$/número.
+    "Primeiros 3 aportes mensais de R$ 2.300,00 realizados na conta de reserva, totalizando R$ 6.900,00, e plano de reserva formalizado.",
+    "Nova linha de serviço lançada e com pelo menos 2 clientes pagantes, gerando R$ 5.000 de receita mensal recorrente.",
+    "Meta de reserva de caixa definida e primeira alocação de R$ 3.000 realizada para uma conta separada, com plano de aportes mensais documentado.",
   ];
 
   it("não emite MISSING_DONEWHEN para doneWhen mensuráveis reais", () => {

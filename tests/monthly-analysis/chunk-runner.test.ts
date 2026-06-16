@@ -147,11 +147,16 @@ describe("chunk-runner _internals", () => {
       concurrency: 3,
     });
 
-    process.env.MONTHLY_ANALYSIS_CHUNK_SIZE = "abc"; // inválido → default 15
+    delete process.env.MONTHLY_ANALYSIS_CHUNK_SIZE;
+    delete process.env.MONTHLY_ANALYSIS_CHUNK_CONCURRENCY;
+    expect(_internals.resolveChunkConfig().chunkSize).toBe(15); // default
+    expect(_internals.resolveChunkConfig().concurrency).toBe(6); // default (us-central1)
+
+    process.env.MONTHLY_ANALYSIS_CHUNK_SIZE = "abc"; // inválido → cai no default 15
     expect(_internals.resolveChunkConfig().chunkSize).toBe(15);
 
-    process.env.MONTHLY_ANALYSIS_CHUNK_CONCURRENCY = "6";
-    expect(_internals.resolveChunkConfig().concurrency).toBe(6);
+    process.env.MONTHLY_ANALYSIS_CHUNK_CONCURRENCY = "8"; // env sobrepõe o default
+    expect(_internals.resolveChunkConfig().concurrency).toBe(8);
   });
 
   it("aggregateResponses devolve noop para lista vazia", () => {
