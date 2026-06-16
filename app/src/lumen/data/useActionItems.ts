@@ -26,39 +26,48 @@ export function useActionItems() {
   const [error, setError] = useState<Error | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const refresh = useCallback(async (options?: { silent?: boolean }) => {
-    if (!user || !activeId) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-    if (!options?.silent) setLoading(true);
-    setError(null);
-    try {
-      const { items: raw, analysisStatus } = await api.actionPlan.get(activeId);
-      setItems(raw);
-      setStatus(analysisStatus);
-    } catch (e) {
-      setError(e instanceof Error ? e : new Error("Erro ao carregar itens do plano"));
-      setItems([]);
-    } finally {
-      if (!options?.silent) setLoading(false);
-    }
-  }, [user, activeId]);
+  const refresh = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!user || !activeId) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+      if (!options?.silent) setLoading(true);
+      setError(null);
+      try {
+        const { items: raw, analysisStatus } =
+          await api.actionPlan.get(activeId);
+        setItems(raw);
+        setStatus(analysisStatus);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e : new Error("Erro ao carregar itens do plano")
+        );
+        setItems([]);
+      } finally {
+        if (!options?.silent) setLoading(false);
+      }
+    },
+    [user, activeId]
+  );
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   // Localized polling for action items
-  const isTerminal = status && ["ready", "completed", "failed", "approved", "delivered"].includes(status);
+  const isTerminal =
+    status &&
+    ["ready", "completed", "failed", "approved", "delivered"].includes(status);
   useEffect(() => {
-    if (!user || !activeId || isTerminal || (status === null && !loading)) return;
-    
+    if (!user || !activeId || isTerminal || (status === null && !loading))
+      return;
+
     const interval = setInterval(() => {
       refresh({ silent: true });
-    }, 5000);
-    
+    }, 10000);
+
     return () => clearInterval(interval);
   }, [user, activeId, isTerminal, status, loading, refresh]);
 
@@ -68,14 +77,11 @@ export function useActionItems() {
       setError(null);
       setStatus("generating");
       await api.analyses.retry(activeId);
-      // Silent refresh of analyses list to update global state once, 
-      // but the 5s polling will handle the item updates.
-      refreshAnalyses({ silent: true, onlyList: true });
       await refresh();
     } catch (e) {
       toast.error("Erro ao reiniciar análise.");
     }
-  }, [activeId, refresh, refreshAnalyses]);
+  }, [activeId, refresh]);
 
   const feedback = useCallback(
     async (itemId: string, approved: boolean, comment?: string) => {

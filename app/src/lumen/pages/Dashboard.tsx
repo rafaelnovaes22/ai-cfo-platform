@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowRight,
   ClipboardPaste,
@@ -19,6 +19,7 @@ import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import CompositionCard from "@/components/CompositionCard.tsx";
 import ActionListCard from "@/components/ActionListCard.tsx";
+import ProcessingOverlay from "@/components/ProcessingOverlay.tsx";
 import { useActionItems } from "../data/useActionItems.ts";
 import CreateAnalysisCard from "@/components/CreateAnalysisCard.tsx";
 import AnalysesCard from "@/components/AnalysesCard.tsx";
@@ -47,10 +48,24 @@ export default function Dashboard() {
     activeId,
     activeAnalysis,
     loading: analysesLoading,
+    isProcessing,
   } = useAnalyses();
   const navigate = useNavigate();
+  const location = useLocation();
   const months = listMonthKeys(transactions);
   const currentKey = months[0];
+
+  // Force show overlay if we just came from an import
+  const [isInitialGeneration, setIsInitialGeneration] = useState(
+    location.state?.showAnalysisOverlay ?? false
+  );
+
+  useEffect(() => {
+    if (isInitialGeneration && !isProcessing && analyses.length > 0) {
+      // Once it's no longer processing (and we have analyses), we can hide it
+      setIsInitialGeneration(false);
+    }
+  }, [isInitialGeneration, isProcessing, analyses]);
 
   // console.log("trend/anomaly", trend, anomaly);
 
@@ -81,6 +96,10 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  if ((isProcessing || isInitialGeneration) && !current) {
+    return <ProcessingOverlay />;
   }
 
   return (

@@ -135,7 +135,7 @@ function PasteModal({
   onImported,
 }: {
   onClose: () => void;
-  onImported: (entryCount: number) => void;
+  onImported: (entryCount: number, analysisId: string) => void;
 }) {
   const [text, setText] = useState("");
   const [referenceMonth, setReferenceMonth] = useState(thisMonth());
@@ -153,7 +153,7 @@ function PasteModal({
       toast.success(
         `${result.entryCount} lançamentos importados (${result.outcome}).`
       );
-      onImported(result.entryCount);
+      onImported(result.entryCount, result.analysisId);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -229,7 +229,7 @@ function FileModal({
   kind,
 }: {
   onClose: () => void;
-  onImported: (entryCount: number) => void;
+  onImported: (entryCount: number, analysisId: string) => void;
   format: string;
   title: string;
   accept: string;
@@ -258,7 +258,7 @@ function FileModal({
       toast.success(
         `${result.entryCount} lançamentos importados em ${formatReferenceMonth(result.referenceMonth)}.`
       );
-      onImported(result.entryCount);
+      onImported(result.entryCount, result.analysisId);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -368,7 +368,7 @@ function ManualEntry({
   onSaved,
 }: {
   onClose: () => void;
-  onSaved: (entryCount: number) => void;
+  onSaved: (entryCount: number, analysisId: string) => void;
 }) {
   const [referenceMonth, setReferenceMonth] = useState(thisMonth());
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -414,7 +414,7 @@ function ManualEntry({
         ],
       });
       toast.success(`Lançamento importado (${result.outcome}).`);
-      onSaved(result.entryCount ?? 1);
+      onSaved(result.entryCount ?? 1, result.analysisId);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -591,30 +591,15 @@ function ModalShell({
 export default function Import() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { uiState, refresh } = useAnalyses();
+  const { refresh, setActiveId } = useAnalyses();
   const initial = params.get("method") as Method;
   const [open, setOpen] = useState<Method>(initial);
-  const [isImporting, setIsImporting] = useState(false);
-  const { refresh: refreshAnalyses } = useAnalyses();
 
-  useEffect(() => {
-    if (
-      isImporting &&
-      (uiState === "READY" ||
-        uiState === "FAILED" ||
-        uiState === "INSUFFICIENT_DATA")
-    ) {
-      setIsImporting(false);
-      navigate("/dashboard");
-    }
-  }, [isImporting, uiState, navigate]);
-
-  const handleImported = (entryCount: number) => {
+  const handleImported = (entryCount: number, analysisId: string) => {
     setOpen(null);
-    setIsImporting(true);
-    void refreshAnalyses();
-    refresh();
-    navigate("/", { state: { entryCount } });
+    setActiveId(analysisId);
+    void refresh();
+    navigate("/", { state: { showAnalysisOverlay: true } });
   };
 
   return (
@@ -685,7 +670,6 @@ export default function Import() {
       {open === "manual" && (
         <ManualEntry onClose={() => setOpen(null)} onSaved={handleImported} />
       )}
-      {isImporting && <ProcessingOverlay />}
     </div>
   );
 }

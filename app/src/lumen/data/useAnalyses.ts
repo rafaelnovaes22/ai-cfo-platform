@@ -112,9 +112,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const onlyList = options?.onlyList ?? false;
 
     if (!silent) setLoading(true);
+    let list: Analysis[] = [];
     try {
       const { analyses: raw } = await api.analyses.list();
-      const list: Analysis[] = raw.map((a) => ({
+      list = raw.map((a) => ({
         ...a,
         name: deriveName(a.referenceMonth),
       }));
@@ -126,6 +127,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
 
     if (onlyList) return;
+
+    // Se a análise ativa (ou a primeira da lista) estiver gerando, 
+    // não adianta buscar trend/anomaly pois o backend ainda não processou.
+    const currentActiveId = activeId || (list.length > 0 ? list[0].id : null);
+    const currentActive = list.find(a => a.id === currentActiveId);
+    if (currentActive?.status === "generating") {
+      setAnomaly([]);
+      setTrend([]);
+      return;
+    }
 
     try {
       const { timeline: anomalyRaw } = await api.analyses.anomalyTimeline();
@@ -140,7 +151,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     } catch {
       setTrend([]);
     }
-  }, []);
+  }, [activeId]);
 
   useEffect(() => {
     if (!user) {

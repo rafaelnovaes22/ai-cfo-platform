@@ -58,10 +58,16 @@ export function ProcessingContent({
   );
 }
 
-export default function ProcessingOverlay() {
+export default function ProcessingOverlay({ 
+  title, 
+  showDots 
+}: { 
+  title?: string; 
+  showDots?: boolean;
+}) {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-cream dark:bg-[#0b0918]">
-      <ProcessingContent />
+      <ProcessingContent title={title} showDots={showDots} />
     </div>
   );
 }
