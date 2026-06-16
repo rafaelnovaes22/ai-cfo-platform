@@ -1,8 +1,20 @@
+// Como a direção foi determinada no parse:
+// - "explicit": coluna Tipo/D-C preenchida, colunas separadas de crédito/débito,
+//   entrada manual ou formato que garante sinal (extrato bancário, DRE)
+// - "sign": sinal negativo no próprio valor (negativo = débito é fato)
+// - "fallback": valor positivo sem nenhum marcador — credit é CHUTE, não fato.
+//   O classificador LLM pode corrigir (ver computeDirectionInferred no service).
+// - "description": direção inferida do texto do lançamento por heurística
+//   determinística (energia/aluguel/DAS → débito), aplicada ao fallback no
+//   service. Mais confiável que fallback; vale também no free tier (sem LLM).
+export type DirectionSource = "explicit" | "sign" | "fallback" | "description";
+
 export interface RawLedger {
   date: string;        // YYYY-MM-DD normalizado
   description: string;
   amountCents: number; // sempre positivo; direction indica sentido
   direction: "credit" | "debit";
+  directionSource?: DirectionSource;
   // Preenchido pelo parsePdfDre — pula classificação LLM
   confirmedCategory?: string;
   correctionSource?: string;
@@ -17,10 +29,23 @@ export interface ParseResult {
   referenceMonth?: string; // YYYY-MM detectado do documento, quando aplicável
 }
 
+export interface IngestMonthResult {
+  referenceMonth: string; // YYYY-MM
+  analysisId: string;
+  entryCount: number;
+}
+
 export interface IngestResult {
+  // analysisId/referenceMonth apontam para o mês principal (mais lançamentos),
+  // mantidos para compat com consumidores que esperam um único mês.
   analysisId: string;
   referenceMonth: string;
-  entryCount: number;
+  entryCount: number; // total do extrato (soma de todos os meses)
   orphanCount: number;
   outcome: IngestOutcome;
+  // Um extrato pode cruzar meses: uma MonthlyAnalysis por mês de competência.
+  months?: IngestMonthResult[];
+  // Range real das datas do extrato (YYYY-MM-DD) — usado pelo caixa do WhatsApp.
+  startDate?: string;
+  endDate?: string;
 }

@@ -100,6 +100,59 @@ function toPlan(stripePlan: string | null | undefined): Plan | null {
   return found ?? null;
 }
 
+// Mapeia o status do Stripe para o enum SubscriptionStatus do Prisma.
+// Sem isto, "trialing"/"paused"/"canceled" colapsavam erroneamente em "past_due".
+function toSubscriptionStatus(
+  s: Stripe.Subscription.Status,
+): "active" | "past_due" | "canceled" | "paused" {
+  switch (s) {
+    case "active":
+    case "trialing":
+      return "active";
+    case "past_due":
+    case "unpaid":
+    case "incomplete":
+      return "past_due";
+    case "canceled":
+    case "incomplete_expired":
+      return "canceled";
+    case "paused":
+      return "paused";
+    default:
+      return "past_due";
+  }
+}
+
+// Resolve o tenantId de uma Invoice. No Stripe SDK ≥ 22 (dahlia) o
+// subscription_details migrou de `invoice.subscription_details` para
+// `invoice.parent.subscription_details`. Lê do caminho correto, com fallback
+// no topo (webhooks legados) e, por fim, resolvendo pelo customer persistido.
+async function resolveInvoiceTenantId(invoice: Stripe.Invoice): Promise<string | undefined> {
+  const parent = (
+    invoice as unknown as {
+      parent?: { subscription_details?: { metadata?: { tenantId?: string } } };
+    }
+  ).parent;
+  const legacy = invoice as unknown as {
+    subscription_details?: { metadata?: { tenantId?: string } };
+  };
+  const fromMeta =
+    parent?.subscription_details?.metadata?.tenantId ??
+    legacy.subscription_details?.metadata?.tenantId;
+  if (fromMeta) return fromMeta;
+
+  const customerId =
+    typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  if (customerId) {
+    const sub = await getPrisma().subscription.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { tenantId: true },
+    });
+    return sub?.tenantId ?? undefined;
+  }
+  return undefined;
+}
+
 export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   const db = getPrisma();
 
@@ -125,9 +178,11 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "invoice.paid": {
       const invoice = event.data.object as Stripe.Invoice;
-      const tenantId = (invoice as { subscription_details?: { metadata?: { tenantId?: string } } })
-        .subscription_details?.metadata?.tenantId;
-      if (!tenantId) break;
+      const tenantId = await resolveInvoiceTenantId(invoice);
+      if (!tenantId) {
+        logger.warn({ invoiceId: invoice.id }, "invoice.paid sem tenantId resolvível — ignorado");
+        break;
+      }
 
       await db.subscription.update({
         where: { tenantId },
@@ -137,14 +192,17 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
           currentPeriodEnd: new Date((invoice.period_end ?? 0) * 1000),
         },
       });
+      logger.info({ tenantId }, "Fatura paga — período renovado");
       break;
     }
 
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
-      const tenantId = (invoice as { subscription_details?: { metadata?: { tenantId?: string } } })
-        .subscription_details?.metadata?.tenantId;
-      if (!tenantId) break;
+      const tenantId = await resolveInvoiceTenantId(invoice);
+      if (!tenantId) {
+        logger.warn({ invoiceId: invoice.id }, "invoice.payment_failed sem tenantId resolvível — ignorado");
+        break;
+      }
 
       await db.subscription.update({ where: { tenantId }, data: { status: "past_due" } });
       logger.warn({ tenantId }, "Pagamento falhou");
@@ -161,7 +219,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         where: { tenantId },
         data: {
           ...(plan ? { plan } : {}),
-          status: sub.status === "active" ? "active" : "past_due",
+          status: toSubscriptionStatus(sub.status),
           // Stripe SDK ≥ 18 moveu current_period_start/end para subscription.items.data[].
           // Para preservar compatibilidade, lemos via cast quando o tipo público não expõe.
           currentPeriodStart: new Date(getSubscriptionPeriod(sub, "start") * 1000),

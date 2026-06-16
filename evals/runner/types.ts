@@ -17,9 +17,14 @@ export interface CaseFile extends CaseFrontmatter {
 export interface ClassificationInput {
   description: string;
   amountCents: number;
-  direction: "credit" | "debit";
+  // "unknown" = arquivo de origem sem marcação de sentido (PR #164)
+  direction: "credit" | "debit" | "unknown";
   date: string;
   tenantContext?: Record<string, unknown>;
+  // Perfil do negócio inferido (business-profile.ts). Quando presente, é injetado
+  // no prompt — necessário para cobrir o cenário "serviço-fim é receita" (ex.:
+  // produtora cuja locução/cobertura para clientes é receita, não custo).
+  businessProfile?: string;
 }
 
 export interface ClassificationGroundTruth {

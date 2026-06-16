@@ -31,6 +31,11 @@ import { parsePlanResponse } from "@/action-plan/generator.js";
 import { normalizeActionPlanActions } from "@/action-plan/postprocess.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { normalizeNarrativeCards } from "@/dre-narrative/postprocess.js";
+import { runNarrativeSynthesisAgentWithTelemetry } from "@/monthly-analysis/agents/narrative-synthesis.js";
+import { runActionPlanningAgentWithTelemetry } from "@/monthly-analysis/agents/action-planning.js";
+import { buildUserPrompt as buildGraphNarrativeUserPrompt } from "@/monthly-analysis/agents/prompts/narrative-synthesis.js";
+import { buildUserPrompt as buildGraphActionUserPrompt } from "@/monthly-analysis/agents/prompts/action-planning.js";
+import { parseNarrativeSynthesisInput, parseActionPlanningInput } from "./assertion-shape.js";
 import { loadCases } from "../case-loader.js";
 import { hashPrompt } from "../prompt-hash.js";
 import type { BucketSummary, CaseFile, CaseResult, RunSummary } from "../types.js";
@@ -201,6 +206,14 @@ async function executeCase(
   if (file.outcome === "plan_generated") {
     return executeActionPlanGenerated(file, manifest, generatorOverride);
   }
+  // Agentes do grafo monthly-analysis (proxy de qualidade, signal não-bloqueante):
+  // roda o agente REAL do grafo e julga o output com as judge_dimensions do manifest.
+  if (file.module === "monthly-analysis/narrative-synthesis") {
+    return executeGraphNarrative(file, manifest);
+  }
+  if (file.module === "monthly-analysis/action-planning") {
+    return executeGraphActionPlan(file, manifest);
+  }
   return makeResult(
     file,
     true,
@@ -211,6 +224,98 @@ async function executeCase(
     0,
     0,
   );
+}
+
+// ─── Executores: agentes do grafo monthly-analysis ───────────────────────────
+
+// O llm_as_judge avalia QUALIDADE DE CONTEÚDO; o schema/estrutura já é validado
+// pelo assertion_shape. Estas notas dizem ao juiz o schema REAL de cada agente do
+// grafo, para ele não penalizar nomes de campos (as rubricas dos cases descrevem
+// um schema antigo com "narrative"/"severity" que não existem mais).
+const NARRATIVE_SCHEMA_NOTE = `SCHEMA DO OUTPUT (agente narrative-synthesis): cada card é { type, title, body, evidenceRefs }. O texto narrativo está em "body"; NÃO existem campos "narrative" nem "severity". A validação de schema/campos é feita por outro método — NÃO penalize nomes de campo nem campos "ausentes" fora deste schema. Avalie APENAS a qualidade de conteúdo nas dimensões dadas (factualidade dos números vs INPUT, clareza executiva, uso das evidências em evidenceRefs/body, tom).`;
+const ACTION_SCHEMA_NOTE = `SCHEMA DO OUTPUT (agente action-planning): { actions: [{ horizon, title, description, effortLevel, riskLevel, impactCents, deadlineDays, doneWhen, evidenceRefs, confidence }] }. impactCents está em CENTAVOS. A validação de schema é feita por outro método — NÃO penalize nomes/estrutura de campos. Avalie APENAS a qualidade de conteúdo nas dimensões dadas (acionabilidade, plausibilidade do impacto vs receita, doneWhen executável, evidenceRefs válidos).`;
+
+async function executeGraphNarrative(file: CaseFile, manifest: JudgeManifest): Promise<CaseResult> {
+  const input = parseNarrativeSynthesisInput(file);
+  const { data: cards, response: generator } = await runNarrativeSynthesisAgentWithTelemetry(
+    input,
+    { tenantId: "eval-runner" },
+  );
+  // inputText = o MESMO prompt formatado (em reais) que o agente recebeu, para o
+  // juiz comparar factualidade na mesma unidade — não o DRE cru em centavos.
+  return judgeGraphOutput(file, manifest, buildGraphNarrativeUserPrompt(input), JSON.stringify({ cards }), generator, NARRATIVE_SCHEMA_NOTE);
+}
+
+async function executeGraphActionPlan(file: CaseFile, manifest: JudgeManifest): Promise<CaseResult> {
+  const input = parseActionPlanningInput(file);
+  const { data: plan, response: generator } = await runActionPlanningAgentWithTelemetry(
+    input,
+    { tenantId: "eval-runner" },
+  );
+  return judgeGraphOutput(file, manifest, buildGraphActionUserPrompt(input), JSON.stringify(plan), generator, ACTION_SCHEMA_NOTE);
+}
+
+// Julga o output de um agente do grafo (já gerado) com o LLM-juiz, reusando a
+// rubrica/dimensões do manifest. Retry uma vez se o juiz devolver JSON inválido.
+async function judgeGraphOutput(
+  file: CaseFile,
+  manifest: JudgeManifest,
+  inputText: string,
+  output: string,
+  generator: LlmResponse,
+  schemaNote?: string,
+): Promise<CaseResult> {
+  const rubric = buildRubricFromCase(file, manifest);
+  const judgePrompt = buildJudgePrompt({
+    inputText,
+    output,
+    rubric,
+    dimensions: manifest.judge_dimensions,
+    scale: manifest.judge_scale,
+    schemaNote,
+  });
+
+  const judge = await callLlm({
+    task: "eval-judge",
+    systemPrompt: JUDGE_SYSTEM_PROMPT,
+    userPrompt: judgePrompt,
+    tenantId: "eval-judge",
+    jsonMode: true,
+  });
+
+  try {
+    const judgeResp = JudgeResponseSchema.parse(JSON.parse(judge.content));
+    return makeJudgeScoredResult(file, manifest, judgeResp, generator, judge);
+  } catch (err) {
+    const retryJudge = await callLlm({
+      task: "eval-judge",
+      systemPrompt: JUDGE_SYSTEM_PROMPT,
+      userPrompt: `${judgePrompt}\n\nRETORNE APENAS JSON valido, sem markdown e sem aspas nao escapadas dentro de strings.`,
+      tenantId: "eval-judge",
+      jsonMode: true,
+    });
+    const merged = {
+      ...retryJudge,
+      inputTokens: judge.inputTokens + retryJudge.inputTokens,
+      outputTokens: judge.outputTokens + retryJudge.outputTokens,
+      costCents: judge.costCents + retryJudge.costCents,
+    };
+    try {
+      const judgeResp = JudgeResponseSchema.parse(JSON.parse(retryJudge.content));
+      return makeJudgeScoredResult(file, manifest, judgeResp, generator, merged);
+    } catch {
+      return makeResult(
+        file,
+        false,
+        `judge_invalid_response: ${(err as Error).message.slice(0, 300)}`,
+        output.slice(0, 200),
+        "judge JSON",
+        generator.inputTokens + merged.inputTokens,
+        generator.outputTokens + merged.outputTokens,
+        generator.costCents + merged.costCents,
+      );
+    }
+  }
 }
 
 // ─── Executor: dre_narrated ───────────────────────────────────────────────────
@@ -823,11 +928,13 @@ interface JudgePromptArgs {
   rubric: string;
   dimensions: string[];
   scale: string;
+  schemaNote?: string;
 }
 
 function buildJudgePrompt(args: JudgePromptArgs): string {
   return `DIMENSÕES A AVALIAR (escala ${args.scale}):
 ${args.dimensions.map((d) => `- ${d}`).join("\n")}
+${args.schemaNote ? `\n${args.schemaNote}\n` : ""}
 
 CONTRATO DE UNIDADES PARA ACTION-PLAN:
 - Se o OUTPUT tiver actions[].impactCents, esse campo esta em CENTAVOS.

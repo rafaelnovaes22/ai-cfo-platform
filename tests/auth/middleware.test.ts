@@ -10,7 +10,7 @@ vi.mock("@/persistence/prisma.js", () => ({
   }),
 }));
 
-import { requireMode, requireRole } from "@/auth/middleware.js";
+import { requireMode, requireRole, requireSubscriber } from "@/auth/middleware.js";
 import type { AuthContext } from "@/auth/middleware.js";
 
 function mockReply() {
@@ -137,5 +137,58 @@ describe("auth/requireRole — RBAC", () => {
     const reply = mockReply();
     await guard(reqWith(null), reply);
     expect(reply.statusCode).toBe(403);
+  });
+});
+
+describe("auth/requireSubscriber — gate do app web", () => {
+  it("permite assinante (plano pago ativo)", async () => {
+    subscriptionFindUniqueMock.mockResolvedValue({ plan: "pro", status: "active" });
+    const reply = mockReply();
+    await requireSubscriber()(reqWith(adminUser), reply);
+    expect(reply.statusCode).toBe(0);
+  });
+
+  it("bloqueia lead trial com 403", async () => {
+    subscriptionFindUniqueMock.mockResolvedValue({ plan: "trial", status: "active" });
+    const reply = mockReply();
+    await requireSubscriber()(reqWith(adminUser), reply);
+    expect(reply.statusCode).toBe(403);
+  });
+
+  it("bloqueia aluno student com 403", async () => {
+    subscriptionFindUniqueMock.mockResolvedValue({ plan: "student", status: "active" });
+    const reply = mockReply();
+    await requireSubscriber()(reqWith(adminUser), reply);
+    expect(reply.statusCode).toBe(403);
+  });
+
+  it("bloqueia plano pago não-ativo (past_due) com 403", async () => {
+    subscriptionFindUniqueMock.mockResolvedValue({ plan: "pro", status: "past_due" });
+    const reply = mockReply();
+    await requireSubscriber()(reqWith(adminUser), reply);
+    expect(reply.statusCode).toBe(403);
+  });
+
+  it("trata subscription ausente como lead (403)", async () => {
+    subscriptionFindUniqueMock.mockResolvedValue(null);
+    const reply = mockReply();
+    await requireSubscriber()(reqWith(adminUser), reply);
+    expect(reply.statusCode).toBe(403);
+  });
+
+  it("deixa API token passar sem consultar subscription (integração ≠ site)", async () => {
+    const reply = mockReply();
+    await requireSubscriber()(
+      reqWith({ userId: "api", tenantId: "t1", role: "api", kind: "api_token", scopes: ["*"] }),
+      reply,
+    );
+    expect(reply.statusCode).toBe(0);
+    expect(subscriptionFindUniqueMock).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia quando auth é null (401)", async () => {
+    const reply = mockReply();
+    await requireSubscriber()(reqWith(null), reply);
+    expect(reply.statusCode).toBe(401);
   });
 });

@@ -45,7 +45,7 @@ function stripReasoningWrappers(text: string): string {
   return trimmed;
 }
 
-export async function callGroq(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
+export async function callGroq(config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   const client = getClient();
 
   // Groq aceita response_format: json_object para modelos Qwen, mas o prompt
@@ -61,7 +61,7 @@ export async function callGroq(config: RouteConfig, req: LlmRequest): Promise<Ll
       { role: "user", content: req.userPrompt },
     ],
     max_completion_tokens: 4096,
-  });
+  }, { signal });
 
   const rawContent = completion.choices[0]?.message?.content ?? "";
   const content = req.jsonMode ? stripReasoningWrappers(rawContent) : rawContent;

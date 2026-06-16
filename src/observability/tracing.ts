@@ -57,16 +57,22 @@ export function createTrace(opts: TraceOptions) {
 
         const usage = endOpts.usage as { input?: number; output?: number } | undefined;
 
-        await child.end(outputs);
+        // Marca o run como ERROR no LangSmith quando a geração falhou.
+        const errorMsg =
+          endOpts.level === "ERROR" || endOpts.error != null
+            ? typeof endOpts.error === "string"
+              ? endOpts.error
+              : JSON.stringify(endOpts.error ?? endOpts.output ?? "error")
+            : undefined;
+
+        await child.end(outputs, errorMsg);
 
         if (usage?.input != null || usage?.output != null) {
           const inputTokens = usage.input ?? 0;
           const outputTokens = usage.output ?? 0;
           // LangSmith lê tokens de extra.metadata.usage_metadata (input_tokens/output_tokens)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const existing = (child as any).extra as Record<string, unknown> ?? {};
           const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (child as any).extra = {
             ...existing,
             metadata: {

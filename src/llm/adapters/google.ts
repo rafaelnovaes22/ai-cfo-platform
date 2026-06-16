@@ -5,7 +5,9 @@ import { join } from "path";
 import type { LlmRequest, LlmResponse, RouteConfig } from "@/llm/types.js";
 import { calculateCostCents } from "@/llm/cost.js";
 
-// Vertex AI — dados processados em southamerica-east1 (LGPD).
+// Vertex AI — região via GOOGLE_CLOUD_LOCATION. O Gemini 2.5 não existe em
+// southamerica-east1 (404); usamos us-central1 com SCCs do Google DPA (ADR-019,
+// transferência internacional amparada — Art. 33 LGPD; Vertex não treina com os dados).
 // Auth: GOOGLE_APPLICATION_CREDENTIALS_JSON (Railway) ou ADC (local).
 let _client: GoogleGenAI | null = null;
 
@@ -24,9 +26,10 @@ function getClient(): GoogleGenAI {
     const apiKey = process.env.GOOGLE_API_KEY;
 
     if (project) {
-      // PROD: Vertex AI (southamerica-east1) — dados não saem do Brasil, sem treino.
+      // PROD: Vertex AI. Região via env; default us-central1, onde o Gemini 2.5
+      // está disponível (ADR-019). Vertex não usa os dados para treino.
       setupCredentials();
-      const location = process.env.GOOGLE_CLOUD_LOCATION ?? "southamerica-east1";
+      const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
       _client = new GoogleGenAI({ vertexai: true, project, location });
     } else if (apiKey) {
       // DEV local: Google AI Studio via API key (só para testes/evals).
@@ -50,17 +53,31 @@ function isRetryable(err: unknown): boolean {
   return msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("RESOURCE_EXHAUSTED");
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Sleep que respeita o AbortSignal: cancela o backoff imediatamente em vez de
+// dormir o intervalo inteiro e só então perceber o abort.
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("aborted"));
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        reject(new Error("aborted"));
+      },
+      { once: true },
+    );
+  });
 }
 
-export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<LlmResponse> {
+export async function callGoogle(config: RouteConfig, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   const client = getClient();
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (signal?.aborted) break;
     if (attempt > 0) {
-      await sleep(BASE_DELAY_MS * 2 ** (attempt - 1));
+      await sleep(BASE_DELAY_MS * 2 ** (attempt - 1), signal);
     }
 
     try {
@@ -70,16 +87,22 @@ export async function callGoogle(config: RouteConfig, req: LlmRequest): Promise<
         config: {
           systemInstruction: req.systemPrompt,
           responseMimeType: req.jsonMode ? "application/json" : "text/plain",
+          ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
           ...(config.thinkingBudget
             ? { thinkingConfig: { thinkingBudget: config.thinkingBudget } }
             : {}),
+          ...(signal ? { abortSignal: signal } : {}),
         },
       });
 
       const content = response.text ?? "";
       const usage = response.usageMetadata;
       const inputTokens = usage?.promptTokenCount ?? 0;
-      const outputTokens = usage?.candidatesTokenCount ?? 0;
+      // Tokens de "thinking" (thoughtsTokenCount) são cobrados como output mas não
+      // entram em candidatesTokenCount — somá-los evita subcontabilizar o custo
+      // nas tasks com thinkingBudget.
+      const outputTokens =
+        (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0);
 
       return {
         content,

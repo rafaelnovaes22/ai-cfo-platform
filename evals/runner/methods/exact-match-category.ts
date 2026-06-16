@@ -34,9 +34,11 @@ export async function runExactMatchCategory(opts: RunOptions): Promise<RunSummar
 
   const systemPrompt = buildSystemPrompt();
   const promptHash = hashPrompt(systemPrompt);
+  // Task "dre-classification" = rota de produção (nó dre-classifier do grafo
+  // LangGraph). A task "classification" da cadeia BullMQ legada foi removida.
   const route = opts.modelOverride
     ? { provider: opts.modelOverride.provider, model: opts.modelOverride.model }
-    : resolveRoute("classification");
+    : resolveRoute("dre-classification");
 
   const results: CaseResult[] = [];
 
@@ -54,21 +56,26 @@ export async function runExactMatchCategory(opts: RunOptions): Promise<RunSummar
       continue;
     }
 
-    const userPrompt = buildUserPrompt([
-      {
-        entryId: parsed.meta.caseId,
-        date: parsed.input.date,
-        description: parsed.input.description,
-        amountCents: parsed.input.amountCents,
-        direction: parsed.input.direction,
-      },
-    ]);
+    const userPrompt = buildUserPrompt(
+      [
+        {
+          entryId: parsed.meta.caseId,
+          date: parsed.input.date,
+          description: parsed.input.description,
+          amountCents: parsed.input.amountCents,
+          direction: parsed.input.direction,
+        },
+      ],
+      undefined,
+      undefined,
+      parsed.input.businessProfile,
+    );
 
     const t0 = Date.now();
     let llmResponse;
     try {
       llmResponse = await dispatchLlm(opts.modelOverride ?? null, {
-        task: "classification",
+        task: "dre-classification",
         systemPrompt,
         userPrompt,
         tenantId: "eval-runner",

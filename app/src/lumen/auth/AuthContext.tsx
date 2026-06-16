@@ -1,13 +1,30 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  ReactNode,
+} from "react";
 import { api } from "@/lib/api/index.js";
-import { setTokens, clearTokens, setUnauthorizedHandler } from "@/lib/api/client.js";
+import {
+  setTokens,
+  clearTokens,
+  setUnauthorizedHandler,
+} from "@/lib/api/client.js";
 import type { MeResponse } from "@/lib/api/index.js";
 
 interface AuthContextValue {
   user: MeResponse | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (tenantName: string, name: string, email: string, password: string) => Promise<void>;
+  signUp: (
+    tenantName: string,
+    name: string,
+    phone: string,
+    email: string,
+    password: string
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
 }
@@ -50,8 +67,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   };
 
-  const signUp = async (tenantName: string, name: string, email: string, password: string) => {
-    const tokens = await api.auth.register({ tenantName, name, email, password });
+  const signUp = async (
+    tenantName: string,
+    name: string,
+    phone: string,
+    email: string,
+    password: string
+  ) => {
+    const tokens = await api.auth.register({
+      tenantName,
+      name,
+      phone,
+      email,
+      password,
+    });
     setTokens(tokens!.accessToken, tokens!.refreshToken);
     const me = await api.auth.me();
     setUser(me);
@@ -72,7 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, requestPasswordReset }}>
+    <AuthContext.Provider
+      value={{ user, loading, signIn, signUp, signOut, requestPasswordReset }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -15,12 +15,16 @@ export async function narrativeSynthesisNode(
       "narrative_synthesis: precondição violada — dre/marginDiagnosis/cashflowRisk ausentes",
     );
   }
+  // A narrativa fala em termos mensais; usa o run-rate mensal por categoria (mês
+  // típico) para o LLM não ler o total do período como valor mensal (ex.: pró-labore
+  // de 2 meses virando "mensal"). Fallback para o total se o monthlyDre não veio.
   const input = {
-    dre: state.dre,
+    dre: state.monthlyDre ?? state.dre,
     anomalies: state.anomalies ?? [],
     marginDiagnosis: state.marginDiagnosis,
     cashflowRisk: state.cashflowRisk,
     segment: state.segment,
+    businessProfile: state.businessProfile,
     taxRegime: state.taxRegime,
     toneOfVoice: state.toneOfVoice,
   };

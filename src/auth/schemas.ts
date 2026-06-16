@@ -6,6 +6,13 @@ export const RegisterBody = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   name: z.string().min(2),
+  // Telefone WhatsApp (E.164) — pré-preenche Tenant.whatsappPhone como sugestão.
+  // NÃO habilita o canal: opt-in explícito (whatsappEnabled/optInAt) fica para
+  // PATCH /config/whatsapp (LGPD Art. 7 — ver ADR-016).
+  phone: z
+    .string()
+    .regex(/^\+[1-9]\d{7,14}$/, "Telefone deve estar no formato E.164 (ex.: +5511999998888)")
+    .optional(),
 });
 
 export const LoginBody = z.object({
@@ -28,6 +35,11 @@ export const MeResponse = z.object({
   role: z.string(),
   name: z.string(),
   email: z.string(),
+  // Acesso ao app web: lead (student/trial) só captura dados; assinante (pago
+  // ativo) acessa. O frontend usa isSubscriber para o gate de rota.
+  plan: z.string(),
+  subscriptionStatus: z.string(),
+  isSubscriber: z.boolean(),
 });
 
 export const PasswordResetRequestBody = z.object({

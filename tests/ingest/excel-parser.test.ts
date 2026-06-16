@@ -37,19 +37,19 @@ describe("ingest/parsers/excel — happy path", () => {
     expect(r.entries[0]?.amountCents).toBe(500_050);
   });
 
-  it("infere direction pelo sinal contábil (parênteses) quando coluna ausente", () => {
-    // Entrada string com formato contábil (parênteses) preserva sinal.
-    // Entrada numérica do Excel perde o sinal no normalize (Math.abs); só strings contábeis sinalizam débito.
+  it("infere direction pelo sinal quando coluna ausente (string contábil E number negativo)", () => {
     const buf = workbookFromAoA([
       ["Data", "Histórico", "Valor"],
       ["30/04/2026", "Recebimento", "1000,00"],
       ["01/05/2026", "Pagamento", "(500,00)"],
       ["02/05/2026", "Tarifa", "-30,00"],
+      ["05/05/2026", "Estorno cliente", -900], // number negativo do Excel preserva sinal
     ]);
     const r = parseExcel(buf);
     expect(r.entries[0]?.direction).toBe("credit");
     expect(r.entries[1]?.direction).toBe("debit");
     expect(r.entries[2]?.direction).toBe("debit");
+    expect(r.entries[3]).toMatchObject({ amountCents: 90_000, direction: "debit", directionSource: "sign" });
   });
 
   it("cai em parsing posicional quando header não bate", () => {
@@ -103,14 +103,70 @@ describe("ingest/parsers/excel — happy path", () => {
         description: "PIX ENVIADO OPEN FINANCE",
         amountCents: 100_000,
         direction: "debit",
+        directionSource: "explicit",
       },
       {
         date: "2026-05-20",
         description: "PIX RECEBIDO",
         amountCents: 100_000,
         direction: "credit",
+        directionSource: "explicit",
       },
     ]);
+  });
+});
+
+describe("ingest/parsers/excel — origem da direção (regressão planilha CID & CID)", () => {
+  it("coluna Tipo presente mas VAZIA + valores positivos → directionSource 'fallback'", () => {
+    // Reproduz a planilha de teste CID & CID: header com Tipo/Categoria em branco,
+    // valores todos positivos (Excel guarda como number). Sem marcação, o credit
+    // resultante é chute — o classificador LLM pode corrigir depois.
+    const buf = workbookFromAoA([
+      ["CID & CID — Moreira e Maíra Jornalismo", "", "", "", "", "", ""],
+      ["", "", "", "", "", "", ""],
+      ["Data", "Descrição", "Valor (R$)", "Forma de Pagamento", "Tipo", "Categoria", "Obs."],
+      ["20/04/2026", "DAS Simples Nacional", 3870, "Boleto", "", "", ""],
+      ["10/04/2026", "Conta de energia - Light", "R$1.340,00", "débito automático", "", "", ""],
+      ["02/04/2026", "Assessoria de imprensa mensal Prefeitura", 12000, "PIX", "", "", ""],
+    ]);
+    const r = parseExcel(buf);
+    expect(r.orphanCount).toBe(0);
+    expect(r.entries).toHaveLength(3);
+    for (const e of r.entries) {
+      expect(e.direction).toBe("credit");
+      expect(e.directionSource).toBe("fallback");
+    }
+  });
+
+  it("valor negativo (string contábil) → directionSource 'sign'", () => {
+    const buf = workbookFromAoA([
+      ["Data", "Descrição", "Valor (R$)", "Tipo"],
+      ["05/05/2026", "Estorno cliente - desistência", "-900,00", ""],
+    ]);
+    const r = parseExcel(buf);
+    expect(r.entries[0]).toMatchObject({ direction: "debit", directionSource: "sign" });
+  });
+
+  it("coluna Tipo preenchida → directionSource 'explicit'", () => {
+    const buf = workbookFromAoA([
+      ["Data", "Descrição", "Valor (R$)", "Tipo"],
+      ["20/04/2026", "DAS Simples Nacional", 3870, "Despesa"],
+      ["02/04/2026", "Assessoria mensal", 12000, "Receita"],
+    ]);
+    const r = parseExcel(buf);
+    expect(r.entries[0]).toMatchObject({ direction: "debit", directionSource: "explicit" });
+    expect(r.entries[1]).toMatchObject({ direction: "credit", directionSource: "explicit" });
+  });
+
+  it("parsing posicional também carrega directionSource", () => {
+    const buf = workbookFromAoA([
+      ["X", "Y", "Z"],
+      ["30/04/2026", "Pix", "100,00"],
+      ["30/04/2026", "Tarifa", "-30,00"],
+    ]);
+    const r = parseExcel(buf);
+    expect(r.entries[0]?.directionSource).toBe("fallback");
+    expect(r.entries[1]?.directionSource).toBe("sign");
   });
 });
 

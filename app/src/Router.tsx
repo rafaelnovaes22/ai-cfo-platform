@@ -11,12 +11,16 @@ import Auth from "./lumen/pages/Auth.tsx";
 import ResetPassword from "./lumen/pages/ResetPassword.tsx";
 import { AuthProvider } from "./lumen/auth/AuthContext.tsx";
 import { ProtectedRoute } from "./lumen/auth/ProtectedRoute.tsx";
+import { SubscriberRoute } from "./lumen/auth/SubscriberRoute.tsx";
 import { AnalysisProvider } from "./lumen/data/useAnalyses.ts";
 import NotFound from "./pages/NotFound.tsx";
 import { useEffect } from "react";
 import nprogress from "nprogress";
 import CashFlow from "./lumen/pages/CashFlow.tsx";
 import Credit from "./lumen/pages/Credit.tsx";
+import UserConfig from "./lumen/pages/UserConfig.tsx";
+import NotificationsConfig from "./lumen/pages/NotificationsConfig.tsx";
+import WhatsappAuth from "./lumen/pages/WhatsappAuth.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,10 +38,18 @@ const Router = () => {
       <Route path="/auth" element={<Auth />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route
+        path="/whatsapp/auth"
         element={
           <ProtectedRoute>
-            <AppLayout />
+            <WhatsappAuth />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        element={
+          <SubscriberRoute>
+            <AppLayout />
+          </SubscriberRoute>
         }
       >
         <Route path="/" element={<Dashboard />} />
@@ -48,6 +60,8 @@ const Router = () => {
         <Route path="/lancamentos" element={<Transactions />} />
         <Route path="/caixa" element={<CashFlow />} />
         <Route path="/credito" element={<Credit />} />
+        <Route path="/config/usuario" element={<UserConfig />} />
+        <Route path="/config/notificacoes" element={<NotificationsConfig />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

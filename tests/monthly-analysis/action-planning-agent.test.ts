@@ -150,6 +150,39 @@ describe("action-planning agent prompts", () => {
     expect(prompt).toMatch(/severity\s*==\s*"high"/);
   });
 
+  it("system prompt raciocina como CFO: postura, alocação de capital, materialidade e proibições", () => {
+    const prompt = buildSystemPrompt();
+    // Passo 1 — postura financeira condiciona o foco (saudável → alocar; estressada → preservar)
+    expect(prompt).toContain("POSTURA FINANCEIRA");
+    expect(prompt).toContain("ALOCAÇÃO DE CAPITAL");
+    expect(prompt).toContain("PRESERVAÇÃO DE CAIXA");
+    expect(prompt).toMatch(/reserva de caixa|runway/i);
+    expect(prompt).toMatch(/diversifica/i);
+    // Passo 2 — gate de materialidade (não micro-otimização)
+    expect(prompt).toContain("MATERIALIDADE");
+    // Passo 3 — higiene de dados / classificar lançamentos não é ação de CFO
+    expect(prompt.toLowerCase()).toContain("classificar lançamentos");
+    // Passo 4 — raciocínio setorial via PERFIL DO NEGÓCIO inferido (segment costuma ser "geral")
+    expect(prompt).toContain("PERFIL DO NEGÓCIO");
+    // Anti-enchimento: não inventar 3ª short imaterial só para completar a cota
+    expect(prompt).toMatch(/3ª ação short/);
+    expect(prompt.toLowerCase()).toContain("micro-corte");
+  });
+
+  it("user prompt inclui o perfil do negócio inferido", () => {
+    const userPrompt = buildUserPrompt({
+      dre: baseDre,
+      anomalies: baseAnomalies,
+      narrativeCards: baseCards,
+      marginDiagnosis: baseMargin,
+      cashflowRisk: baseCashflow,
+      referenceMonth: "2026-04",
+      businessProfile: "Produtora de conteúdo jornalístico; receita-fim = assinaturas e publicidade.",
+    });
+    expect(userPrompt).toContain("Perfil do negócio");
+    expect(userPrompt).toContain("conteúdo jornalístico");
+  });
+
   it("system prompt inclui regra de ordenação ROI das ações short", () => {
     const prompt = buildSystemPrompt();
     expect(prompt).toContain("ORDENAÇÃO DAS AÇÕES SHORT");

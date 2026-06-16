@@ -57,3 +57,7 @@ docs/forge/sync-history.md
 # Learning snapshots — templates auto-gerados por hooks/stop/learning-snapshot.sh
 # (revisão humana/Hermes antes de promover para agent-memory.md; sem valor versionado)
 docs/learnings/
+
+# Shadow run reports (gerados localmente por scripts/run-monthly-analysis-graph-shadow.ts)
+evals/monthly-analysis/shadow-runs/*
+!evals/monthly-analysis/shadow-runs/.gitkeep

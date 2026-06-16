@@ -1,6 +1,5 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
-import type { DreLines } from "@/dre-narrative/aggregator.js";
 
 let _redis: IORedis | null = null;
 
@@ -27,61 +26,10 @@ const JOB_OPTIONS = {
   removeOnFail: { count: 50 },
 };
 
-// ── Classification ─────────────────────────────────────────────────────────
-
-let _classificationQueue: Queue | null = null;
-
-export interface ClassificationJob { analysisId: string; tenantId: string; traceId?: string }
-
-export function getClassificationQueue(): Queue {
-  if (!_classificationQueue) {
-    _classificationQueue = new Queue("classification", { connection: getRedis() });
-  }
-  return _classificationQueue;
-}
-
-export async function enqueueClassification(job: ClassificationJob): Promise<void> {
-  await getClassificationQueue().add("classify", job, JOB_OPTIONS);
-}
-
-// ── DRE Narrative ──────────────────────────────────────────────────────────
-
-let _dreNarrativeQueue: Queue | null = null;
-
-export interface DreNarrativeJob { analysisId: string; tenantId: string; traceId?: string }
-
-export function getDreNarrativeQueue(): Queue {
-  if (!_dreNarrativeQueue) {
-    _dreNarrativeQueue = new Queue("dre-narrative", { connection: getRedis() });
-  }
-  return _dreNarrativeQueue;
-}
-
-export async function enqueueDreNarrative(job: DreNarrativeJob): Promise<void> {
-  await getDreNarrativeQueue().add("narrate", job, JOB_OPTIONS);
-}
-
-// ── Action Plan ────────────────────────────────────────────────────────────
-
-let _actionPlanQueue: Queue | null = null;
-
-export interface ActionPlanJob { analysisId: string; tenantId: string; dre: DreLines; traceId?: string }
-
-export function getActionPlanQueue(): Queue {
-  if (!_actionPlanQueue) {
-    _actionPlanQueue = new Queue("action-plan", { connection: getRedis() });
-  }
-  return _actionPlanQueue;
-}
-
-export async function enqueueActionPlan(job: ActionPlanJob): Promise<void> {
-  await getActionPlanQueue().add("plan", job, JOB_OPTIONS);
-}
-
 // ── Monthly Analysis Graph (LangGraph) ────────────────────────────────────
-// Usado quando productConfig.monthlyAnalysis.orchestrator = "langgraph"
-// ou MONTHLY_ANALYSIS_DEFAULT_ORCHESTRATOR=langgraph.
-// Substitui a cadeia classification → dre-narrative → action-plan com pipeline unificado.
+// Orquestrador único do monthly-analysis (#180): 1 job roda o grafo inteiro
+// (normalize → clarity → classification → diagnoses → narrative → plan → QA).
+// A cadeia legada de 3 jobs (classification → dre-narrative → action-plan) foi removida.
 
 let _monthlyAnalysisGraphQueue: Queue | null = null;
 
@@ -157,3 +105,44 @@ export async function enqueueEvalContinuous(): Promise<void> {
     removeOnFail: { count: 5 },
   });
 }
+
+// ── WhatsApp Message Retention (ADR-017) ──────────────────────────────────
+// Job repetível diário que apaga mensagens do log com createdAt < now-180d.
+
+export interface WhatsappRetentionJob {}
+
+let _whatsappRetentionQueue: Queue | null = null;
+
+export function getWhatsappRetentionQueue(): Queue {
+  if (!_whatsappRetentionQueue) {
+    _whatsappRetentionQueue = new Queue("whatsapp-retention", { connection: getRedis() });
+  }
+  return _whatsappRetentionQueue;
+}
+
+export async function scheduleWhatsappRetention(): Promise<void> {
+  await getWhatsappRetentionQueue().add("purge", {}, {
+    repeat: { pattern: "0 4 * * *" }, // diário às 04:00
+    jobId: "whatsapp-retention-singleton",
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}
+
+// ── Eval Continuous (agendamento repetível) ───────────────────────────────
+// O worker já existia, mas nada agendava o scan de drift (ADR-011) — rodava só
+// se enfileirado manualmente. Agenda um run diário.
+
+export async function scheduleEvalContinuous(): Promise<void> {
+  await getEvalContinuousQueue().add("run", {}, {
+    repeat: { pattern: "0 3 * * *", tz: "America/Sao_Paulo" }, // diário 03:00 BRT
+    jobId: "eval-continuous-repeat",
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}
+
+// NOTA: o resumo diário proativo de caixa via WhatsApp foi intencionalmente NÃO
+// agendado — o canal é reativo (responde a comandos e a extratos recebidos).
+// Envio proativo é business-initiated (cobrado pela Meta) e foi descartado por
+// decisão de produto (anti-spam + custo). Ver notification-service (dead code).

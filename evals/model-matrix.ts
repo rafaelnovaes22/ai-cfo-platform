@@ -50,6 +50,16 @@ interface CliArgs {
 }
 
 const TASK_DEFINITIONS: Record<AgenticLlmTask, TaskEvaluationDefinition> = {
+  "business-profile": {
+    task: "business-profile",
+    responsibility: "Inferir o ramo do negócio a partir das descrições dos lançamentos para dar contexto ao classificador.",
+    evalDataset: "evals/monthly-analysis/business-profile/cases.jsonl",
+    sampleSizeTarget: 20,
+    primaryMetrics: ["segment_match_rate", "revenue_terms_recall", "latency_p95_ms", "cost_cents_per_analysis"],
+    minimumGates: ["identifica a atividade-fim correta", "lista os termos de receita-fim do setor", "custo marginal por análise"],
+    riskLevel: "baixo",
+    promotionRule: "Perfil é contexto auxiliar (não decide categoria sozinho); degradação graciosa se falhar. Pode ir a SHADOW com amostra pequena.",
+  },
   "normalization": {
     task: "normalization",
     responsibility: "Limpar, padronizar e enriquecer lançamentos sem alterar valores financeiros.",

@@ -49,6 +49,11 @@ interface EntryRow {
   confirmedCategory: string | null;
 }
 
+// EntryRow + competência (YYYY-MM) — base do run-rate mensal por categoria.
+export interface DatedEntryRow extends EntryRow {
+  month: string;
+}
+
 function effectiveCategory(e: EntryRow): string {
   return e.confirmedCategory ?? e.predictedCategory ?? "nao_classificado";
 }
@@ -117,6 +122,35 @@ export function aggregateDre(entries: EntryRow[]): DreLines {
     transferenciaInterna: sumBy(entries, "transferencia_interna"),
     naoClassificado:    sumBy(entries, "nao_classificado"),
   };
+}
+
+/**
+ * DRE de um "mês típico" em run-rate por categoria: cada categoria é dividida pelos
+ * meses DISTINTOS em que ela ocorre (não pelo período inteiro), depois re-agregada.
+ * Necessário porque a análise consolida o extrato de N meses, mas narrativa/plano
+ * raciocinam em termos mensais — sem isto, o LLM lê o total do período como mensal
+ * (ex.: pró-labore presente em 2 meses, R$ 36k, virava "R$ 30k mensal" no plano; o
+ * recorrente real é R$ 18k/mês). Dividir por categoria (e não pelo nº de meses do
+ * período) evita diluir uma categoria recorrente com meses em que ela não aparece.
+ */
+export function aggregateMonthlyRunRateDre(rows: DatedEntryRow[]): DreLines {
+  const byCategory = new Map<string, { total: number; months: Set<string>; sample: EntryRow }>();
+  for (const r of rows) {
+    const cat = effectiveCategory(r);
+    const g = byCategory.get(cat) ?? { total: 0, months: new Set<string>(), sample: r };
+    g.total += r.amountCents;
+    g.months.add(r.month);
+    byCategory.set(cat, g);
+  }
+  // 1 linha sintética por categoria com o valor mensal recorrente; re-agrega para
+  // um DRE coerente (lucro/EBITDA/margens recalculados sobre os valores mensais).
+  const monthlyRows: EntryRow[] = [...byCategory.values()].map(({ total, months, sample }) => ({
+    amountCents: Math.round(total / Math.max(1, months.size)),
+    direction: sample.direction,
+    predictedCategory: sample.predictedCategory,
+    confirmedCategory: sample.confirmedCategory,
+  }));
+  return aggregateDre(monthlyRows);
 }
 
 export function formatDreForPrompt(dre: DreLines, referenceMonth: string): string {

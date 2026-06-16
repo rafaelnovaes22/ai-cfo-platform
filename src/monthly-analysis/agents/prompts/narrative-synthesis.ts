@@ -1,6 +1,7 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
 import { buildNarrativeSignals } from "@/dre-narrative/prompts.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 import type {
   Anomaly,
   CashflowRisk,
@@ -14,6 +15,7 @@ export interface NarrativeSynthesisAgentInput {
   cashflowRisk: CashflowRisk;
   referenceMonth?: string;
   segment?: string;
+  businessProfile?: string;
   taxRegime?: string;
   toneOfVoice?: string;
 }
@@ -22,6 +24,8 @@ export interface NarrativeSynthesisAgentInput {
 // (verbos proibidos/exigidos, jargão por taxRegime, evidence métrica-first).
 export function buildSystemPrompt(): string {
   return `Você é o analista financeiro do Aicfo, especialista em PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Leia o diagnóstico financeiro (DRE + anomalias + diagnóstico de margens + risco de caixa) e gere
@@ -82,6 +86,8 @@ JARGÃO POR REGIME TRIBUTÁRIO (use exclusivamente os termos do regime do tenant
 - taxRegime=lucroReal       → "IRPJ", "CSLL", "EBITDA" liberado.
 
 TERMINOLOGIA POR SEGMENTO (adapte o vocabulário dos cards ao setor)
+Quando o Segmento vier "geral" ou não informado, use o PERFIL DO NEGÓCIO inferido (no contexto)
+para entender o setor e o que é a receita-fim da empresa, e adapte o vocabulário a isso.
 - varejo:           Ao mencionar CMV, escreva "Custo dos Produtos Vendidos (o que foi pago aos fornecedores)". Margem Bruta = "o que sobrou após pagar os fornecedores".
 - industria-leve:   Use termos de manufatura: insumos, custo de produção. Prefira lucroOperacional; evite EBITDA.
 - servicos-b2b:     Foque em custo de mão-de-obra, utilização da equipe, faturamento por consultor.
@@ -165,9 +171,13 @@ export function buildUserPrompt(input: NarrativeSynthesisAgentInput): string {
   const segment = input.segment ?? "(não informado)";
   const taxRegime = input.taxRegime ?? "simples";
   const toneOfVoice = input.toneOfVoice ?? "formal";
+  const businessProfile = input.businessProfile?.trim()
+    ? input.businessProfile.trim()
+    : "(não inferido)";
 
   return `CONTEXTO DA EMPRESA
 - Segmento: ${segment}
+- Perfil do negócio (inferido dos lançamentos): ${businessProfile}
 - Regime Tributário: ${taxRegime}
 - Tom de voz desejado: ${toneOfVoice}
 

@@ -23,6 +23,10 @@ import { actionPlanRoutes } from "@/action-plan/routes.js";
 import { hubRoutes } from "@/hub/routes.js";
 import { exportRoutes } from "@/export/routes.js";
 import { cashflowRoutes } from "@/cashflow/routes.js";
+import { whatsappWebhookRoutes } from "@/channels/whatsapp/webhook.js";
+import { whatsappConfigRoutes } from "@/channels/whatsapp/config-routes.js";
+import { whatsappMessagesRoutes } from "@/channels/whatsapp/messages-routes.js";
+import { requireAuth, requireSubscriber } from "@/auth/middleware.js";
 import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushTraces } from "@/observability/tracing.js";
@@ -137,13 +141,26 @@ await app.register(authRoutes);
 await app.register(workspaceRoutes);
 await app.register(billingRoutes);
 await app.register(tenantConfigRoutes);
-await app.register(ingestRoutes);
-await app.register(classificationRoutes);
-await app.register(dreNarrativeRoutes);
-await app.register(actionPlanRoutes);
-await app.register(hubRoutes);
-await app.register(exportRoutes);
-await app.register(cashflowRoutes);
+await app.register(classificationRoutes); // interna (worker/integração) — fora do gate de site
+
+// Rotas de dados do app web: exclusivas de assinante. Lead (plan student/trial)
+// tem a conta capturada mas não acessa o painel. O WhatsApp usa os services
+// direto (não estas rotas HTTP), então o free tier do aluno não é afetado.
+// requireAuth roda aqui também (hook de plugin precede o preHandler de rota)
+// para popular req.auth antes do requireSubscriber; a rota o reexecuta (idempotente).
+await app.register(async (web) => {
+  web.addHook("preHandler", requireAuth);
+  web.addHook("preHandler", requireSubscriber());
+  await web.register(ingestRoutes);
+  await web.register(dreNarrativeRoutes);
+  await web.register(actionPlanRoutes);
+  await web.register(hubRoutes);
+  await web.register(exportRoutes);
+  await web.register(cashflowRoutes);
+});
+await app.register(whatsappWebhookRoutes);
+await app.register(whatsappConfigRoutes);
+await app.register(whatsappMessagesRoutes);
 
 startWorkers();
 
