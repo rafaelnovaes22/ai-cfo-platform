@@ -157,8 +157,12 @@ export const ActionPlanItemDraftSchema = z.object({
   description: z.string().min(10),
   effortLevel: z.enum(["low", "medium", "high"]),
   riskLevel: z.enum(["low", "medium", "high"]),
-  impactCents: z.number().int().positive(),
-  deadlineDays: z.number().int().positive().optional(),
+  // nonnegative (não positive): o LLM pode estimar impacto 0 para uma ação sem
+  // retorno financeiro mensal direto (ex.: organizar processo). Antes, um único 0
+  // derrubava TODA a análise no parse Zod. O gate de materialidade
+  // (filterImmaterialActions) é quem corta ações de impacto baixo/zero — não o parse.
+  impactCents: z.number().int().nonnegative(),
+  deadlineDays: z.number().int().nonnegative().optional(),
   doneWhen: z.string().min(5),
   evidenceRefs: z.array(z.string().min(2)).min(1),
   assumptions: z.array(z.string().min(3)).default([]),

@@ -13,6 +13,7 @@ import {
 } from "@/monthly-analysis/agents/prompts/action-planning.js";
 import {
   ActionPlanDraftSchema,
+  ActionPlanItemDraftSchema,
   type ActionPlanItemDraft,
   type Anomaly,
   type CashflowRisk,
@@ -377,5 +378,31 @@ describe("runActionPlanningAgent", () => {
       },
       { tenantId: "tenant-1" },
     )).rejects.toThrow();
+  });
+});
+
+describe("ActionPlanItemDraftSchema — impactCents nonnegative (regressão)", () => {
+  const validItem = {
+    horizon: "short",
+    title: "Organize o processo de cobrança",
+    description: "Estruture o fluxo de cobrança de recebíveis para reduzir inadimplência futura.",
+    effortLevel: "low",
+    riskLevel: "low",
+    impactCents: 0,
+    doneWhen: "Fluxo documentado e em uso a partir do próximo mês.",
+    evidenceRefs: ["dre:receitaBruta"],
+    confidence: 0.6,
+  };
+
+  // Antes, impactCents 0 (ação sem retorno financeiro direto) derrubava TODA a
+  // análise no parse Zod. Agora passa; o gate de materialidade decide se corta.
+  it("aceita impactCents 0", () => {
+    expect(ActionPlanItemDraftSchema.safeParse(validItem).success).toBe(true);
+  });
+
+  it("ainda rejeita impactCents negativo", () => {
+    expect(
+      ActionPlanItemDraftSchema.safeParse({ ...validItem, impactCents: -100 }).success,
+    ).toBe(false);
   });
 });
