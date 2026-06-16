@@ -20,7 +20,7 @@ export const ChangeRoleBody = z.object({
 
 export const CreateTokenBody = z.object({
   name: z.string().min(2).max(60),
-  scopes: z.array(z.string()).default([]),
+  scopes: z.array(z.string().max(50)).max(20).default([]),
   expiresInDays: z.number().int().min(1).max(365).optional(),
 });
 

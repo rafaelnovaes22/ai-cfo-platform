@@ -14,6 +14,7 @@ import {
 import * as XLSX from "xlsx";
 import { api } from "@/lib/api/index.js";
 import { ApiProblem } from "@/lib/api/client.js";
+import { LIMITS, isAcceptedFile, formatBytes } from "@/lib/limits.js";
 import { toast } from "sonner";
 import ImportLoading from "@/components/ImportLoading";
 
@@ -163,11 +164,21 @@ function PasteModal({
       <MonthField value={referenceMonth} onChange={setReferenceMonth} />
       <textarea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        maxLength={LIMITS.PASTE_MAX_CHARS}
+        onChange={(e) => {
+          // maxLength não cobre paste programático em todos os browsers — corta aqui também.
+          const next = e.target.value;
+          if (next.length > LIMITS.PASTE_MAX_CHARS) {
+            toast.error("Texto muito grande. Cole até 1 milhão de caracteres ou envie como arquivo.");
+            setText(next.slice(0, LIMITS.PASTE_MAX_CHARS));
+            return;
+          }
+          setText(next);
+        }}
         disabled={submitting}
-        className="w-full h-56 bg-background border border-[#171132] rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-[#96ff7e] mt-3"
+        className="w-full h-56 bg-cream-deep dark:bg-[#0b0918] text-ink dark:text-cream border border-[#171132] rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-[#96ff7e] mt-3"
         placeholder={
-          "Data\tDescrição\tValor\n01/09\tCliente Vértice MRR\t14200\n02/09\tMeta Ads\t-22840\n..."
+          "Data\tDescrição\tValor\n01/09/2026\tCliente Vértice MRR\t14.200,00\n02/09/2026\tMeta Ads\t-22.840,00\n..."
         }
       />
       <div className="flex items-center justify-end gap-2 mt-5">
@@ -244,6 +255,21 @@ function FileModal({
   }
 
   async function handleFileChange(selected: File | null) {
+    // Valida ANTES de aceitar: a UI promete "até 10 MB" e isso precisa ser real
+    // (em prod um PDF de 10211 KB passava e só falhava depois do round-trip).
+    if (selected && selected.size > LIMITS.FILE_MAX_BYTES) {
+      toast.error(
+        `Arquivo de ${formatBytes(selected.size)} excede o limite de ${formatBytes(LIMITS.FILE_MAX_BYTES)}.`,
+      );
+      setFile(null);
+      return;
+    }
+    if (selected && !isAcceptedFile(selected.name)) {
+      toast.error("Formato não suportado. Envie PDF, Excel (.xlsx/.xls) ou CSV.");
+      setFile(null);
+      return;
+    }
+
     setFile(selected);
     if (!selected || kind !== "xls") return;
 
@@ -343,9 +369,13 @@ function ManualEntry({
     const errs: Record<string, string> = {};
     if (!date) errs.date = "Informe a data";
     if (!description.trim()) errs.description = "Informe a descrição";
+    else if (description.trim().length > LIMITS.DESCRIPTION_MAX_CHARS)
+      errs.description = `Descrição até ${LIMITS.DESCRIPTION_MAX_CHARS} caracteres`;
     const numAmount = parseFloat(amount.replace(",", "."));
-    if (!amount || isNaN(numAmount) || numAmount <= 0)
+    if (!amount || isNaN(numAmount) || !Number.isFinite(numAmount) || numAmount <= 0)
       errs.amount = "Valor inválido";
+    else if (numAmount > LIMITS.AMOUNT_MAX_REAIS)
+      errs.amount = `Valor máximo por lançamento: R$ ${LIMITS.AMOUNT_MAX_REAIS.toLocaleString("pt-BR")},00`;
     if (!referenceMonth) errs.referenceMonth = "Informe o mês";
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -407,6 +437,7 @@ function ManualEntry({
           <input
             type="text"
             value={description}
+            maxLength={LIMITS.DESCRIPTION_MAX_CHARS}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Ex: Contrato cliente Alfa, Meta Ads setembro…"
             className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
@@ -417,8 +448,14 @@ function ManualEntry({
             type="number"
             step="0.01"
             min="0"
+            max={LIMITS.AMOUNT_MAX_REAIS}
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              // type=number não respeita maxLength: sem este corte dava para
+              // digitar uma fileira interminável de dígitos (visto em prod).
+              if (e.target.value.length > 16) return;
+              setAmount(e.target.value);
+            }}
             placeholder="0,00"
             className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
           />
@@ -511,10 +548,10 @@ function ModalShell({
       <div className="relative bg-cream dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg shadow-[#0b0918] w-full max-w-2xl p-7 animate-fade-up max-h-[90vh] overflow-auto">
         <div className="flex items-start justify-between mb-5">
           <div>
-            <div className="uppercase text-[11px] tracking-widest mb-1">
+            <div className="uppercase text-[11px] tracking-widest mb-1 text-ink-soft dark:text-cream/60">
               Importar dados
             </div>
-            <h2 className="text-[24px] tracking-tight">{title}</h2>
+            <h2 className="text-[24px] tracking-tight text-ink dark:text-cream">{title}</h2>
           </div>
           <button
             onClick={onClose}
@@ -550,7 +587,7 @@ export default function Import() {
         <h1 className="text-3xl leading-[1.05] tracking-tight max-w-xl">
           Como você quer trazer seus números?
         </h1>
-        <p className="dark:dark:text-[#96ff7e] mt-3 text-[14px] max-w-lg">
+        <p className="text-ink-soft dark:text-[#96ff7e] mt-3 text-[14px] max-w-lg">
           Seja via planilha ou fazendo lançamentos individuais, escolha a melhor
           forma de trazer seus dados.
         </p>
@@ -564,20 +601,20 @@ export default function Import() {
             className="group flex flex-col h-full text-left dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg p-6 hover:border-[#96ff7e] hover:shadow-[#0b0918] transition-all"
           >
             <c.icon
-              className="h-5 w-5 dark:dark:text-[#96ff7e] mb-5"
+              className="h-5 w-5 text-ink-soft dark:text-[#96ff7e] mb-5"
               strokeWidth={1.6}
             />
-            <div className="uppercase text-[11px] tracking-widest mb-2">
+            <div className="uppercase text-[11px] tracking-widest mb-2 text-ink-soft dark:text-cream/60">
               {c.eyebrow}
             </div>
-            <h3 className="text-[20px] leading-snug tracking-tight mb-2">
+            <h3 className="text-[20px] leading-snug tracking-tight mb-2 text-ink dark:text-cream">
               {c.title}
             </h3>
-            <p className="text-[12.5px] dark:dark:text-[#96ff7e] leading-relaxed flex-1">
+            <p className="text-[12.5px] text-ink-soft dark:text-[#96ff7e] leading-relaxed flex-1">
               {c.desc}
             </p>
             <div className="mt-5 flex justify-end">
-              <ArrowRight className="h-4 w-4 dark:dark:text-[#96ff7e] group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="h-4 w-4 text-ink-soft dark:text-[#96ff7e] group-hover:translate-x-0.5 transition-all" />
             </div>
           </button>
         ))}

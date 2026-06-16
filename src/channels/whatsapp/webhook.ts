@@ -95,9 +95,11 @@ export const whatsappWebhookRoutes: FastifyPluginAsync = async (app) => {
           continue;
         }
         // Log inbound best-effort (ADR-017): só registra se o número casa um tenant.
-        void resolveTenantIdByPhone(msg.from).then((tenantId) => {
-          if (tenantId) void logInbound({ tenantId, providerMessageId: msg.messageId });
-        });
+        void resolveTenantIdByPhone(msg.from)
+          .then((tenantId) => {
+            if (tenantId) void logInbound({ tenantId, providerMessageId: msg.messageId });
+          })
+          .catch((err) => logger.warn({ err, from: msg.from }, "whatsapp.webhook.inbound-log.error"));
         processMessage(msg, { sessionStore, adapter }).catch(async (err) => {
           logger.error({ requestId, from: msg.from, err }, "whatsapp.message.process.error");
           // Libera a dedup-key para permitir reprocesso na reentrega da Meta.

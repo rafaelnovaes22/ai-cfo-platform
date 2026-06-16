@@ -51,15 +51,15 @@ export default function UserConfig() {
             </div>
             <div className="grid w-full items-center gap-2">
               <label
-                htmlFor="email"
+                htmlFor="empresa"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                Email
+                Empresa
               </label>
               <input
-                type="email"
-                id="email"
-                placeholder="Digite seu email"
+                type="text"
+                id="empresa"
+                placeholder="Digite sua empresa"
                 className="flex h-10 w-full rounded-md bg-input dark:bg-[#0b0918] px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-black/50 dark:placeholder:text-white/30 dark:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>

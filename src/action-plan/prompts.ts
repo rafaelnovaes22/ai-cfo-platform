@@ -1,9 +1,12 @@
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import { formatDreForPrompt } from "@/dre-narrative/aggregator.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 
 // L0 - estatico e cacheavel
 export function buildActionPlanSystemPrompt(): string {
   return `Voce e o advisor financeiro estrategico do Aicfo para PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Com base na DRE e nos cards de analise do mes, gere um Plano de Acao em 3 horizontes.

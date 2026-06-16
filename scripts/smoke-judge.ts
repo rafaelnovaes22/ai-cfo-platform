@@ -1,4 +1,6 @@
-import { judgeClarity } from "@/classification/judge.js";
+// Smoke do clarity judge — usa o agente do grafo (task "clarity-judge"), o único
+// caminho desde a remoção da cadeia BullMQ legada (judgeClarity).
+import { runClarityJudgeAgent } from "@/monthly-analysis/agents/classification.js";
 
 const SAMPLES = [
   // Esperado: clear (NF + termo categórico)
@@ -18,7 +20,7 @@ const SAMPLES = [
 
 async function main(): Promise<void> {
   const t0 = Date.now();
-  const results = await judgeClarity(SAMPLES, "smoke");
+  const results = await runClarityJudgeAgent(SAMPLES, { tenantId: "smoke" });
   const ms = Date.now() - t0;
 
   console.table(

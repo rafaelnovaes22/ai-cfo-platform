@@ -45,6 +45,37 @@ export const DRE_TAXONOMY = {
 export type DreCategory = keyof typeof DRE_TAXONOMY;
 export const DRE_CATEGORIES = Object.keys(DRE_TAXONOMY) as DreCategory[];
 
+// Natureza de fluxo de cada categoria: "credit" = dinheiro entra, "debit" = sai,
+// null = sem natureza determinável (depende do lançamento). Usado para corrigir
+// a direção de lançamentos com directionInferred=true após a classificação —
+// nunca para sobrescrever direção que veio confiável do arquivo (extrato, sinal).
+export const CATEGORY_NATURE: Record<DreCategory, "credit" | "debit" | null> = {
+  receita_bruta:            "credit",
+  receita_financeira:       "credit",
+  outras_receitas:          "credit",
+  deducoes_receita:         "debit",
+  cpv_cmv:                  "debit",
+  custo_servicos:           "debit",
+  despesas_pessoal:         "debit",
+  prolabore:                "debit",
+  despesas_administrativas: "debit",
+  despesas_comerciais:      "debit",
+  despesas_ti:              "debit",
+  despesas_viagem:          "debit",
+  despesas_juridicas:       "debit",
+  despesas_financeiras:     "debit",
+  simples_nacional:         "debit",
+  irpj_csll:                "debit",
+  capex:                    "debit",
+  emprestimos_entrada:      "credit",
+  amortizacao_dividas:      "debit",
+  // Transferência interna pode ser entrada ou saída da conta observada.
+  transferencia_interna:    null,
+  depreciacao:              "debit",
+  outras_despesas:          "debit",
+  nao_classificado:         null,
+};
+
 export function buildTaxonomyBlock(): string {
   return Object.entries(DRE_TAXONOMY)
     .map(([key, desc], i) => `${i + 1}. **${key}** — ${desc}`)

@@ -64,16 +64,21 @@ export const NormalizedLedgerEntrySchema = z.object({
 export type NormalizedLedgerEntry = z.infer<typeof NormalizedLedgerEntrySchema>;
 
 export const ClarityResultSchema = z.object({
-  entryId: z.string(),
+  // entryId/reason com default: o Gemini às vezes omite campos em respostas grandes
+  // (77+ lançamentos). Clarity é advisory (cap por entryId) — um item com entryId ""
+  // é só ignorado em applyClarityCaps, em vez de derrubar a análise inteira (ZodError).
+  entryId: z.string().default(""),
   clarity: z.enum(["clear", "partial", "ambiguous"]),
-  reason: z.string().max(240),
+  reason: z.string().max(240).default(""),
 });
 export type ClarityResult = z.infer<typeof ClarityResultSchema>;
 export const ClarityResultsSchema = z.array(ClarityResultSchema);
 export type ClarityResults = z.infer<typeof ClarityResultsSchema>;
 
 export const DreClassificationResultSchema = z.object({
-  entryId: z.string(),
+  // entryId com default "": o Gemini às vezes omite; resolveRealEntryId cai no índice
+  // da resposta como fallback, então não quebra o mapeamento (e evita ZodError).
+  entryId: z.string().default(""),
   category: z.string(),
   confidence: z.number().min(0).max(1),
   rationale: z.string().max(240).optional(),
@@ -152,8 +157,12 @@ export const ActionPlanItemDraftSchema = z.object({
   description: z.string().min(10),
   effortLevel: z.enum(["low", "medium", "high"]),
   riskLevel: z.enum(["low", "medium", "high"]),
-  impactCents: z.number().int().positive(),
-  deadlineDays: z.number().int().positive().optional(),
+  // nonnegative (não positive): o LLM pode estimar impacto 0 para uma ação sem
+  // retorno financeiro mensal direto (ex.: organizar processo). Antes, um único 0
+  // derrubava TODA a análise no parse Zod. O gate de materialidade
+  // (filterImmaterialActions) é quem corta ações de impacto baixo/zero — não o parse.
+  impactCents: z.number().int().nonnegative(),
+  deadlineDays: z.number().int().nonnegative().optional(),
   doneWhen: z.string().min(5),
   evidenceRefs: z.array(z.string().min(2)).min(1),
   assumptions: z.array(z.string().min(3)).default([]),
@@ -163,8 +172,11 @@ export type ActionPlanItemDraft = z.infer<typeof ActionPlanItemDraftSchema>;
 
 export const ActionPlanDraftSchema = z.object({
   actions: z.array(ActionPlanItemDraftSchema).min(5),
-}).refine(({ actions }) => actions.filter((a) => a.horizon === "short").length >= 3, {
-  message: "Mínimo 3 ações short obrigatório",
+  // Mín 2 short (não 3): forçar uma 3ª short numa empresa saudável e estável produzia
+  // micro-corte imaterial só para completar a cota. Com 2, o "espaço" migra para
+  // medium/long, onde moram as alavancas estruturais (reserva, diversificação).
+}).refine(({ actions }) => actions.filter((a) => a.horizon === "short").length >= 2, {
+  message: "Mínimo 2 ações short obrigatório",
   path: ["actions"],
 }).refine(({ actions }) => actions.filter((a) => a.horizon === "medium").length >= 1, {
   message: "Mínimo 1 ação medium obrigatório",

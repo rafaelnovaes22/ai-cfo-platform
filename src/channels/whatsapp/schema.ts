@@ -29,15 +29,11 @@ export const WaWebhookPayloadSchema = z.object({
                   id: z.string(),
                   from: z.string(),
                   timestamp: z.string(),
-                  type: z.enum([
-                    "text",
-                    "document",
-                    "image",
-                    "audio",
-                    "interactive",
-                    "button",
-                    "unknown",
-                  ]),
+                  // String livre (não enum): a Meta adiciona novos tipos de mensagem
+                  // (sticker, location, reaction, order…). Um enum estrito rejeitaria
+                  // o payload inteiro com 400 → a Meta desabilitaria o webhook (perda
+                  // de TODAS as mensagens). Tipos desconhecidos viram "unknown" no parser.
+                  type: z.string(),
                   text: z.object({ body: z.string() }).optional(),
                   document: z
                     .object({
@@ -70,7 +66,7 @@ export const WaWebhookPayloadSchema = z.object({
                 z.object({
                   id: z.string(),
                   recipient_id: z.string(),
-                  status: z.enum(["sent", "delivered", "read", "failed"]),
+                  status: z.string(), // tolerante a status novos; o parser filtra os conhecidos
                   timestamp: z.string(),
                 }),
               )

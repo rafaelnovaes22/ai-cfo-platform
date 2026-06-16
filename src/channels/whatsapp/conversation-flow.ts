@@ -4,9 +4,9 @@
 // C8 — tenantId sempre resolvido da sessão Redis; nunca hardcoded.
 
 import { randomUUID } from "node:crypto"
-import { SignJWT } from "jose"
 
 import { logger } from "@/observability/logger.js"
+import { signWhatsAppLinkToken, appBaseUrl } from "./link-token.js"
 import { getPrisma } from "@/persistence/prisma.js"
 import { getCashflowSummaryDay, getCashflow } from "@/cashflow/service.js"
 import {
@@ -16,9 +16,15 @@ import {
   formatWelcomeMenu,
   formatError,
   formatIngestReceived,
+  formatStudentCashflowHint,
 } from "./response-formatter.js"
 import { classifyCommand, isSupportedDocument } from "./message-parser.js"
 import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
+import { decideWhatsappConversation } from "./conversation-graph/index.js"
+import { buildConversationState, withConversationState, getConversationState } from "./conversation-graph/state.js"
+import type { WaConversationState } from "./conversation-graph/state.js"
+import { cashflowToMetrics, buildPostCashflowState } from "./conversation-graph/explanation.js"
+import type { CashflowResponse } from "@/cashflow/types.js"
 import type { WaIncomingMessage, WaSession, WaSessionStep, IWhatsAppSessionStore, IWhatsAppAdapter } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -46,18 +52,6 @@ function lastNDaysBRT(n: number): { startDate: string; endDate: string } {
   return { startDate, endDate }
 }
 
-/** Gera um token JWT temporário (1h) para vinculação WhatsApp. */
-async function signWhatsAppLinkToken(phone: string): Promise<string> {
-  const secret = process.env["JWT_SECRET"]
-  if (!secret) throw new Error("JWT_SECRET não configurado")
-  const key = new TextEncoder().encode(secret)
-  return new SignJWT({ whatsappPhone: phone, purpose: "whatsapp_link" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(key)
-}
-
 /**
  * Busca tenant pelo número E.164 e retorna apenas os campos necessários.
  * Retorna null se não encontrado ou se whatsappEnabled=false.
@@ -66,13 +60,19 @@ async function findTenantByPhone(phone: string): Promise<{
   id: string
   name: string
   plan: string
+  userName?: string
 } | null> {
   const prisma = getPrisma()
+  // A Meta entrega o `from`/wa_id em E.164 SEM o '+', mas whatsappPhone é sempre
+  // persistido COM '+' (regex E.164 no register e no PATCH /config/whatsapp).
+  // Sem normalizar, a query nunca casa e o usuário fica preso em loop de magic-link.
+  const candidates = phone.startsWith("+") ? [phone] : [`+${phone}`, phone]
   const tenant = await prisma.tenant.findFirst({
-    where: { whatsappPhone: phone, whatsappEnabled: true },
+    where: { whatsappPhone: { in: candidates }, whatsappEnabled: true },
     select: {
       id: true,
       name: true,
+      users: { select: { name: true }, orderBy: { createdAt: "asc" }, take: 1 },
       subscriptions: {
         select: { plan: true },
         take: 1,
@@ -83,6 +83,7 @@ async function findTenantByPhone(phone: string): Promise<{
   return {
     id: tenant.id,
     name: tenant.name,
+    userName: tenant.users[0]?.name ?? undefined,
     plan: tenant.subscriptions[0]?.plan ?? "trial",
   }
 }
@@ -123,49 +124,61 @@ async function transitionTo(
 
 /**
  * Calcula e envia o fluxo de caixa do período exato do extrato recém-ingerido.
- * O range vem das datas reais dos lançamentos (min/max), não de um mês fixo —
- * é o "conforme o extrato enviado". Sem LLM: pura agregação determinística.
+ * O range (startDate/endDate) vem das datas reais do extrato — "conforme o extrato
+ * enviado". Como um extrato pode cruzar meses (múltiplas análises), o range é do
+ * IngestResult, não de um único analysisId. getCashflow agrega por tenant+período.
  */
 async function sendStatementCashflow(
   phone: string,
   tenantId: string,
-  analysisId: string,
+  startDate: string,
+  endDate: string,
   adapter: IWhatsAppAdapter,
-): Promise<void> {
-  const prisma = getPrisma()
-  const range = await prisma.ledgerEntry.aggregate({
-    where: { analysisId },
-    _min: { date: true },
-    _max: { date: true },
-  })
-  const min = range._min.date
-  const max = range._max.date
-  if (!min || !max) {
-    logger.warn({ tenantId, analysisId }, "whatsapp:ingest — sem range de datas; não há caixa a enviar")
-    return
-  }
-
+): Promise<CashflowResponse | null> {
   const requestId = randomUUID()
   const cashflow = await getCashflow({
     tenantId,
-    startDate: min.toISOString().slice(0, 10),
-    endDate: max.toISOString().slice(0, 10),
+    startDate,
+    endDate,
     granularity: "daily",
     requestId,
   })
   await adapter.sendText(phone, formatCashflowStatement(cashflow))
+  return cashflow
 }
 
 /**
- * Executa o ingest em background sem bloquear a resposta ao usuário.
- * Quando keepAllEntries=true (fluxo do aluno), já devolve o fluxo de caixa do
- * extrato automaticamente — o aluno não precisa pedir.
+ * Grava os números reais do extrato no lastOutcome do estado conversacional.
+ * Sem isto, "me explica o resultado" não tinha os dados e acabava ecoando a
+ * saudação anterior. Só persiste se já existe estado conversacional (o fluxo
+ * legado não consome lastOutcome). Relê a sessão atual do store para não
+ * sobrescrever uma transição mais recente do usuário (race do background).
+ */
+async function persistCashflowOutcome(
+  store: IWhatsAppSessionStore,
+  phone: string,
+  cashflow: CashflowResponse,
+): Promise<void> {
+  const current = await store.get(phone)
+  if (!current) return
+  const conversation = getConversationState(current)
+  if (!conversation) return
+
+  const metrics = cashflowToMetrics(cashflow)
+  const updated = buildPostCashflowState(conversation, metrics)
+  await store.set(withConversationState(current, updated))
+}
+
+/**
+ * Executa o ingest em background sem bloquear a resposta ao usuário. WhatsApp é
+ * canal student-only (cash-flow-only): havendo lançamentos, devolve o fluxo de caixa
+ * do extrato automaticamente, usando o range real do extrato (pode cruzar meses).
  */
 function ingestDocumentBackground(
   msg: WaIncomingMessage,
   tenantId: string,
   adapter: IWhatsAppAdapter,
-  opts: { skipAnalysis?: boolean; keepAllEntries?: boolean },
+  opts: { skipAnalysis?: boolean; store?: IWhatsAppSessionStore },
 ): void {
   ingestDoc(msg, tenantId, adapter, opts).then(async (result) => {
     if ("error" in result) {
@@ -176,8 +189,11 @@ function ingestDocumentBackground(
       return
     }
     logger.info({ tenantId, analysisId: result.analysisId, entryCount: result.entryCount }, "whatsapp:ingest — concluído")
-    if (opts.keepAllEntries && result.entryCount > 0) {
-      await sendStatementCashflow(msg.from, tenantId, result.analysisId, adapter)
+    if (result.entryCount > 0 && result.startDate && result.endDate) {
+      const cashflow = await sendStatementCashflow(msg.from, tenantId, result.startDate, result.endDate, adapter)
+      if (cashflow && opts.store) {
+        await persistCashflowOutcome(opts.store, msg.from, cashflow)
+      }
     }
   }).catch((err) => {
     logger.error({ tenantId, err }, "whatsapp:ingest — exceção no background ingest")
@@ -196,16 +212,19 @@ async function handleIdleOrOnboarding(
   const tenant = await findTenantByPhone(msg.from)
 
   if (tenant) {
-    // Tenant encontrado e habilitado → entrar direto no menu
+    // Tenant reconhecido → entra no MENU e processa o CONTEÚDO da mensagem direto
+    // (documento/comando) via handleMenu. Sem isto, a 1a mensagem de uma sessão nova
+    // (ex.: extrato enviado depois da sessão Redis de 30min expirar) era ignorada e o
+    // menu era mostrado, obrigando o usuário a reenviar. Greeting cai no UNKNOWN do
+    // handleMenu, que mostra o menu de boas-vindas (comportamento preservado).
     await transitionTo(session, "MENU", deps.store, { tenantId: tenant.id })
-    const menuText = formatWelcomeMenu(tenant.name, tenant.plan)
-    await deps.adapter.sendText(msg.from, menuText)
+    await handleMenu(msg, { ...session, step: "MENU", tenantId: tenant.id }, deps)
     return
   }
 
   // Tenant não encontrado ou whatsappEnabled=false → enviar magic link
   const token = await signWhatsAppLinkToken(msg.from)
-  const link = `https://app.aicfo.com.br/whatsapp/auth?token=${token}`
+  const link = `${appBaseUrl()}/whatsapp/auth?token=${token}`
   const text =
     `Olá! 👋 Para usar o Aicfo pelo WhatsApp, vincule seu número à sua conta:\n\n` +
     `🔗 ${link}\n\n` +
@@ -224,15 +243,15 @@ async function handleAwaitingAuth(
   const tenant = await findTenantByPhone(msg.from)
 
   if (tenant) {
+    // Acabou de vincular → entra no MENU e processa o conteúdo direto (igual onboarding).
     await transitionTo(session, "MENU", deps.store, { tenantId: tenant.id })
-    const menuText = formatWelcomeMenu(tenant.name, tenant.plan)
-    await deps.adapter.sendText(msg.from, menuText)
+    await handleMenu(msg, { ...session, step: "MENU", tenantId: tenant.id }, deps)
     return
   }
 
   // Ainda sem vínculo — reenviar link
   const token = await signWhatsAppLinkToken(msg.from)
-  const link = `https://app.aicfo.com.br/whatsapp/auth?token=${token}`
+  const link = `${appBaseUrl()}/whatsapp/auth?token=${token}`
   const text =
     `⏳ Seu número ainda não está vinculado a nenhuma conta Aicfo.\n\n` +
     `Use o link para vincular:\n🔗 ${link}\n\n` +
@@ -284,21 +303,26 @@ async function handleIngestDocument(
   msg: WaIncomingMessage,
   session: WaSession,
   deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
-  plan: string,
 ): Promise<void> {
   const filename = msg.document?.filename ?? "arquivo"
-  const isStudent = plan === "student"
-  // Confirma recebimento imediatamente
-  await deps.adapter.sendText(msg.from, formatIngestReceived(filename, isStudent))
+  // Decisão de produto (2026-06-15): o WhatsApp é canal student-only. Todo extrato
+  // recebe o *fluxo de caixa* em texto (zero LLM), independente do plano — nunca a
+  // análise mensal, que vive no app (plano pago) e antes devolvia um link aqui em
+  // vez do caixa. Por isso o ingest roda sempre em modo cash-flow-only.
+  // TODO (evolução do pago): direcionar o cliente pago para a LP da Aicfo.
+  await deps.adapter.sendText(msg.from, formatIngestReceived(filename, true))
   await transitionTo(session, "INGEST_FLOW", deps.store, {
-    context: { mediaId: msg.document?.id, filename },
+    context: {
+      ...session.context,
+      mediaId: msg.document?.id,
+      filename,
+    },
   })
-  // Dispara ingest em background — student: parse+store (zero LLM) + caixa do extrato;
-  // pago: pipeline completo (classificação → DRE → plano de ação).
+  // Background: parse+store (zero LLM) + caixa do extrato, para todos os planos.
   if (msg.document?.id && session.tenantId) {
     ingestDocumentBackground(msg, session.tenantId, deps.adapter, {
-      skipAnalysis: isStudent,
-      keepAllEntries: isStudent,
+      skipAnalysis: true,
+      store: deps.store,
     })
   }
 }
@@ -316,6 +340,24 @@ async function getTenantPlan(tenantId: string): Promise<string> {
   return subscription?.plan ?? "trial"
 }
 
+/**
+ * Nome para a saudação: primeiro nome do usuário (mais pessoal) em vez do nome da
+ * empresa/tenant. Usa o usuário mais antigo do tenant; cai no nome do tenant se não houver.
+ */
+async function greetingName(tenantId: string): Promise<string> {
+  const prisma = getPrisma()
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      name: true,
+      users: { select: { name: true }, orderBy: { createdAt: "asc" }, take: 1 },
+    },
+  })
+  const userName = tenant?.users[0]?.name?.trim()
+  if (userName) return userName.split(/\s+/)[0]!
+  return tenant?.name ?? ""
+}
+
 async function handleMenu(
   msg: WaIncomingMessage,
   session: WaSession,
@@ -323,12 +365,10 @@ async function handleMenu(
 ): Promise<void> {
   const tenantId = session.tenantId as string
 
-  // Documento recebido → ingest permitido para todos os planos.
-  // Plano student: skipAnalysis=true (parse+store apenas, sem LLM).
-  // Planos pagos: pipeline completo (classificação → DRE → plano de ação).
+  // Documento recebido → fluxo de caixa do extrato (cash-flow-only) para todos.
+  // WhatsApp é canal student-only: nunca gera/anuncia a análise mensal aqui.
   if (isSupportedDocument(msg)) {
-    const plan = await getTenantPlan(tenantId)
-    await handleIngestDocument(msg, session, deps, plan)
+    await handleIngestDocument(msg, session, deps)
     return
   }
 
@@ -344,12 +384,20 @@ async function handleMenu(
     "whatsapp:flow — command dispatched",
   )
 
+  // Free tier do aluno não tem dado contínuo: caixa/semana voltariam R$ 0,00.
+  // Orienta a enviar o extrato em vez de mostrar um caixa vazio e confuso.
+  if (command === "CAIXA" || command === "SEMANA") {
+    const plan = await getTenantPlan(tenantId)
+    if (plan === "student") {
+      await deps.adapter.sendText(msg.from, formatStudentCashflowHint())
+      return
+    }
+  }
+
   switch (command) {
     case "MENU": {
       const plan = await getTenantPlan(tenantId)
-      const prisma = getPrisma()
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
-      const menuText = formatWelcomeMenu(tenant?.name ?? "", plan)
+      const menuText = formatWelcomeMenu(await greetingName(tenantId), plan)
       await deps.adapter.sendText(msg.from, menuText)
       break
     }
@@ -376,7 +424,7 @@ async function handleMenu(
       const text =
         `📊 *Análise financeira mensal*\n\n` +
         `Acesse o app para ver sua análise completa:\n` +
-        `🔗 https://app.aicfo.com.br/hub\n\n` +
+        `🔗 ${appBaseUrl()}/hub\n\n` +
         `_Aicfo · CFO-IA_`
       await deps.adapter.sendText(msg.from, text)
       break
@@ -397,13 +445,130 @@ async function handleMenu(
     default: {
       // Texto não reconhecido → reenviar menu de ajuda
       const plan = await getTenantPlan(tenantId)
-      const prisma = getPrisma()
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
-      const helpText = formatWelcomeMenu(tenant?.name ?? "", plan)
+      const helpText = formatWelcomeMenu(await greetingName(tenantId), plan)
       await deps.adapter.sendText(msg.from, helpText)
       break
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Fluxo conversacional LangGraph (zero-token por padrão)
+// ---------------------------------------------------------------------------
+
+function conversationGraphEnabled(): boolean {
+  return process.env.WHATSAPP_CONVERSATION_GRAPH_ENABLED === "true"
+}
+
+async function sendAuthLink(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { store: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+  prefix?: string,
+): Promise<void> {
+  const token = await signWhatsAppLinkToken(msg.from)
+  const link = `${appBaseUrl()}/whatsapp/auth?token=${token}`
+  const text =
+    (prefix ?? `Olá! 👋 Para usar o Aicfo pelo WhatsApp, vincule seu número à sua conta:`) +
+    `\n\n🔗 ${link}\n\n` +
+    `_O link expira em 1 hora._`
+
+  await deps.adapter.sendText(msg.from, text)
+  const conversation = buildConversationState(session, null)
+  await transitionTo(withConversationState(session, conversation), "AWAITING_AUTH", deps.store)
+}
+
+async function sendStatus(
+  msg: WaIncomingMessage,
+  tenantId: string,
+  deps: { adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const plan = await getTenantPlan(tenantId)
+  const text =
+    `ℹ️ *Status da sua conta*\n\n` +
+    `Plano: *${plan}*\n` +
+    `Canal WhatsApp: ✅ Ativo\n\n` +
+    `_Aicfo · CFO-IA_`
+  await deps.adapter.sendText(msg.from, text)
+}
+
+async function sendMonthlyAnalysisLink(
+  msg: WaIncomingMessage,
+  tenantId: string,
+  deps: { adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const plan = await getTenantPlan(tenantId)
+  if (plan === "student") {
+    await deps.adapter.sendText(msg.from, formatError("PLAN_LIMIT"))
+    return
+  }
+  const text =
+    `📊 *Análise financeira mensal*\n\n` +
+    `Acesse o app para ver sua análise completa:\n` +
+    `🔗 ${appBaseUrl()}/hub\n\n` +
+    `_Aicfo · CFO-IA_`
+  await deps.adapter.sendText(msg.from, text)
+}
+
+function applyConversationOutcome(
+  decision: Awaited<ReturnType<typeof decideWhatsappConversation>>,
+): WaConversationState {
+  // Preserva o lastOutcome real (o resultado do extrato, gravado pelo background
+  // com os números e o dataRef). NÃO deriva outcome do texto da resposta: fazer isso
+  // sobrescrevia o resultado financeiro com a saudação ("Olá, Rafael!") e perdia os
+  // números — era a causa do "me explica o resultado" ecoar a saudação.
+  return {
+    ...decision.conversation,
+    lastBotAction: decision.route,
+  }
+}
+
+async function processMessageWithConversationGraph(
+  msg: WaIncomingMessage,
+  session: WaSession,
+  deps: { sessionStore: IWhatsAppSessionStore; adapter: IWhatsAppAdapter },
+): Promise<void> {
+  const tenant = await findTenantByPhone(msg.from)
+  if (!tenant) {
+    await sendAuthLink(msg, session, { store: deps.sessionStore, adapter: deps.adapter })
+    return
+  }
+
+  const baseSession: WaSession = { ...session, tenantId: tenant.id, step: "MENU" }
+  const conversation = buildConversationState(baseSession, tenant)
+  const decision = await decideWhatsappConversation(msg, conversation)
+
+  logger.info(
+    { from: msg.from, intent: decision.intent, route: decision.route, usedSlm: decision.usedSlm },
+    "whatsapp:conversation-graph — decision",
+  )
+
+  switch (decision.route) {
+    case "HANDLE_DOCUMENT": {
+      const persisted = withConversationState(baseSession, applyConversationOutcome(decision))
+      await handleIngestDocument(msg, persisted, { store: deps.sessionStore, adapter: deps.adapter })
+      return
+    }
+
+    case "STATUS":
+      await sendStatus(msg, tenant.id, { adapter: deps.adapter })
+      break
+
+    case "MONTHLY_ANALYSIS":
+      await sendMonthlyAnalysisLink(msg, tenant.id, { adapter: deps.adapter })
+      break
+
+    case "SEND_TEXT":
+    case "NEED_SLM":
+    default:
+      if (decision.responseText) {
+        await deps.adapter.sendText(msg.from, decision.responseText)
+      }
+      break
+  }
+
+  const updatedConversation = applyConversationOutcome(decision)
+  await deps.sessionStore.set(withConversationState(baseSession, updatedConversation))
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +600,11 @@ export async function processMessage(
   )
 
   try {
+    if (conversationGraphEnabled()) {
+      await processMessageWithConversationGraph(msg, session, { sessionStore, adapter })
+      return
+    }
+
     switch (session.step) {
       case "IDLE":
       case "ONBOARDING":

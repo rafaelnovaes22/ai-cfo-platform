@@ -95,12 +95,13 @@ export function formatWelcomeMenu(tenantName: string, plan: string): string {
   const header = `Olá, *${tenantName}*! 👋\nSou o Aicfo, seu CFO-IA.\n`
 
   if (isBasic) {
+    // Free tier do aluno é baseado em extrato pontual (não há dado contínuo).
+    // "Caixa de hoje"/"semana" voltariam R$ 0,00, então o menu é centrado no extrato.
     return (
       header +
-      "O que posso fazer por você?\n\n" +
-      "1️⃣ Ver caixa de hoje\n" +
-      "2️⃣ Resumo do mês\n\n" +
-      "_Responda com o número da opção._"
+      "Me envie um *extrato* da sua conta (PDF, Excel ou CSV) e eu calculo o seu " +
+      "*fluxo de caixa* na hora: entradas, saídas e resultado do período.\n\n" +
+      "_É só enviar o arquivo aqui._ 📎"
     )
   }
 
@@ -108,11 +109,21 @@ export function formatWelcomeMenu(tenantName: string, plan: string): string {
     header +
     "O que posso fazer por você?\n\n" +
     "1️⃣ Ver caixa de hoje\n" +
-    "2️⃣ Resumo do mês\n" +
-    "3️⃣ Resumo dos últimos 7 dias\n" +
-    "4️⃣ Enviar extrato / planilha\n" +
-    "5️⃣ Ver análise do mês\n\n" +
+    "2️⃣ Resumo dos últimos 7 dias\n" +
+    "3️⃣ Ver análise do mês\n\n" +
+    "Ou envie um extrato / planilha (PDF, Excel ou CSV) para importar lançamentos.\n\n" +
     "_Responda com o número da opção._"
+  )
+}
+
+/**
+ * Dica para o aluno (free tier) que pede caixa/semana: o canal não tem dado
+ * contínuo, o caixa vem do extrato enviado. Evita devolver R$ 0,00 confuso.
+ */
+export function formatStudentCashflowHint(): string {
+  return (
+    "📎 Pra ver seu fluxo de caixa, me envie um *extrato* da sua conta (PDF, Excel ou CSV).\n\n" +
+    "Eu calculo entradas, saídas e resultado do período na hora."
   )
 }
 
@@ -139,9 +150,11 @@ export function formatError(
  * Formata confirmação de recebimento de arquivo para ingest.
  */
 export function formatIngestReceived(filename: string, studentPlan = false): string {
+  // Canal reativo: NÃO prometer notificação proativa (ela está desligada). O usuário
+  // pede "análise" aqui ou acessa o app para ver quando ficar pronta.
   const body = studentPlan
     ? "Já estou lendo seus lançamentos e calculando o fluxo de caixa do extrato. Um instante…"
-    : "Estou processando os lançamentos. Você será notificado assim que a análise ficar pronta."
+    : "Estou processando os lançamentos. Quando a análise ficar pronta, peça *análise* aqui ou acesse o app para ver."
   return `✅ *Arquivo recebido!*\n\n📄 ${filename}\n\n${body}`
 }
 

@@ -1,16 +1,18 @@
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { LumenLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
 import { ApiProblem } from "@/lib/api/client.js";
 import { PatternFormat } from "react-number-format";
+import { Eye, EyeOff } from "lucide-react";
+import { addCountryCode } from "@/lib/utils.ts";
 
 const signUpSchema = z
   .object({
     tenantName: z.string().trim().min(2, "Informe o nome da empresa").max(100),
-    name: z.string().trim().min(1, "Informe seu nome").max(100),
+    name: z.string().trim().min(2, "Informe seu nome").max(100),
     phone: z
       .string()
       .transform((val) => val.replace(/\D/g, ""))
@@ -37,6 +39,16 @@ type Mode = "signin" | "signup" | "forgot";
 export default function Auth() {
   const { user, loading, signIn, signUp, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Destino pós-login: a rota que o ProtectedRoute tentou acessar (state.from),
+  // ou "/" como padrão. Inclui a query (?token=...) para o fluxo /whatsapp/auth
+  // não perder o token ao passar pelo login.
+  const fromLoc = (
+    location.state as { from?: { pathname?: string; search?: string } } | null
+  )?.from;
+  const from = fromLoc
+    ? `${fromLoc.pathname ?? "/"}${fromLoc.search ?? ""}`
+    : "/";
   const [mode, setMode] = useState<Mode>("signin");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -55,13 +67,12 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream">
+      <div className="flex min-h-screen items-center justify-center bg-cream dark:bg-[#0b0918]">
         <div className="text-[13px] text-[#96ff7e]">Carregando…</div>
       </div>
     );
   }
-
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={from} replace />;
 
   const update =
     (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -87,8 +98,10 @@ export default function Auth() {
         parsed.data.email,
         parsed.data.password
       );
-      toast.success("Conta criada com sucesso!");
-      navigate("/", { replace: true });
+      // Cadastro = captação de lead. O acesso ao painel é liberado só para
+      // assinante; o SubscriberRoute decide o destino (app ou tela de lead).
+      toast.success("Cadastro recebido!");
+      navigate("/importar", { replace: true });
     } catch (err) {
       const msg =
         err instanceof ApiProblem
@@ -122,7 +135,7 @@ export default function Auth() {
     setSubmitting(true);
     try {
       await signIn(parsed.data.email, parsed.data.password);
-      navigate("/", { replace: true });
+      navigate(from, { replace: true });
     } catch (err) {
       const msg =
         err instanceof ApiProblem && err.status === 401
@@ -152,23 +165,13 @@ export default function Auth() {
     setMode("signin");
   };
 
-  const addCountryCode = (phone: string) => {
-    if (!phone) return undefined;
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length === 11) {
-      return "+55" + digits;
-    }
-    return digits;
-  };
-
   return (
-    <div className="min-h-screen  bg-[url('https://images.unsplash.com/photo-1635776063043-ab23b4c226f6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-[400px]">
-        <div className="flex justify-center mb-10">
-          <LumenLogo size={48} className="brightness-[1000%]" />
-        </div>
-
-        <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-3xl p-12">
+    <div className="min-h-screen bg-[url('https://images.unsplash.com/photo-1635776063043-ab23b4c226f6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover flex items-center justify-start">
+      <div className="w-full h-screen max-w-[560px]">
+        <div className="relative bg-white shadow-2xl shadow-black border h-full text-black p-12 pt-16 flex flex-col justify-center overflow-y-auto">
+          <div className="absolute top-12 left-12">
+            <LumenLogo size={36} />
+          </div>
           <h1 className="text-[20px] font-medium mb-1">
             {mode === "signin" && "Entrar"}
             {mode === "signup" && "Criar conta"}
@@ -193,31 +196,31 @@ export default function Auth() {
           >
             {mode === "signup" && (
               <>
-                <Field label="Empresa" error={errors.tenantName}>
-                  <input
-                    type="text"
-                    value={form.tenantName}
-                    onChange={update("tenantName")}
-                    className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
-                    autoComplete="organization"
-                    placeholder="Nome da sua empresa"
-                  />
-                </Field>
                 <Field label="Nome" error={errors.name}>
                   <input
                     type="text"
                     value={form.name}
                     onChange={update("name")}
-                    className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
+                    className="auth-input !border !border-[#171132]"
                     autoComplete="name"
                   />
                 </Field>
-                {/* <Field label="Whatsapp" error={errors.phone}>
+                <Field label="Empresa" error={errors.tenantName}>
+                  <input
+                    type="text"
+                    value={form.tenantName}
+                    onChange={update("tenantName")}
+                    className="auth-input !border !border-[#171132]"
+                    autoComplete="organization"
+                    placeholder="Nome da sua empresa"
+                  />
+                </Field>
+                <Field label="Whatsapp" error={errors.phone}>
                   <PatternFormat
                     type="text"
                     value={form.phone || ""}
                     onChange={update("phone")}
-                    className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
+                    className="auth-input !border !border-[#171132]"
                     autoComplete="phone"
                     format="(##) #####-####" // Máscara para números de 9 dígitos
                     mask="_" // Opcional: exibe underscores enquanto digita
@@ -228,7 +231,7 @@ export default function Auth() {
                       } as React.ChangeEvent<HTMLInputElement>)
                     }
                   />
-                </Field> */}
+                </Field>
               </>
             )}
 
@@ -237,18 +240,16 @@ export default function Auth() {
                 type="email"
                 value={form.email}
                 onChange={update("email")}
-                className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
+                className="auth-input !border !border-[#171132]"
                 autoComplete="email"
               />
             </Field>
 
             {mode !== "forgot" && (
               <Field label="Senha" error={errors.password}>
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.password}
                   onChange={update("password")}
-                  className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
                   autoComplete={
                     mode === "signup" ? "new-password" : "current-password"
                   }
@@ -258,11 +259,9 @@ export default function Auth() {
 
             {mode === "signup" && (
               <Field label="Confirme a senha" error={errors.confirmPassword}>
-                <input
-                  type="password"
+                <PasswordInput
                   value={form.confirmPassword}
                   onChange={update("confirmPassword")}
-                  className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
                   autoComplete="new-password"
                 />
               </Field>
@@ -283,7 +282,7 @@ export default function Auth() {
             </button>
           </form>
 
-          <div className="mt-6 flex flex-col gap-2 text-[12.5px] text-[#96ff7e] text-center">
+          <div className="mt-6 flex flex-col gap-2 text-[12.5px] text-center">
             {mode === "signin" && (
               <>
                 <button
@@ -329,6 +328,37 @@ export default function Auth() {
   );
 }
 
+function PasswordInput({
+  value,
+  onChange,
+  autoComplete,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  autoComplete: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        className="auth-input !border !border-[#171132] !pr-10 w-full"
+        autoComplete={autoComplete}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+        className="absolute right-3 top-1/2 -translate-y-1/2 opacity-60 hover:opacity-100 transition-opacity"
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
+
 function Field({
   label,
   error,
@@ -340,7 +370,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[12px] ">{label}</span>
+      <span className="text-[12px] text-black">{label}</span>
       {children}
       {error && <span className="text-[11.5px] text-red-600">{error}</span>}
     </label>

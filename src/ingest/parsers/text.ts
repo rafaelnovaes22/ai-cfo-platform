@@ -1,5 +1,5 @@
 // Parser para texto colado (clipboard) — TSV ou CSV simples
-import { normalizeDate, normalizeAmountCents, normalizeDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns, detectMonthFirst } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 function splitRow(line: string): string[] {
@@ -8,7 +8,7 @@ function splitRow(line: string): string[] {
   return line.split(";").map((c) => c.trim()); // separador BR padrão
 }
 
-export function parseText(raw: string): ParseResult {
+export function parseText(raw: string, defaultYear?: string): ParseResult {
   const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return { entries: [], orphanCount: 0 };
 
@@ -25,11 +25,15 @@ export function parseText(raw: string): ParseResult {
     }
   }
 
-  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = cols;
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx, impliedDirection } = cols;
 
   const dataLines = lines.slice(headerLineIdx + 1);
   const entries: RawLedger[] = [];
   let orphanCount = 0;
+
+  // Orientação dia/mês detectada uma vez para o conteúdo colado (consistência).
+  const dateColIdx = dateIdx >= 0 ? dateIdx : 0;
+  const monthFirst = detectMonthFirst(dataLines.map((line) => splitRow(line)[dateColIdx]));
 
   for (const line of dataLines) {
     const cells = splitRow(line);
@@ -40,7 +44,7 @@ export function parseText(raw: string): ParseResult {
     if (!rawDate.trim() && !rawDesc.trim()) continue;
 
     let rawCents: number | null;
-    let rawDir: string | null = dirIdx !== null ? (cells[dirIdx] ?? null) : null;
+    let rawDir: string | null = impliedDirection ?? (dirIdx !== null ? (cells[dirIdx] ?? null) : null);
 
     if (amountIdx >= 0) {
       rawCents = normalizeAmountCents(cells[amountIdx] ?? "");
@@ -58,14 +62,16 @@ export function parseText(raw: string): ParseResult {
       rawCents = normalizeAmountCents(cells[2] ?? "");
     }
 
-    const date = normalizeDate(rawDate);
+    const date = normalizeDate(rawDate, monthFirst, defaultYear);
     if (!date || rawCents === null || !rawDesc.trim()) { orphanCount++; continue; }
 
+    const resolved = resolveDirection(rawDir, rawCents);
     entries.push({
       date,
       description: rawDesc,
       amountCents: Math.abs(rawCents),
-      direction: normalizeDirection(rawDir, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 

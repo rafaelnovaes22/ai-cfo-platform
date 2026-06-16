@@ -156,9 +156,9 @@ function setupHappyPath(): void {
       return {
         content: JSON.stringify({
           actions: [
-            { horizon: "short", title: "Renegociar fornecedor de materia-prima", description: "Buscar 3 cotações alternativas e renegociar prazo de pagamento.", effortLevel: "low", riskLevel: "low", impactCents: 5000, doneWhen: "Contrato renegociado em até 30 dias", evidenceRefs: ["cpv_cmv"], assumptions: [], confidence: 0.7 },
-            { horizon: "short", title: "Revisar contratos de fornecedores recorrentes", description: "Mapear top 5 fornecedores e renegociar condições com base em volume.", effortLevel: "medium", riskLevel: "low", impactCents: 3000, doneWhen: "Mapeamento concluido + 2 contratos renegociados", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.65 },
-            { horizon: "short", title: "Auditar gastos administrativos", description: "Revisar lançamentos de despesas administrativas para identificar redundâncias.", effortLevel: "low", riskLevel: "low", impactCents: 2000, doneWhen: "Lista de 5 redundancias entregue ao CEO até o fim do mês", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.6 },
+            { horizon: "short", title: "Renegociar fornecedor de materia-prima", description: "Buscar 3 cotações alternativas e renegociar prazo de pagamento.", effortLevel: "low", riskLevel: "low", impactCents: 50000, doneWhen: "Contrato renegociado em até 30 dias", evidenceRefs: ["cpv_cmv"], assumptions: [], confidence: 0.7 },
+            { horizon: "short", title: "Revisar contratos de fornecedores recorrentes", description: "Mapear top 5 fornecedores e renegociar condições com base em volume.", effortLevel: "medium", riskLevel: "low", impactCents: 40000, doneWhen: "Mapeamento concluido + 2 contratos renegociados", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.65 },
+            { horizon: "short", title: "Auditar gastos administrativos", description: "Revisar lançamentos de despesas administrativas para identificar redundâncias.", effortLevel: "low", riskLevel: "low", impactCents: 30000, doneWhen: "Lista de 5 redundancias entregue ao CEO até o fim do mês", evidenceRefs: ["despesasAdm"], assumptions: [], confidence: 0.6 },
             { horizon: "medium", title: "Implementar controle de orçamento mensal", description: "Criar processo de aprovação de despesas acima de R$500.", effortLevel: "medium", riskLevel: "medium", impactCents: 10000, doneWhen: "Processo aprovado e em uso por 60 dias", evidenceRefs: ["margemOperacional"], assumptions: [], confidence: 0.7 },
             { horizon: "long", title: "Investir em automação de processos", description: "Avaliar ferramentas de automação para reduzir despesas operacionais.", effortLevel: "high", riskLevel: "medium", impactCents: 30000, doneWhen: "Ferramenta homologada e ROI medido em 6 meses", evidenceRefs: ["despesasAdm", "despesasPessoal"], assumptions: [], confidence: 0.6 },
           ],
@@ -170,6 +170,12 @@ function setupHappyPath(): void {
       return {
         content: JSON.stringify({ publishable: true, issues: [], retryTargets: [] }),
         provider: "openai", model: "gpt-4.1-mini", inputTokens: 400, outputTokens: 100, costCents: 1, traceId: "t6",
+      };
+    }
+    if (task === "business-profile") {
+      return {
+        content: "Comércio/serviços com vendas via NF; receita-fim = vendas; despesas = fornecedor, aluguel, salário, luz.",
+        provider: "google", model: "gemini-2.5-flash-lite", inputTokens: 200, outputTokens: 60, costCents: 1, traceId: "t0",
       };
     }
     throw new Error(`Mock não cobre task: ${task}`);
@@ -199,6 +205,15 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.dre).toBeDefined();
     expect(result.dre!.receitaLiquida).toBe(460000); // 4 × 100000+120000+110000+130000 = 460000
 
+    // monthlyDre (mês típico) precisa propagar pelo grafo — channel registrado no
+    // Annotation. Com 1 só competência (abril), run-rate = o próprio total.
+    expect(result.monthlyDre).toBeDefined();
+    expect(result.monthlyDre!.receitaLiquida).toBe(460000);
+
+    // businessProfile inferido precisa propagar até narrativa/plano — channel registrado.
+    expect(result.businessProfile).toBeDefined();
+    expect(result.businessProfile).toContain("receita-fim");
+
     // Diagnoses (fan-out paralelo: anomaly + margin + cashflow)
     expect(Array.isArray(result.anomalies)).toBe(true);
     expect(result.marginDiagnosis).toBeDefined();
@@ -215,7 +230,7 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.actionPlan!.actions.filter((a) => a.horizon === "short").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("invoca callLlm exatamente 6 vezes (normalize + clarity + classification + narrative + action + QA)", async () => {
+  it("invoca callLlm exatamente 6 vezes (normalize + clarity + business-profile + classification + narrative + action)", async () => {
     setupHappyPath();
     const graph = buildMonthlyAnalysisGraph();
 
@@ -228,16 +243,18 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     });
 
     const tasksInvoked = callLlmMock.mock.calls.map((call) => (call[0] as { task: string }).task);
+    // financial-qa-review NÃO entra: o QA é 100% determinístico (sem LLM).
     expect(tasksInvoked).toEqual(
       expect.arrayContaining([
         "normalization",
         "clarity-judge",
+        "business-profile",
         "dre-classification",
         "narrative-synthesis",
         "action-planning",
-        "financial-qa-review",
       ]),
     );
+    expect(tasksInvoked).not.toContain("financial-qa-review");
     expect(tasksInvoked).toHaveLength(6);
   });
 

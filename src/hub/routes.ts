@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getPrisma } from "@/persistence/prisma.js";
-import { requireAuth, requireScope } from "@/auth/middleware.js";
+import { requireAuth, requireScope, requireWrite } from "@/auth/middleware.js";
+import { enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
+import { defaultErrorResponses, problemDetail } from "@/http/problem-detail.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 
 const DreSnapshotSchema = z.object({
@@ -258,6 +261,105 @@ export const hubRoutes: FastifyPluginAsync = async (app) => {
           };
         }),
       });
+    },
+  });
+
+  // Status enxuto de UMA análise — para o front fazer polling pós-upload e reidratar
+  // o loading após F5 sem puxar a lista inteira. Fonte de verdade do estado de geração.
+  f.get("/analysis/:analysisId/status", {
+    schema: {
+      params: z.object({ analysisId: z.string().uuid() }),
+      response: {
+        200: z.object({
+          id:              z.string(),
+          referenceMonth:  z.string(),
+          // pending | generating | ready | delivered | approved | failed
+          status:          z.string(),
+          mode:            z.string(),
+          hasActionPlan:   z.boolean(),
+          actionItemCount: z.number(),
+          generatedAt:     z.string().datetime().nullable(),
+          deliveredAt:     z.string().datetime().nullable(),
+        }),
+        ...defaultErrorResponses,
+      },
+    },
+    preHandler: [requireAuth, requireScope('hub:read')],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const analysis = await db.monthlyAnalysis.findFirst({
+        where: { id: req.params.analysisId, tenantId: req.auth!.tenantId },
+        select: {
+          id: true, referenceMonth: true, status: true, mode: true,
+          actionPlanJson: true, generatedAt: true, deliveredAt: true,
+          _count: { select: { actionItems: true } },
+        },
+      });
+      if (!analysis) {
+        return reply.status(404).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/analysis-not-found",
+          title: "Análise não encontrada",
+          status: 404,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
+      return reply.send({
+        id:              analysis.id,
+        referenceMonth:  analysis.referenceMonth,
+        status:          analysis.status,
+        mode:            analysis.mode,
+        hasActionPlan:   analysis.actionPlanJson != null,
+        actionItemCount: analysis._count.actionItems,
+        generatedAt:     analysis.generatedAt?.toISOString() ?? null,
+        deliveredAt:     analysis.deliveredAt?.toISOString() ?? null,
+      });
+    },
+  });
+
+  // Reprocessa uma análise que falhou tecnicamente (status "failed" = job BullMQ
+  // esgotou as tentativas). Os lançamentos já estão vinculados à análise, então é
+  // só re-disparar o pipeline na mesma analysisId — não exige reimportar nada.
+  // Botão "tentar novamente" do front. traceId omitido → nova trace na re-execução.
+  f.post("/analysis/:analysisId/retry", {
+    schema: {
+      params: z.object({ analysisId: z.string().uuid() }),
+      response: {
+        200: z.object({ id: z.string(), status: z.string() }),
+        ...defaultErrorResponses,
+      },
+    },
+    preHandler: [requireAuth, requireWrite(["admin", "editor"], ["ingest:write"])],
+    handler: async (req, reply) => {
+      const db = getPrisma();
+      const analysis = await db.monthlyAnalysis.findFirst({
+        where:  { id: req.params.analysisId, tenantId: req.auth!.tenantId },
+        select: { id: true, status: true, tenantId: true },
+      });
+      if (!analysis) {
+        return reply.status(404).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/analysis-not-found",
+          title: "Análise não encontrada",
+          status: 404,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
+      // Só reprocessa o que travou. Re-disparar uma análise pronta/aprovada ou ainda
+      // em andamento corromperia o estado (duplica trabalho, sobrescreve resultado).
+      if (analysis.status !== "failed") {
+        return reply.status(409).send(problemDetail({
+          type: "https://api.aicfo.com.br/errors/analysis-not-retryable",
+          title: "Análise não está em estado de retry",
+          status: 409,
+          detail: `Só análises com status 'failed' podem ser reprocessadas; status atual: '${analysis.status}'.`,
+          instance: req.url,
+          requestId: randomUUID(),
+        }));
+      }
+      await db.monthlyAnalysis.update({ where: { id: analysis.id }, data: { status: "generating" } });
+      await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId: analysis.tenantId });
+      return reply.send({ id: analysis.id, status: "generating" });
     },
   });
 };

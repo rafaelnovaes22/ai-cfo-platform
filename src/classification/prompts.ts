@@ -1,9 +1,12 @@
 import { buildTaxonomyBlock } from "@/classification/taxonomy.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 
 // System prompt é L0 — estático e cacheável pelo provider (Gemini prompt cache).
 // Não referenciar dados de tenant aqui (C8).
 export function buildSystemPrompt(): string {
   return `Você é o classificador de lançamentos financeiros do Aicfo, plataforma de gestão financeira para PMEs brasileiras.
+
+${INJECTION_GUARD}
 
 TAREFA
 Classifique cada lançamento recebido em uma das categorias DRE abaixo.
@@ -25,6 +28,16 @@ REGRAS DE CATEGORIA
 - DAS / Simples → "simples_nacional". IRPJ/CSLL separados → "irpj_csll".
 - Valores de entrada de empréstimo → "emprestimos_entrada" (não "receita_bruta").
 - Estorno (credit) de tarifa/multa → "despesas_financeiras" (reverte despesa, não é receita).
+- direction="unknown": o arquivo de origem NÃO informou se o lançamento é entrada ou saída.
+  Classifique APENAS pela semântica da descrição — contas/impostos/fornecedores/folha são
+  despesas mesmo sem sinal. NÃO assuma que é receita.
+- SERVIÇO-FIM × SERVIÇO CONTRATADO (decisivo quando há PERFIL DO NEGÓCIO): se a descrição
+  corresponde a um tipo de serviço/produto que o PERFIL identifica como a RECEITA-FIM da
+  empresa, classifique como "receita_bruta" MESMO com direction="unknown" e mesmo que a
+  descrição contenha "comercial", "serviço" ou "produção". Nome de um CLIENTE/empresa na
+  descrição (ex.: "... - Supermercados X", "... - Prefeitura Y") reforça que é venda, não custo.
+  Só use "custo_servicos" quando for claramente um serviço CONTRATADO de terceiros pela empresa
+  (ex.: "freelancer", "freela", "pagamento a fornecedor/prestador").
 
 REGRAS DE CONFIDENCE
 confidence deve refletir sua certeza real. Use confidence ≤ 0.65 em QUALQUER um dos casos abaixo:
@@ -48,6 +61,18 @@ Saída:   [{"entryId":"b2","category":"receita_bruta","confidence":0.95}]
 
 Entrada: [{"entryId":"a3","date":"2026-04-22","description":"MULTA DETRAN PLACA ABC1D23 VEICULO EMPRESA","amountCents":19500,"direction":"debit"}]
 Saída:   [{"entryId":"a3","category":"outras_despesas","confidence":0.88}]
+
+Entrada: [{"entryId":"a4","date":"2026-04-20","description":"DAS Simples Nacional","amountCents":387000,"direction":"unknown"}]
+Saída:   [{"entryId":"a4","category":"simples_nacional","confidence":0.97}]
+
+Entrada: [{"entryId":"a5","date":"2026-04-10","description":"Conta de energia - Light","amountCents":134000,"direction":"unknown"}]
+Saída:   [{"entryId":"a5","category":"despesas_administrativas","confidence":0.9}]
+
+EXEMPLO — SERVIÇO-FIM É RECEITA (aplicar o PERFIL DO NEGÓCIO, mesmo com direction="unknown")
+Perfil: produtora de mídia/jornalismo; a receita vem de cobertura, locução, narração, edição e produção de conteúdo para clientes.
+Entrada: [{"entryId":"a6","date":"2026-04-30","description":"Locução comercial rádio - Supermercados Preço Bom","amountCents":730000,"direction":"unknown"}]
+Saída:   [{"entryId":"a6","category":"receita_bruta","confidence":0.85}]
+(É serviço PRESTADO ao cliente "Supermercados Preço Bom", não um custo. "comercial" aqui qualifica o tipo de locução, não indica despesa.)
 
 EXEMPLOS — BAIXA CONFIANÇA (regra 1: TED para sócio sem NF)
 Entrada: [{"entryId":"d1","date":"2026-04-30","description":"TED PARA JOAO SILVA SOCIO R$ 10.000","amountCents":1000000,"direction":"debit"}]
@@ -95,14 +120,25 @@ function buildTenantFactsBlock(tenantFacts: TenantFact[]): string {
   return `REGRAS APRENDIDAS DESTE TENANT (alta prioridade — aplicar sempre que a descrição combinar):\n${lines}\n\n`;
 }
 
+function buildBusinessProfileBlock(businessProfile?: string): string {
+  if (!businessProfile || businessProfile.trim().length === 0) return "";
+  // Perfil inferido dos próprios lançamentos (ver business-profile.ts). Vem antes do
+  // segmento genérico porque é específico deste negócio: diz quais descrições são a
+  // RECEITA-FIM (serviço/produto vendido), evitando que serviços prestados sejam
+  // classificados como despesa quando a direção é "unknown".
+  return `PERFIL DO NEGÓCIO (inferido dos lançamentos — use para distinguir receita de despesa). Lançamentos que correspondem à RECEITA-FIM descrita aqui devem ser "receita_bruta", mesmo com direction="unknown" e mesmo contendo palavras como "comercial"/"serviço":\n${businessProfile.trim()}\n\n`;
+}
+
 export function buildUserPrompt(
   entries: EntryForClassification[],
   segment?: string,
   tenantFacts?: TenantFact[],
+  businessProfile?: string,
 ): string {
+  const profileBlock = buildBusinessProfileBlock(businessProfile);
   const segmentLine = segment
     ? `Segmento da empresa: ${segment}. Use o vocabulário típico do setor ao classificar (ex: mensalidades → receita_bruta para SaaS; CMV → custos_diretos para varejo).\n\n`
     : "";
   const factsBlock = tenantFacts && tenantFacts.length > 0 ? buildTenantFactsBlock(tenantFacts) : "";
-  return `${factsBlock}${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
+  return `${factsBlock}${profileBlock}${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
 }

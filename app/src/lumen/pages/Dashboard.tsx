@@ -92,6 +92,7 @@ export default function Dashboard() {
 
         {current && trend?.length > 1 && (
           <div className="w-full">
+            {/* trend já vem em reais (normalizado em api.analyses.trend). */}
             <MonthlyViewChart chartData={trend} />
           </div>
         )}

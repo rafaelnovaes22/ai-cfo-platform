@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { normalizeDate, normalizeAmountCents, normalizeDirection, detectColumns } from "@/ingest/normalize.js";
+import { normalizeDate, normalizeAmountCents, resolveDirection, detectColumns, detectMonthFirst } from "@/ingest/normalize.js";
 import type { ParseResult, RawLedger } from "@/ingest/types.js";
 
 // Defesa em profundidade contra o risco residual do xlsx (CVE de prototype pollution).
@@ -58,12 +58,19 @@ export function parseExcel(buffer: Buffer): ParseResult {
     return parsePositional(rows.slice(firstNonEmptyRowIdx + 1));
   }
 
-  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx } = detected;
+  const { dateIdx, descIdx, amountIdx, dirIdx, creditIdx, debitIdx, impliedDirection } = detected;
 
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
-  for (const row of rows.slice(headerRowIdx + 1)) {
+  const dataRows = rows.slice(headerRowIdx + 1);
+  // Orientação dia/mês detectada uma vez para o arquivo (só células-texto; datas
+  // que já vêm como Date do Excel não passam por normalizeDate).
+  const monthFirst = detectMonthFirst(
+    dataRows.map((r) => (r[dateIdx] instanceof Date ? null : String(r[dateIdx] ?? ""))),
+  );
+
+  for (const row of dataRows) {
     const cells = row;
     const cellDate = cells[dateIdx];
     const cellDesc = cells[descIdx];
@@ -77,7 +84,7 @@ export function parseExcel(buffer: Buffer): ParseResult {
     } else {
       const rawDateStr = String(cellDate ?? "").trim();
       if (!rawDateStr && !rawDescStr) continue; // linha em branco
-      date = rawDateStr ? normalizeDate(rawDateStr) : null;
+      date = rawDateStr ? normalizeDate(rawDateStr, monthFirst) : null;
     }
 
     let rawCents: number | null;
@@ -88,7 +95,7 @@ export function parseExcel(buffer: Buffer): ParseResult {
       rawCents = typeof cellAmount === "number"
         ? normalizeAmountCents(cellAmount)
         : normalizeAmountCents(String(cellAmount ?? ""));
-      rawDirStr = dirIdx !== null ? String(cells[dirIdx] ?? "") : null;
+      rawDirStr = impliedDirection ?? (dirIdx !== null ? String(cells[dirIdx] ?? "") : null);
     } else {
       // Colunas separadas de crédito/débito
       const cellCredit = cells[creditIdx!];
@@ -111,11 +118,13 @@ export function parseExcel(buffer: Buffer): ParseResult {
     if (!date || rawCents === null || !rawDescStr) { orphanCount++; continue; }
 
     const amountCents = Math.abs(rawCents);
+    const resolved = resolveDirection(rawDirStr, rawCents);
     entries.push({
       date,
       description: rawDescStr,
       amountCents,
-      direction: normalizeDirection(rawDirStr, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 
@@ -126,21 +135,27 @@ function parsePositional(rows: unknown[][]): ParseResult {
   const entries: RawLedger[] = [];
   let orphanCount = 0;
 
+  const monthFirst = detectMonthFirst(
+    rows.map((r) => (r[0] instanceof Date ? null : String(r[0] ?? ""))),
+  );
+
   for (const row of rows) {
     const cells = (row as unknown[]).map((c) => String(c ?? "").trim());
     if (cells.every((c) => !c)) continue;
 
-    const date = normalizeDate(cells[0] ?? "");
+    const date = normalizeDate(cells[0] ?? "", monthFirst);
     const desc = cells[1] ?? "";
     const rawCents = normalizeAmountCents(cells[2] ?? "");
 
     if (!date || rawCents === null || !desc) { orphanCount++; continue; }
 
+    const resolved = resolveDirection(cells[3] ?? null, rawCents);
     entries.push({
       date,
       description: desc,
       amountCents: Math.abs(rawCents),
-      direction: normalizeDirection(cells[3] ?? null, rawCents),
+      direction: resolved.direction,
+      directionSource: resolved.source,
     });
   }
 

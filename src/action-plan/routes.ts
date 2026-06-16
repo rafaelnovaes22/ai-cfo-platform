@@ -33,9 +33,16 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
   // Plano de ação completo
   f.get("/analysis/:analysisId/action-plan", {
     schema: {
-      params: z.object({ analysisId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid() }),
       response: {
         200: z.object({
+          // Status da análise dona do plano. O front usa isto para diferenciar um
+          // plano ainda EM GERAÇÃO (generating/pending → items vazio é transitório,
+          // mantém loading) de um plano CONCLUÍDO sem ações materiais (ready/
+          // delivered/approved → items vazio é o resultado final, mostra "sem ações").
+          // Sem isto, items=[] é ambíguo e o front fica em loading infinito.
+          // Valores possíveis: pending | generating | ready | delivered | approved | failed.
+          analysisStatus: z.string(),
           items: z.array(ActionItemSchema),
           summary: z.object({
             shortImpact:  z.number(),
@@ -75,6 +82,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
       // ao z.enum() do response schema, mas TS não infere essa equivalência.
       // lastStatusUpdatedAt é DateTime? no Prisma — serializa para ISO 8601 ou null.
       return reply.send({
+        analysisStatus: analysis.status,
         items: items.map((i) => ({
           ...i,
           lastStatusUpdatedAt: i.lastStatusUpdatedAt ? i.lastStatusUpdatedAt.toISOString() : null,
@@ -92,7 +100,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
   // Feedback do cliente (ASSISTED)
   f.patch("/analysis/:analysisId/action-plan/:itemId/feedback", {
     schema: {
-      params: z.object({ analysisId: z.string(), itemId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid(), itemId: z.string().uuid() }),
       body: z.object({
         approved: z.boolean(),
         comment: z.string().max(500).optional(),
@@ -129,7 +137,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
   // Lifecycle de status do item de ação — sinal de validação para self-harness (ADR-011 Etapa 2)
   f.patch("/actions/:itemId/status", {
     schema: {
-      params: z.object({ itemId: z.string() }),
+      params: z.object({ itemId: z.string().uuid() }),
       body: z.object({
         status: z.enum(["pending", "in_progress", "blocked", "done", "abandoned"]),
         reason: z.string().max(500).optional(),
@@ -173,7 +181,7 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
   // Aprovação do mês (fecha a análise no modo ASSISTED)
   f.post("/analysis/:analysisId/approve", {
     schema: {
-      params: z.object({ analysisId: z.string() }),
+      params: z.object({ analysisId: z.string().uuid() }),
       response: {
         200: z.object({ status: z.string(), approvedAt: z.string() }),
         ...defaultErrorResponses,

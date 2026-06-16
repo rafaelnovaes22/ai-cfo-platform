@@ -38,7 +38,7 @@ export const tenantConfigRoutes: FastifyPluginAsync = async (app) => {
 
   f.patch("/config/members/:userId/role", {
     schema: {
-      params: z.object({ userId: z.string() }),
+      params: z.object({ userId: z.string().uuid() }),
       body: ChangeRoleBody,
       response: { 200: z.object({ id: z.string(), role: z.string() }) },
     },
@@ -87,7 +87,7 @@ export const tenantConfigRoutes: FastifyPluginAsync = async (app) => {
   });
 
   f.delete("/config/tokens/:tokenId", {
-    schema: { params: z.object({ tokenId: z.string() }), response: { 204: z.null() } },
+    schema: { params: z.object({ tokenId: z.string().uuid() }), response: { 204: z.null() } },
     preHandler: [requireAuth, requireRole("admin")],
     handler: async (req, reply) => {
       await configService.revokeToken(req.auth!.tenantId, req.params.tokenId);

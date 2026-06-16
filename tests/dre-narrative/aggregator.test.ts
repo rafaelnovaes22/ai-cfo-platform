@@ -1,5 +1,40 @@
 import { describe, it, expect } from "vitest";
-import { aggregateDre } from "@/dre-narrative/aggregator.js";
+import { aggregateDre, aggregateMonthlyRunRateDre } from "@/dre-narrative/aggregator.js";
+
+describe("dre-narrative/aggregateMonthlyRunRateDre", () => {
+  // amountCents positivo para tudo (convenção do aggregateDre — soma por categoria,
+  // ignora direction/sinal). direction é só rótulo.
+  const row = (amountCents: number, category: string, month: string) => ({
+    amountCents,
+    direction: "debit",
+    month,
+    predictedCategory: category,
+    confirmedCategory: null,
+  });
+
+  it("divide cada categoria pelos meses em que ELA ocorre (valor recorrente)", () => {
+    // Pró-labore só em abr+mai (2 meses) → R$ 36.000 / 2 = R$ 18.000/mês recorrente,
+    // mesmo o extrato tendo 3 meses (mar/abr/mai). Não dilui com março (sem pró-labore).
+    const monthly = aggregateMonthlyRunRateDre([
+      row(10_000_00, "receita_bruta", "2026-03"),
+      row(10_000_00, "receita_bruta", "2026-04"),
+      row(10_000_00, "receita_bruta", "2026-05"),
+      row(18_000_00, "prolabore", "2026-04"),
+      row(18_000_00, "prolabore", "2026-05"),
+    ]);
+    // pró-labore: 36.000 / 2 meses presentes = 18.000 (não 12.000 do período de 3)
+    expect(monthly.prolabore).toBe(18_000_00);
+    // receita: 30.000 / 3 meses presentes = 10.000
+    expect(monthly.receitaBruta).toBe(10_000_00);
+  });
+
+  it("uma única competência é no-op (run-rate = o próprio mês)", () => {
+    const monthly = aggregateMonthlyRunRateDre([
+      row(10_000_00, "prolabore", "2026-05"),
+    ]);
+    expect(monthly.prolabore).toBe(10_000_00);
+  });
+});
 
 interface EntryRow {
   amountCents: number;

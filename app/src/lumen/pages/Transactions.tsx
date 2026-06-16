@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { formatBRL } from "../data/categories.ts";
 import {
   useTransactions,
@@ -10,8 +10,12 @@ import { useAnalyses } from "../data/useAnalyses.ts";
 import { toast } from "@/components/ui/sonner";
 
 export default function Transactions() {
-  const { transactions, loading, correct } = useTransactions();
+  const { transactions, loading, correct, classifying } = useTransactions();
   const { activeAnalysis } = useAnalyses();
+  const pendingCount = useMemo(
+    () => transactions.filter((t) => t.pending).length,
+    [transactions]
+  );
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
   const [category, setCategory] = useState("all");
@@ -75,6 +79,14 @@ export default function Transactions() {
               ? "Carregando…"
               : `${transactions.length} ${transactions.length === 1 ? "registro" : "registros"} no total.`}
           </p>
+          {classifying && !loading && (
+            <p className="mt-2 inline-flex items-center gap-2 text-[12.5px] text-amber-400/90">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {pendingCount > 0
+                ? `IA classificando ${pendingCount} ${pendingCount === 1 ? "lançamento" : "lançamentos"}. A lista atualiza sozinha.`
+                : "IA finalizando a análise. Você já pode revisar as categorias."}
+            </p>
+          )}
         </div>
       </header>
 
@@ -187,6 +199,7 @@ export default function Transactions() {
                   <StatusBadge
                     status={t.reviewStatus}
                     confidence={t.confidence}
+                    classifying={t.pending && classifying}
                   />
                 </td>
               </tr>
@@ -265,10 +278,21 @@ function SummaryCard({
 function StatusBadge({
   status,
   confidence,
+  classifying = false,
 }: {
   status: ReviewStatus;
   confidence: number | null;
+  classifying?: boolean;
 }) {
+  // A IA ainda não devolveu a categoria deste lançamento — pipeline em andamento.
+  if (classifying) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-sky-500/15 text-sky-400 border border-sky-500/30 animate-pulse">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        Classificando…
+      </span>
+    );
+  }
   if (status === "needs_review") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">

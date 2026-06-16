@@ -10,11 +10,18 @@ export const CashflowQuerySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "endDate deve ser YYYY-MM-DD"),
   granularity: GranularityEnum.default("monthly"),
-  category: z.string().optional(),
+  category: z.string().max(100).optional(),
   bankAccountId: z.string().uuid().optional(),
 }).refine(
   (d) => d.startDate <= d.endDate,
   { message: "startDate deve ser anterior ou igual a endDate" }
+).refine(
+  // Teto de 60 meses: sem ele, um range 1900→2100 vira full scan no Postgres.
+  (d) => {
+    const ms = new Date(`${d.endDate}T00:00:00Z`).getTime() - new Date(`${d.startDate}T00:00:00Z`).getTime();
+    return ms <= 60 * 31 * 24 * 60 * 60 * 1000;
+  },
+  { message: "Período máximo: 60 meses" }
 );
 
 export const CashflowSummaryQuerySchema = z.object({

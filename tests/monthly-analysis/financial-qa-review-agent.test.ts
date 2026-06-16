@@ -6,7 +6,7 @@ vi.mock("@/llm/index.js", () => ({
   callLlm: (...args: unknown[]) => callLlmMock(...args),
 }));
 
-import { runFinancialQaReviewAgent, runDeterministicFinancialQaReview } from "@/monthly-analysis/agents/financial-qa-review.js";
+import { runFinancialQaReviewAgent, runFinancialQaReviewAgentWithTelemetry, runDeterministicFinancialQaReview } from "@/monthly-analysis/agents/financial-qa-review.js";
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -215,30 +215,8 @@ describe("runFinancialQaReviewAgent", () => {
     actionPlan: coherentPlan(),
   };
 
-  it("rebaixa NUMBER_MISMATCH do LLM a warning — LLM é advisory, não bloqueia", async () => {
-    const mockReview: QaReview = {
-      publishable: false,
-      issues: [
-        {
-          severity: "blocker",
-          code: "NUMBER_MISMATCH",
-          message: "Card critical_gap cita 'lucro de R$ 50.000', mas DRE.lucroLiquido = R$ 12.000.",
-          evidenceRef: "lucroLiquido",
-        },
-      ],
-      retryTargets: ["narrative-synthesis"],
-    };
-
-    callLlmMock.mockResolvedValue({
-      content: JSON.stringify(mockReview),
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      inputTokens: 600,
-      outputTokens: 80,
-      costCents: 2,
-      traceId: null,
-    });
-
+  // QA é 100% determinístico (LLM advisory removido — ver financial-qa-review.ts).
+  it("análise coerente aprova SEM chamar o LLM", async () => {
     const result = await runFinancialQaReviewAgent(baseState, {
       tenantId: "tenant-1",
       traceId: "trace-qa-1",
@@ -247,114 +225,21 @@ describe("runFinancialQaReviewAgent", () => {
       taxRegime: "simples",
     });
 
-    // Determinístico aprovou (baseState é coerente) → LLM roda só como advisory:
-    // o blocker do LLM vira warning, publishable=true, sem retry.
-    expect(result.publishable).toBe(true);
-    expect(result.issues).toHaveLength(1);
-    expect(result.issues[0]?.severity).toBe("warning");
-    expect(result.issues[0]?.code).toBe("NUMBER_MISMATCH");
-    expect(result.retryTargets).toEqual([]);
-
-    expect(callLlmMock).toHaveBeenCalledWith(expect.objectContaining({
-      task: "financial-qa-review",
-      tenantId: "tenant-1",
-      traceId: "trace-qa-1",
-      jsonMode: true,
-    }));
-  });
-
-  it("rebaixa MISSING_DONEWHEN do LLM a warning — advisory não dispara retry", async () => {
-    const mockReview: QaReview = {
-      publishable: false,
-      issues: [
-        {
-          severity: "blocker",
-          code: "MISSING_DONEWHEN",
-          message: "action#3 'Cortar despesa administrativa' tem doneWhen genérico ('cliente satisfeito') sem métrica nem prazo.",
-          evidenceRef: "action#3",
-        },
-      ],
-      retryTargets: ["action-planning"],
-    };
-
-    callLlmMock.mockResolvedValue({
-      content: JSON.stringify(mockReview),
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      inputTokens: 600,
-      outputTokens: 80,
-      costCents: 2,
-      traceId: null,
-    });
-
-    const result = await runFinancialQaReviewAgent(baseState, { tenantId: "tenant-1" });
-
-    expect(result.publishable).toBe(true);
-    expect(result.issues[0]?.severity).toBe("warning");
-    expect(result.issues[0]?.code).toBe("MISSING_DONEWHEN");
-    expect(result.retryTargets).toEqual([]);
-  });
-
-  it("retorna publishable=true quando análise está coerente", async () => {
-    const mockReview: QaReview = {
-      publishable: true,
-      issues: [],
-      retryTargets: [],
-    };
-
-    callLlmMock.mockResolvedValue({
-      content: JSON.stringify(mockReview),
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      inputTokens: 600,
-      outputTokens: 30,
-      costCents: 2,
-      traceId: null,
-    });
-
-    const result = await runFinancialQaReviewAgent(baseState, { tenantId: "tenant-1" });
-
     expect(result.publishable).toBe(true);
     expect(result.issues).toEqual([]);
     expect(result.retryTargets).toEqual([]);
+    expect(callLlmMock).not.toHaveBeenCalled();
   });
 
-  it("falha rápido quando LLM devolve JSON malformado", async () => {
-    callLlmMock.mockResolvedValue({
-      content: "not-json{{",
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      inputTokens: 600,
-      outputTokens: 5,
-      costCents: 2,
-      traceId: null,
-    });
+  it("telemetria sem LLM: latencyMs 0 e response NOOP", async () => {
+    const { response, latencyMs } = await runFinancialQaReviewAgentWithTelemetry(
+      baseState,
+      { tenantId: "tenant-1" },
+    );
 
-    await expect(
-      runFinancialQaReviewAgent(baseState, { tenantId: "tenant-1" }),
-    ).rejects.toThrow();
-  });
-
-  it("falha rápido quando LLM devolve schema inválido (severity inexistente)", async () => {
-    callLlmMock.mockResolvedValue({
-      content: JSON.stringify({
-        publishable: false,
-        issues: [
-          { severity: "critical", code: "X", message: "Algo errado" },
-        ],
-        retryTargets: [],
-      }),
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      inputTokens: 600,
-      outputTokens: 30,
-      costCents: 2,
-      traceId: null,
-    });
-
-    await expect(
-      runFinancialQaReviewAgent(baseState, { tenantId: "tenant-1" }),
-    ).rejects.toThrow();
+    expect(latencyMs).toBe(0);
+    expect(response.model).toBe("noop");
+    expect(callLlmMock).not.toHaveBeenCalled();
   });
 
   it("lança erro quando estado está incompleto (sem narrativeCards)", async () => {
@@ -526,6 +411,12 @@ describe("MISSING_DONEWHEN — regressão: doneWhen mensuráveis reais não repr
     "Contratos revisados e economias contratuais de pelo menos 15% aplicadas nas próximas faturas.",
     "Programa implantado com indicadores de redução de custos de pessoal em pelo menos 10% após 6 meses.",
     "DespesasPessoal + PróLabore não excedem R$ 69.200 no fechamento do mês seguinte",
+    // Capturados no LangSmith em 2026-06-16 (trace 019ed0d2): reprovados por
+    // falso-positivo (verbos realizad/totalizand/lançad/gerand fora da whitelist
+    // e "mensal/mensais" sem casar a âncora temporal), apesar de terem R$/número.
+    "Primeiros 3 aportes mensais de R$ 2.300,00 realizados na conta de reserva, totalizando R$ 6.900,00, e plano de reserva formalizado.",
+    "Nova linha de serviço lançada e com pelo menos 2 clientes pagantes, gerando R$ 5.000 de receita mensal recorrente.",
+    "Meta de reserva de caixa definida e primeira alocação de R$ 3.000 realizada para uma conta separada, com plano de aportes mensais documentado.",
   ];
 
   it("não emite MISSING_DONEWHEN para doneWhen mensuráveis reais", () => {

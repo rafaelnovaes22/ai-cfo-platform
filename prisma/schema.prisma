@@ -29,7 +29,9 @@ model Tenant {
   learningAutonomyState Json @default("{\"classification\":\"needs_review\",\"narrative\":\"needs_review\",\"action\":\"needs_review\"}")
 
   // Canal WhatsApp (LGPD Art. 7 — opt-in explícito obrigatório)
-  whatsappPhone   String? // número E.164 vinculado ao canal WhatsApp
+  // @unique: um número só pode estar vinculado a UM tenant — sem isso, dois tenants
+  // com o mesmo número causariam roteamento cross-tenant no canal inbound.
+  whatsappPhone   String?   @unique // número E.164 vinculado ao canal WhatsApp
   whatsappOptInAt DateTime? // timestamp do opt-in explícito (LGPD Art. 7)
   whatsappEnabled Boolean   @default(false)
 
@@ -198,6 +200,7 @@ enum AnalysisStatus {
   ready // gerado, aguardando entrega (SHADOW: Rafael revisa)
   delivered // entregue ao cliente (ASSISTED/AUTONOMOUS)
   approved // cliente aprovou (fecha o mês)
+  failed // pipeline esgotou tentativas — visível ao usuário (re-tentar/re-ingest)
 }
 
 enum CardType {
@@ -223,6 +226,9 @@ model LedgerEntry {
   description String
   amountCents Int // valores em centavos — nunca Float (evita arredondamento)
   direction   LedgerDirection
+  // true = direção veio de fallback (arquivo sem coluna Tipo e sem sinais sistemáticos);
+  // o classificador pode corrigi-la pela natureza da categoria prevista
+  directionInferred Boolean @default(false)
 
   // Flywheel de treinamento — pares rotulados gerados pelo pipeline SHADOW/ASSISTED
   predictedCategory        String? // saída do modelo atual
@@ -231,10 +237,16 @@ model LedgerEntry {
   confirmedCategory        String? // categoria final aceita
   correctionSource         String? // "rafael" | "client" | "auto-approved" | "needs_review"
 
+  // Chave de deduplicação por conteúdo (md5 de data|descrição|valor|direção + índice
+  // de ocorrência). Garante que reenviar o mesmo extrato não duplique lançamentos —
+  // o cashflow agrega por tenant+período e duplicatas inflavam o resultado. Ver src/ingest/dedupe.ts.
+  dedupeHash String?
+
   importedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@unique([tenantId, dedupeHash]) // bloqueia reinserção do mesmo lançamento (NULLs são distintos no Postgres)
   @@index([tenantId])
   @@index([analysisId])
   @@index([date])

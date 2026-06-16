@@ -1,5 +1,6 @@
 import type { LlmResponse } from "@/llm/types.js";
 import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
+import { mapWithConcurrency } from "@/shared/concurrency.js";
 
 // Resultado padrão de um agente instrumentado: dados + resposta crua do LLM
 // (para telemetria) + latência medida. Espelha o retorno das funções
@@ -16,7 +17,11 @@ export interface ChunkConfig {
 }
 
 const DEFAULT_CHUNK_SIZE = 15;
-const DEFAULT_CONCURRENCY = 4;
+// 6 cobre 1 onda para extratos de até ~90 lançamentos (chunkSize 15) — o caso
+// típico processa todos os lotes em paralelo em vez de 2 ondas. Era 4 (calibrado
+// p/ Vertex southamerica-east1); us-central1 (ADR-019) tem throughput maior e o
+// adapter já faz retry de 429/RESOURCE_EXHAUSTED. Ajuste fino via env.
+const DEFAULT_CONCURRENCY = 6;
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -43,24 +48,6 @@ function splitIntoChunks<I>(items: I[], size: number): I[][] {
   return chunks;
 }
 
-// Pool de concorrência que preserva a ordem dos resultados (results[i] ↔ items[i]).
-async function mapWithConcurrency<A, B>(
-  items: A[],
-  limit: number,
-  fn: (item: A, index: number) => Promise<B>,
-): Promise<B[]> {
-  const results = new Array<B>(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    for (let i = next++; i < items.length; i = next++) {
-      results[i] = await fn(items[i]!, i);
-    }
-  }
-  const pool = Array.from({ length: Math.min(limit, items.length) }, () => worker());
-  await Promise.all(pool);
-  return results;
-}
-
 // Soma tokens/custo de todos os lotes; provider/model/traceId do primeiro lote
 // (são homogêneos — mesma task → mesma rota). content é irrelevante agregado:
 // os nós consomem `data`, não `response.content`.
@@ -83,10 +70,10 @@ function aggregateResponses(responses: LlmResponse[]): LlmResponse {
  * limite de concorrência), preservando a ordem e agregando a telemetria.
  *
  * Por quê: nós como normalize/clarity/dre-classifier geram output proporcional
- * ao nº de lançamentos numa única chamada LLM. No Vertex southamerica-east1
- * (throughput limitado pela LGPD/ADR-009), uma chamada de ~6k tokens de saída
- * leva ~90s. Dividir em lotes concorrentes reduz o wall-clock ao lote mais
- * lento (não à soma), sem mudar o contrato de saída por entryId.
+ * ao nº de lançamentos numa única chamada LLM — uma chamada de ~6k tokens de saída
+ * leva dezenas de segundos no Vertex. Dividir em lotes concorrentes reduz o
+ * wall-clock ao lote mais lento (não à soma), sem mudar o contrato de saída por
+ * entryId. A concorrência default cobre o caso típico em 1 onda (ver constantes).
  *
  * Garantias:
  * - items vazio → telemetria noop, sem chamar LLM.

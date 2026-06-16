@@ -3,6 +3,7 @@
 // e cria entradas sintéticas com confirmedCategory já preenchida — pula classificação.
 import { z } from "zod";
 import { callLlm } from "@/llm/index.js";
+import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 import { buildTaxonomyBlock, DRE_CATEGORIES } from "@/classification/taxonomy.js";
 import { extractPdfText } from "@/ingest/parsers/pdf-text.js";
 import { logger } from "@/observability/logger.js";
@@ -85,6 +86,8 @@ function buildSystemPrompt(): string {
   return `Você é um extrator de DRE (Demonstrativo de Resultado do Exercício) para contabilidade brasileira.
 Dado o texto de um relatório DRE consolidado, extraia cada linha financeira e mapeie para a taxonomia Aicfo.
 
+${INJECTION_GUARD}
+
 Taxonomia disponível:
 ${buildTaxonomyBlock()}
 
@@ -166,6 +169,8 @@ export async function parsePdfDre(
       description: line.description,
       amountCents: Math.round(absValue * 100),
       direction: line.direction,
+      // Direção derivada da natureza da linha DRE — confiável por construção.
+      directionSource: "explicit",
       confirmedCategory: category,
       correctionSource: "dre-import",
       classificationConfidence: 1.0,

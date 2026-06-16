@@ -103,7 +103,10 @@ function parseInputBlock(file: CaseFile): ClassificationInput {
   const amountCentsRaw = fields.amountCents ?? "";
   const amountCents = Number(amountCentsRaw);
 
-  if (!description || !date || Number.isNaN(amountCents) || (direction !== "credit" && direction !== "debit")) {
+  // "unknown" = arquivo de origem sem marcação de sentido (PR #164) — o prompt
+  // de classificação instrui o modelo a inferir pela semântica da descrição.
+  if (!description || !date || Number.isNaN(amountCents) ||
+      (direction !== "credit" && direction !== "debit" && direction !== "unknown")) {
     throw new Error(
       `Campos obrigatórios ausentes/inválidos em ${file.filePath}: ` +
       `description=${description}, date=${date}, amountCents=${amountCentsRaw}, direction=${direction}`,
@@ -115,7 +118,9 @@ function parseInputBlock(file: CaseFile): ClassificationInput {
     tenantContext = parseInlineObject(fields.tenant_context);
   }
 
-  return { description, direction, date, amountCents, tenantContext };
+  const businessProfile = fields.business_profile ? unquote(fields.business_profile) : undefined;
+
+  return { description, direction, date, amountCents, tenantContext, businessProfile };
 }
 
 function parseGroundTruthBlock(file: CaseFile): ClassificationGroundTruth {

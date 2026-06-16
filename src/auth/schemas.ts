@@ -35,6 +35,11 @@ export const MeResponse = z.object({
   role: z.string(),
   name: z.string(),
   email: z.string(),
+  // Acesso ao app web: lead (student/trial) só captura dados; assinante (pago
+  // ativo) acessa. O frontend usa isSubscriber para o gate de rota.
+  plan: z.string(),
+  subscriptionStatus: z.string(),
+  isSubscriber: z.boolean(),
 });
 
 export const PasswordResetRequestBody = z.object({
