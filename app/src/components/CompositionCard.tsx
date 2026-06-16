@@ -8,7 +8,7 @@ export default function CompositionCard({ current, composition }) {
       <div className="col-span-12 px-10 pl-0">
         <div className="font-semibold  mb-4">Lucro líquido</div>
         <div className="text-5xl font-semibold leading-none -tracking-[3px]  tabular font-sans">
-          {formatBRL(current.netProfit)}
+          {current.netProfit ? formatBRL(current.netProfit) : "-"}
         </div>
         <div className="mt-8 pl-4 border-l-2 flex flex-col items-start gap-0 text-[13px]">
           <span className="font-semibold">Margem</span>
@@ -17,20 +17,20 @@ export default function CompositionCard({ current, composition }) {
               current.margin >= 0 ? "text-[#29c89b]" : "text-[#ff9191]"
             }`}
           >
-            {current.margin}%
+            {current.margin || "-"}%
           </span>
         </div>
         <div className="flex gap-6">
           <div className="mt-4 pl-4 border-l-2 border-[#29c89b] flex flex-col items-start gap-0 text-[13px]">
             <span className="font-semibold text-[#29c89b]">Receitas</span>
             <span className="whitespace-nowrap font-medium text-lg md:text-xl text-[#29c89b]">
-              {formatBRL(composition.income)}
+              {composition.income ? formatBRL(composition.income) : "-"}
             </span>
           </div>
           <div className="mt-4 pl-4 border-l-2 border-[#ff9191] flex flex-col items-start gap-0 text-[13px]">
             <span className="font-semibold text-[#ff9191]">Despesas</span>
             <span className="whitespace-nowrap font-medium text-lg md:text-xl text-[#ff9191]">
-              -{formatBRL(composition.expense)}
+              -{composition.expense ? formatBRL(composition.expense) : ""}
             </span>
           </div>
         </div>

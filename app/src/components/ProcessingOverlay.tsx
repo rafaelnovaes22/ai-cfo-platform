@@ -10,12 +10,12 @@ export const catchphrases = [
   "Preparando dashboard de performance...",
 ];
 
-export function ProcessingContent({ 
-  className, 
+export function ProcessingContent({
+  className,
   title = "Analisando seus dados",
-  showDots = true 
-}: { 
-  className?: string; 
+  showDots = true,
+}: {
+  className?: string;
   title?: string;
   showDots?: boolean;
 }) {
@@ -29,25 +29,27 @@ export function ProcessingContent({
   }, []);
 
   return (
-    <div className={`flex flex-col items-center justify-center text-center ${className}`}>
+    <div
+      className={`flex flex-col items-center justify-center text-center ${className}`}
+    >
       <div className="relative mb-6">
         <Loader2 className="h-10 w-10 animate-spin text-[#111164] dark:text-[#96ff7e]" />
       </div>
-      <div className="space-y-2 animate-fade-up">
+      <div className="space-y-2 animate-fade-up min-w-[300px]">
         <h2 className="text-xl font-medium tracking-tight">{title}</h2>
         <p className="text-[14px] text-muted-foreground animate-pulse min-h-[1.5em]">
           {catchphrases[index]}
         </p>
       </div>
-      
+
       {showDots && (
         <div className="mt-8 flex justify-center gap-1.5">
           {catchphrases.map((_, i) => (
             <div
               key={i}
               className={`h-1 rounded-full transition-all duration-500 ${
-                i === index 
-                  ? "w-8 bg-[#111164] dark:bg-[#96ff7e]" 
+                i === index
+                  ? "w-8 bg-[#111164] dark:bg-[#96ff7e]"
                   : "w-2 bg-muted opacity-30"
               }`}
             />
@@ -58,11 +60,11 @@ export function ProcessingContent({
   );
 }
 
-export default function ProcessingOverlay({ 
-  title, 
-  showDots 
-}: { 
-  title?: string; 
+export default function ProcessingOverlay({
+  title,
+  showDots,
+}: {
+  title?: string;
   showDots?: boolean;
 }) {
   return (

@@ -69,10 +69,10 @@ export default function Dashboard() {
 
   // console.log("trend/anomaly", trend, anomaly);
 
-  const current = currentKey ? summarizeMonth(transactions, currentKey) : null;
+  const current = currentKey ? summarizeMonth(transactions, currentKey) : {};
   const composition = currentKey
     ? compositionByType(transactions, currentKey)
-    : null;
+    : {};
 
   // const userName = user?.userId?.split("@")[0] ?? "você";
   const userName = "você";
@@ -103,7 +103,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <header className="animate-fade-up flex items-end justify-between">
         <div>
           <h1 className="text-2xl tracking-tight  max-w-2xl">
@@ -122,11 +122,17 @@ export default function Dashboard() {
         <div></div>
       </header>
 
-      <div className="flex flex-wrap -mx-4 md:mx-0 gap-4">
-        {analyses.length === 0 && !analysesLoading && (
-          <EmptyState userName={userName} />
-        )}
-
+      {analyses.length === 0 && !analysesLoading && (
+        <div className="absolute top-[30vh] left-1/2 -translate-x-1/2 -translate-y-1/2 z-50">
+          <div className="relative z-[1] animate-fade-up">
+            <EmptyState userName={userName} />
+          </div>
+          <div className="absolute inset-0 bg-cream/80 dark:bg-[#0b0918]/80 -z-1 blur-2xl"></div>
+        </div>
+      )}
+      <div
+        className={`flex flex-wrap -mx-4 md:mx-0 gap-4 ${analyses.length === 0 && !analysesLoading ? "blur-md pointer-events-none max-h-[calc(100vh-300px)] md:max-h-[calc(100vh-370px)] overflow-hidden opacity-50" : ""}`}
+      >
         {current && trend?.length > 1 && (
           <div className="w-full">
             {/* trend já vem em reais (normalizado em api.analyses.trend). */}
