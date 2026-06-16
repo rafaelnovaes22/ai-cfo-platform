@@ -27,7 +27,7 @@ const cards: {
   eyebrow: string;
   title: string;
   desc: string;
-  icon: any;
+  icon: typeof ClipboardPaste;
 }[] = [
   {
     id: "paste",
