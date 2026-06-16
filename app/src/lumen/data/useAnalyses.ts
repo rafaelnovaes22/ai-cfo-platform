@@ -51,6 +51,17 @@ export interface Analysis {
   period_end?: string | null;
 }
 
+export type AnalysisUIState = "PROCESSING" | "FAILED" | "READY" | "INSUFFICIENT_DATA";
+
+function deriveAnalysisUIState(analysis: Analysis, hasData?: boolean): AnalysisUIState {
+  if (analysis.status === "failed") return "FAILED";
+  if (TERMINAL_STATUSES.has(analysis.status)) {
+    if (analysis.status === "ready" && hasData === false) return "INSUFFICIENT_DATA";
+    return "READY";
+  }
+  return "PROCESSING";
+}
+
 const STORAGE_KEY = "lumen.activeAnalysisId";
 
 const TERMINAL_STATUSES = new Set([
@@ -67,6 +78,8 @@ interface Ctx {
   loading: boolean;
   activeId: string | null;
   activeAnalysis: Analysis | null;
+  isProcessing: boolean;
+  uiState: AnalysisUIState | null;
   trend: TrendPoint[] | null;
   anomaly: AnomalyTimelinePoint[] | null;
   setActiveId: (id: string | null) => void;
@@ -94,8 +107,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (options?: { silent?: boolean; onlyList?: boolean }) => {
+    const silent = options?.silent ?? false;
+    const onlyList = options?.onlyList ?? false;
+
+    if (!silent) setLoading(true);
     try {
       const { analyses: raw } = await api.analyses.list();
       const list: Analysis[] = raw.map((a) => ({
@@ -106,8 +122,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     } catch {
       setAnalyses([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+
+    if (onlyList) return;
 
     try {
       const { timeline: anomalyRaw } = await api.analyses.anomalyTimeline();
@@ -150,7 +168,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     user != null && analyses.some((a) => !TERMINAL_STATUSES.has(a.status));
   useEffect(() => {
     if (!needsPolling) return;
-    const id = setInterval(refresh, 4000);
+    // When polling for status, only refresh the list to avoid heavy dashboard updates
+    const id = setInterval(() => refresh({ silent: true, onlyList: true }), 4000);
     return () => clearInterval(id);
   }, [needsPolling, refresh]);
 
@@ -159,6 +178,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     [analyses, activeId]
   );
 
+  const isProcessing = useMemo(
+    () => activeAnalysis != null && !TERMINAL_STATUSES.has(activeAnalysis.status),
+    [activeAnalysis]
+  );
+
+  const uiState = useMemo(() => {
+    if (!activeAnalysis) return null;
+    return deriveAnalysisUIState(activeAnalysis);
+  }, [activeAnalysis]);
+
   const value: Ctx = {
     analyses,
     trend,
@@ -166,6 +195,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     loading,
     activeId,
     activeAnalysis,
+    isProcessing,
+    uiState,
     setActiveId,
     refresh,
   };

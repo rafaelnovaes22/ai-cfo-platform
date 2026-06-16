@@ -6,10 +6,13 @@ import {
   Zap,
   Shield,
   TrendingUp,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useActionItems, type ActionItem } from "../data/useActionItems";
 import { useAnalyses } from "../data/useAnalyses.ts";
+import ProcessingOverlay from "@/components/ProcessingOverlay";
 import { formatBRL } from "../data/analytics";
 import { toast } from "sonner";
 
@@ -44,9 +47,16 @@ const riskLabel: Record<string, string> = {
 };
 
 export default function Plan() {
-  const { items, loading, feedback } = useActionItems();
-  const { activeAnalysis } = useAnalyses();
+  const { items, loading, error, status, retry, feedback } = useActionItems();
+  const { activeAnalysis, uiState: globalUiState, isProcessing: globalIsProcessing } = useAnalyses();
   const [horizon, setHorizon] = useState<Horizon>("short");
+
+  // Derive local state from action-plan status
+  const uiState = status === "failed" ? "FAILED" : 
+                  (status && ["ready", "completed", "approved", "delivered"].includes(status)) ? "READY" : 
+                  globalUiState;
+  
+  const isProcessing = status === "generating" || globalIsProcessing;
 
   const grouped = useMemo(() => {
     const map: Record<Horizon, ActionItem[]> = {
@@ -60,7 +70,85 @@ export default function Plan() {
 
   const actions = grouped[horizon];
 
+  if (isProcessing) {
+    return <ProcessingOverlay />;
+  }
+
   if (!loading && items.length === 0) {
+    if (uiState === "FAILED" || error) {
+      return (
+        <div className="space-y-10">
+          <header className="animate-fade-up">
+            <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">
+              Plano de ação{activeAnalysis ? ` · ${activeAnalysis.name}` : ""}
+            </div>
+            <h1 className="text-3xl leading-[1.05] tracking-tight">
+              Erro ao gerar plano
+            </h1>
+          </header>
+          <section className="dark:bg-[#15152f] border dark:border-[#15152f]/50 rounded-lg p-12 text-center">
+            <div className="h-12 w-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <RotateCcw className="h-6 w-6" />
+            </div>
+            <h2 className="text-[26px] tracking-tight mb-2">
+              Falha técnica
+            </h2>
+            <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
+              Houve um problema inesperado durante o processamento da sua análise.
+              Seus dados estão salvos, podemos tentar gerar o plano novamente.
+            </p>
+            <button
+              onClick={async () => {
+                try {
+                  await retry();
+                  toast.success("Sua análise foi reiniciada!");
+                } catch (e) {
+                  toast.error("Erro ao reiniciar análise.");
+                }
+              }}
+              className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90"
+            >
+              <RotateCcw className="h-4 w-4" /> Tentar novamente
+            </button>
+          </section>
+        </div>
+      );
+    }
+
+    if (uiState === "READY") {
+      return (
+        <div className="space-y-10">
+          <header className="animate-fade-up">
+            <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">
+              Plano de ação{activeAnalysis ? ` · ${activeAnalysis.name}` : ""}
+            </div>
+            <h1 className="text-3xl leading-[1.05] tracking-tight">
+              Próximos passos para a sua empresa
+            </h1>
+          </header>
+          <section className="dark:bg-[#15152f] border dark:border-[#15152f]/50 rounded-lg p-12 text-center">
+            <Inbox
+              className="h-10 w-10 mx-auto dark:text-[#96ff7e] mb-4"
+              strokeWidth={1.4}
+            />
+            <h2 className="text-[26px] tracking-tight mb-2">
+              Dados insuficientes
+            </h2>
+            <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
+              Não encontramos informações suficientes nos seus lançamentos para gerar recomendações precisas.
+              Tente importar mais extratos ou detalhar melhor suas categorias.
+            </p>
+            <Link
+              to="/importar"
+              className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90"
+            >
+              Importar mais dados
+            </Link>
+          </section>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-10">
         <header className="animate-fade-up">

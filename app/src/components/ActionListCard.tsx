@@ -1,8 +1,17 @@
 import { useActionItems, type ActionItem } from "@/lumen/data/useActionItems";
-import { ArrowRight, Inbox, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
+import { useAnalyses } from "@/lumen/data/useAnalyses";
+import {
+  ArrowRight,
+  Inbox,
+  ThumbsUp,
+  ThumbsDown,
+  Loader2,
+  RotateCcw,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { ProcessingContent } from "./ProcessingOverlay";
 
 type Horizon = "short" | "medium" | "long";
 
@@ -71,8 +80,18 @@ function ActionCard({
 }
 
 export default function ActionListCard({ current, transactions }) {
-  const { items, loading, feedback } = useActionItems();
+  const { items, loading, error, status, retry, feedback } = useActionItems();
+  const { uiState: globalUiState } = useAnalyses();
   const [horizon, setHorizon] = useState<Horizon>("short");
+
+  // Derive local state from action-plan status
+  const uiState =
+    status === "failed"
+      ? "FAILED"
+      : status &&
+          ["ready", "completed", "approved", "delivered"].includes(status)
+        ? "READY"
+        : globalUiState;
 
   const grouped = useMemo(() => {
     const map: Record<Horizon, ActionItem[]> = {
@@ -87,11 +106,65 @@ export default function ActionListCard({ current, transactions }) {
   const actions = grouped[horizon];
 
   if (current && items.length === 0) {
+    if (uiState === "FAILED" || error) {
+      return (
+        <div className="space-y-6">
+          <div className="font-semibold mb-4">Plano de Ação</div>
+          <div className="text-center py-8">
+            <div className="h-10 w-10 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
+              <RotateCcw className="h-5 w-5" />
+            </div>
+            <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+              Por algum motivo não foi possível gerar o plano de ação. Tente
+              novamente.
+            </p>
+            <button
+              onClick={async () => {
+                try {
+                  await retry();
+                  toast.success("Reiniciando geração do plano...");
+                } catch (e) {
+                  toast.error("Não foi possível reiniciar a análise.");
+                }
+              }}
+              className="bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-2 mx-auto hover:bg-[#111164]/90 transition-colors"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (uiState === "READY" && !loading) {
+      return (
+        <div className="space-y-6">
+          <div className="font-semibold mb-4">Plano de Ação</div>
+          <div className="text-center py-8">
+            <Inbox
+              className="h-8 w-8 mx-auto dark:text-[#96ff7e] mb-3"
+              strokeWidth={1.4}
+            />
+            <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+              Não encontramos dados suficientes para gerar recomendações
+              precisas.
+            </p>
+            <Link
+              to="/importar"
+              className="inline-flex items-center gap-2 bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] hover:bg-[#111164]/90"
+            >
+              Importar mais dados
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6">
         <div className="font-semibold mb-4">Plano de Ação</div>
-        <div className="animate-pulse w-full py-12 text-sm flex items-center justify-center gap-2 text-muted-foreground">
-          <Loader2 className="animate-spin w-4 h-4" /> Gerando plano de ação...
+        <div className="py-12">
+          <ProcessingContent title="Gerando plano de ação" showDots={false} />
         </div>
       </div>
     );

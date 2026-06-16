@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { LumenLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
+import { api } from "@/lib/api/index.js";
 import { ApiProblem } from "@/lib/api/client.js";
 import { PatternFormat } from "react-number-format";
 import { Eye, EyeOff } from "lucide-react";
@@ -135,7 +136,14 @@ export default function Auth() {
     setSubmitting(true);
     try {
       await signIn(parsed.data.email, parsed.data.password);
-      navigate(from, { replace: true });
+      
+      // Check if user has analyses to decide destination
+      const { analyses } = await api.analyses.list();
+      if (analyses.length === 0) {
+        navigate("/importar", { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       const msg =
         err instanceof ApiProblem && err.status === 401

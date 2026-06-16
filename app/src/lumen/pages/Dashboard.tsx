@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   ClipboardPaste,
@@ -15,7 +15,7 @@ import {
 } from "../data/analytics.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useAnalyses } from "../data/useAnalyses.ts";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import CompositionCard from "@/components/CompositionCard.tsx";
 import ActionListCard from "@/components/ActionListCard.tsx";
@@ -38,9 +38,17 @@ const inputMethods = [
 ];
 
 export default function Dashboard() {
-  const { transactions, loading } = useTransactions();
+  const { transactions, loading: transactionsLoading } = useTransactions();
   const { user } = useAuth();
-  const { analyses, trend, anomaly, activeId, activeAnalysis } = useAnalyses();
+  const {
+    analyses,
+    trend,
+    anomaly,
+    activeId,
+    activeAnalysis,
+    loading: analysesLoading,
+  } = useAnalyses();
+  const navigate = useNavigate();
   const months = listMonthKeys(transactions);
   const currentKey = months[0];
 
@@ -65,6 +73,16 @@ export default function Dashboard() {
     { income: number; expense: number; count: number }
   > = {};
 
+  if (analysesLoading && analyses.length === 0) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="animate-pulse text-[13px] dark:text-[#96ff7e]">
+          Carregando…
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <header className="animate-fade-up flex items-end justify-between">
@@ -74,7 +92,7 @@ export default function Dashboard() {
           </h1>
           <p className=" mt-2 text-sm opacity-65">
             {analyses.length === 0
-              ? loading
+              ? analysesLoading
                 ? "Carregando…"
                 : "Crie sua primeira análise importando dados ou cadastrando lançamentos."
               : `${analyses.length} ${
@@ -86,7 +104,7 @@ export default function Dashboard() {
       </header>
 
       <div className="flex flex-wrap -mx-4 md:mx-0 gap-4">
-        {analyses.length === 0 && !loading && (
+        {analyses.length === 0 && !analysesLoading && (
           <EmptyState userName={userName} />
         )}
 

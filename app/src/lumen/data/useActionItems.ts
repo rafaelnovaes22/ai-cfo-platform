@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext";
 import { useAnalyses } from "./useAnalyses";
+import { toast } from "sonner";
 
 export interface ActionItem {
   id: string;
@@ -19,24 +20,29 @@ export interface ActionItem {
 
 export function useActionItems() {
   const { user } = useAuth();
-  const { activeId } = useAnalyses();
+  const { activeId, refresh: refreshAnalyses } = useAnalyses();
   const [items, setItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
     if (!user || !activeId) {
       setItems([]);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
+    setError(null);
     try {
-      const { items: raw } = await api.actionPlan.get(activeId);
+      const { items: raw, analysisStatus } = await api.actionPlan.get(activeId);
       setItems(raw);
-    } catch {
+      setStatus(analysisStatus);
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error("Erro ao carregar itens do plano"));
       setItems([]);
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [user, activeId]);
 
@@ -44,14 +50,41 @@ export function useActionItems() {
     refresh();
   }, [refresh]);
 
+  // Localized polling for action items
+  const isTerminal = status && ["ready", "completed", "failed", "approved", "delivered"].includes(status);
+  useEffect(() => {
+    if (!user || !activeId || isTerminal || (status === null && !loading)) return;
+    
+    const interval = setInterval(() => {
+      refresh({ silent: true });
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [user, activeId, isTerminal, status, loading, refresh]);
+
+  const retry = useCallback(async () => {
+    if (!activeId) return;
+    try {
+      setError(null);
+      setStatus("generating");
+      await api.analyses.retry(activeId);
+      // Silent refresh of analyses list to update global state once, 
+      // but the 5s polling will handle the item updates.
+      refreshAnalyses({ silent: true, onlyList: true });
+      await refresh();
+    } catch (e) {
+      toast.error("Erro ao reiniciar análise.");
+    }
+  }, [activeId, refresh, refreshAnalyses]);
+
   const feedback = useCallback(
     async (itemId: string, approved: boolean, comment?: string) => {
       if (!activeId) return;
       await api.actionPlan.feedback(activeId, itemId, { approved, comment });
-      await refresh();
+      await refresh({ silent: true });
     },
     [activeId, refresh]
   );
 
-  return { items, loading, refresh, feedback };
+  return { items, loading, error, status, refresh, retry, feedback };
 }

@@ -146,6 +146,7 @@ export const billing = {
   openPortal: () =>
     apiFetch<Req200<"/billing/portal", "post">>("/billing/portal", {
       method: "POST",
+      body: JSON.stringify({}),
     }),
 };
 
@@ -309,7 +310,13 @@ export const analyses = {
   approve: (analysisId: string) =>
     apiFetch<Req200<"/analysis/{analysisId}/approve", "post">>(
       `/analysis/${analysisId}/approve`,
-      { method: "POST" }
+      { method: "POST", body: JSON.stringify({}) }
+    ),
+
+  retry: (analysisId: string) =>
+    apiFetch<Req200<"/analysis/{analysisId}/retry", "post">>(
+      `/analysis/${analysisId}/retry`,
+      { method: "POST", body: JSON.stringify({}) }
     ),
 };
 

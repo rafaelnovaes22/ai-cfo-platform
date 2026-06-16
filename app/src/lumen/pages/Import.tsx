@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ClipboardPaste,
@@ -16,6 +16,8 @@ import { api } from "@/lib/api/index.js";
 import { ApiProblem } from "@/lib/api/client.js";
 import { LIMITS, isAcceptedFile, formatBytes } from "@/lib/limits.js";
 import { toast } from "sonner";
+import ProcessingOverlay from "@/components/ProcessingOverlay";
+import { useAnalyses } from "../data/useAnalyses";
 import ImportLoading from "@/components/ImportLoading";
 
 type Method = "paste" | "pdf" | "xls" | "manual" | null;
@@ -25,7 +27,7 @@ const cards: {
   eyebrow: string;
   title: string;
   desc: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: any;
 }[] = [
   {
     id: "paste",
@@ -81,7 +83,10 @@ function inferReferenceMonthFromSheet(file: File): Promise<string | null> {
 
         wb.SheetNames.forEach((name) => {
           const ws = wb.Sheets[name];
-          const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+          const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+            header: 1,
+            defval: "",
+          });
 
           for (const row of rows.slice(0, 2_000)) {
             for (const cell of row) {
@@ -91,7 +96,8 @@ function inferReferenceMonthFromSheet(file: File): Promise<string | null> {
           }
         });
 
-        const [month] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+        const [month] =
+          [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
         resolve(month ?? null);
       } catch (err) {
         reject(err);
@@ -169,7 +175,9 @@ function PasteModal({
           // maxLength não cobre paste programático em todos os browsers — corta aqui também.
           const next = e.target.value;
           if (next.length > LIMITS.PASTE_MAX_CHARS) {
-            toast.error("Texto muito grande. Cole até 1 milhão de caracteres ou envie como arquivo.");
+            toast.error(
+              "Texto muito grande. Cole até 1 milhão de caracteres ou envie como arquivo."
+            );
             setText(next.slice(0, LIMITS.PASTE_MAX_CHARS));
             return;
           }
@@ -242,10 +250,14 @@ function FileModal({
     try {
       const result = await api.ingest.upload(file, referenceMonth);
       if (!result || result.outcome === "failed" || result.entryCount === 0) {
-        toast.error("Nenhum lançamento reconhecido. Verifique se o arquivo tem colunas de data, descrição e valor.");
+        toast.error(
+          "Nenhum lançamento reconhecido. Verifique se o arquivo tem colunas de data, descrição e valor."
+        );
         return;
       }
-      toast.success(`${result.entryCount} lançamentos importados em ${formatReferenceMonth(result.referenceMonth)}.`);
+      toast.success(
+        `${result.entryCount} lançamentos importados em ${formatReferenceMonth(result.referenceMonth)}.`
+      );
       onImported(result.entryCount);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -259,13 +271,15 @@ function FileModal({
     // (em prod um PDF de 10211 KB passava e só falhava depois do round-trip).
     if (selected && selected.size > LIMITS.FILE_MAX_BYTES) {
       toast.error(
-        `Arquivo de ${formatBytes(selected.size)} excede o limite de ${formatBytes(LIMITS.FILE_MAX_BYTES)}.`,
+        `Arquivo de ${formatBytes(selected.size)} excede o limite de ${formatBytes(LIMITS.FILE_MAX_BYTES)}.`
       );
       setFile(null);
       return;
     }
     if (selected && !isAcceptedFile(selected.name)) {
-      toast.error("Formato não suportado. Envie PDF, Excel (.xlsx/.xls) ou CSV.");
+      toast.error(
+        "Formato não suportado. Envie PDF, Excel (.xlsx/.xls) ou CSV."
+      );
       setFile(null);
       return;
     }
@@ -372,7 +386,12 @@ function ManualEntry({
     else if (description.trim().length > LIMITS.DESCRIPTION_MAX_CHARS)
       errs.description = `Descrição até ${LIMITS.DESCRIPTION_MAX_CHARS} caracteres`;
     const numAmount = parseFloat(amount.replace(",", "."));
-    if (!amount || isNaN(numAmount) || !Number.isFinite(numAmount) || numAmount <= 0)
+    if (
+      !amount ||
+      isNaN(numAmount) ||
+      !Number.isFinite(numAmount) ||
+      numAmount <= 0
+    )
       errs.amount = "Valor inválido";
     else if (numAmount > LIMITS.AMOUNT_MAX_REAIS)
       errs.amount = `Valor máximo por lançamento: R$ ${LIMITS.AMOUNT_MAX_REAIS.toLocaleString("pt-BR")},00`;
@@ -551,7 +570,9 @@ function ModalShell({
             <div className="uppercase text-[11px] tracking-widest mb-1 text-ink-soft dark:text-cream/60">
               Importar dados
             </div>
-            <h2 className="text-[24px] tracking-tight text-ink dark:text-cream">{title}</h2>
+            <h2 className="text-[24px] tracking-tight text-ink dark:text-cream">
+              {title}
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -570,11 +591,29 @@ function ModalShell({
 export default function Import() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { uiState, refresh } = useAnalyses();
   const initial = params.get("method") as Method;
   const [open, setOpen] = useState<Method>(initial);
+  const [isImporting, setIsImporting] = useState(false);
+  const { refresh: refreshAnalyses } = useAnalyses();
+
+  useEffect(() => {
+    if (
+      isImporting &&
+      (uiState === "READY" ||
+        uiState === "FAILED" ||
+        uiState === "INSUFFICIENT_DATA")
+    ) {
+      setIsImporting(false);
+      navigate("/dashboard");
+    }
+  }, [isImporting, uiState, navigate]);
 
   const handleImported = (entryCount: number) => {
     setOpen(null);
+    setIsImporting(true);
+    void refreshAnalyses();
+    refresh();
     navigate("/", { state: { entryCount } });
   };
 
@@ -646,6 +685,7 @@ export default function Import() {
       {open === "manual" && (
         <ManualEntry onClose={() => setOpen(null)} onSaved={handleImported} />
       )}
+      {isImporting && <ProcessingOverlay />}
     </div>
   );
 }
