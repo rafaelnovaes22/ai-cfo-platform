@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./lumen/auth/AuthContext.tsx";
 import { AnalysisProvider } from "./lumen/data/useAnalyses.ts";
+import { ActionPlanProvider } from "./lumen/data/useActionItems.ts";
 import Router from "./Router.tsx";
 
 const queryClient = new QueryClient();
@@ -18,7 +19,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <AnalysisProvider>
-            <Router />
+            <ActionPlanProvider>
+              <Router />
+            </ActionPlanProvider>
           </AnalysisProvider>
         </AuthProvider>
       </BrowserRouter>

@@ -1,4 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+  createElement,
+} from "react";
 import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext";
 import { useAnalyses } from "./useAnalyses";
@@ -18,9 +27,25 @@ export interface ActionItem {
   clientComment: string | null;
 }
 
-export function useActionItems() {
+interface ActionPlanCtx {
+  items: ActionItem[];
+  loading: boolean;
+  error: Error | null;
+  status: string | null;
+  refresh: (options?: { silent?: boolean }) => Promise<void>;
+  retry: () => Promise<void>;
+  feedback: (
+    itemId: string,
+    approved: boolean,
+    comment?: string
+  ) => Promise<void>;
+}
+
+const ActionPlanContext = createContext<ActionPlanCtx | null>(null);
+
+export function ActionPlanProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { activeId, refresh: refreshAnalyses } = useAnalyses();
+  const { activeId } = useAnalyses();
   const [items, setItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -58,18 +83,18 @@ export function useActionItems() {
 
   // Localized polling for action items
   const isTerminal =
-    status &&
+    status != null &&
     ["ready", "completed", "failed", "approved", "delivered"].includes(status);
+
   useEffect(() => {
-    if (!user || !activeId || isTerminal || (status === null && !loading))
-      return;
+    if (!user || !activeId || isTerminal) return;
 
     const interval = setInterval(() => {
       refresh({ silent: true });
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [user, activeId, isTerminal, status, loading, refresh]);
+  }, [user, activeId, isTerminal, refresh]);
 
   const retry = useCallback(async () => {
     if (!activeId) return;
@@ -92,5 +117,26 @@ export function useActionItems() {
     [activeId, refresh]
   );
 
-  return { items, loading, error, status, refresh, retry, feedback };
+  const value = useMemo(
+    () => ({
+      items,
+      loading,
+      error,
+      status,
+      refresh,
+      retry,
+      feedback,
+    }),
+    [items, loading, error, status, refresh, retry, feedback]
+  );
+
+  return createElement(ActionPlanContext.Provider, { value }, children);
+}
+
+export function useActionItems() {
+  const ctx = useContext(ActionPlanContext);
+  if (!ctx) {
+    throw new Error("useActionItems must be used within an ActionPlanProvider");
+  }
+  return ctx;
 }

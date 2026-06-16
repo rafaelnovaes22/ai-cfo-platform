@@ -85,13 +85,24 @@ export default function ActionListCard({ current, transactions }) {
   const [horizon, setHorizon] = useState<Horizon>("short");
 
   // Derive local state from action-plan status
-  const uiState =
-    status === "failed"
-      ? "FAILED"
-      : status &&
-          ["ready", "completed", "approved", "delivered"].includes(status)
-        ? "READY"
-        : globalUiState;
+  const uiState = useMemo(() => {
+    if (status === "failed") return "FAILED";
+    if (
+      status &&
+      ["ready", "completed", "approved", "delivered"].includes(status)
+    )
+      return "READY";
+
+    if (
+      status === null ||
+      status === "pending" ||
+      status === "generating" ||
+      loading
+    )
+      return "LOADING";
+
+    return globalUiState;
+  }, [status, loading, globalUiState]);
 
   const grouped = useMemo(() => {
     const map: Record<Horizon, ActionItem[]> = {
@@ -106,7 +117,7 @@ export default function ActionListCard({ current, transactions }) {
   const actions = grouped[horizon];
 
   if (current && items.length === 0) {
-    if (uiState === "FAILED" || error) {
+    if (uiState === "FAILED") {
       return (
         <div className="space-y-6">
           <div className="font-semibold mb-4">Plano de Ação</div>
@@ -150,8 +161,7 @@ export default function ActionListCard({ current, transactions }) {
               strokeWidth={1.4}
             />
             <p className="text-[13px] dark:text-[#96ff7e] mb-4">
-              Não encontramos dados suficientes para gerar recomendações
-              precisas.
+              Sem ações materiais este mês.
             </p>
             <Link
               to="/importar"
