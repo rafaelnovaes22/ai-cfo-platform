@@ -114,9 +114,13 @@ export default function ActionListCard({ current, transactions }) {
             <div className="h-10 w-10 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
               <RotateCcw className="h-5 w-5" />
             </div>
+            <h2 className="text-[26px] tracking-tight mb-2">
+              Vamos gerar seu plano de ação?
+            </h2>
             <p className="text-[13px] dark:text-[#96ff7e] mb-4">
-              Por algum motivo não foi possível gerar o plano de ação. Tente
-              novamente.
+              Por algum motivo não foi possível gerar o plano de ação
+              automaticamente. <br />
+              Clique no botão abaixo para gerar novamente.
             </p>
             <button
               onClick={async () => {
@@ -129,7 +133,7 @@ export default function ActionListCard({ current, transactions }) {
               }}
               className="bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-2 mx-auto hover:bg-[#111164]/90 transition-colors"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+              <RotateCcw className="h-3.5 w-3.5" /> Gerar plano de ação
             </button>
           </div>
         </div>

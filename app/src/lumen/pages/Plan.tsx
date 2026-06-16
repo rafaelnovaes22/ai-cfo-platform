@@ -48,14 +48,22 @@ const riskLabel: Record<string, string> = {
 
 export default function Plan() {
   const { items, loading, error, status, retry, feedback } = useActionItems();
-  const { activeAnalysis, uiState: globalUiState, isProcessing: globalIsProcessing } = useAnalyses();
+  const {
+    activeAnalysis,
+    uiState: globalUiState,
+    isProcessing: globalIsProcessing,
+  } = useAnalyses();
   const [horizon, setHorizon] = useState<Horizon>("short");
 
   // Derive local state from action-plan status
-  const uiState = status === "failed" ? "FAILED" : 
-                  (status && ["ready", "completed", "approved", "delivered"].includes(status)) ? "READY" : 
-                  globalUiState;
-  
+  const uiState =
+    status === "failed"
+      ? "FAILED"
+      : status &&
+          ["ready", "completed", "approved", "delivered"].includes(status)
+        ? "READY"
+        : globalUiState;
+
   const isProcessing = status === "generating" || globalIsProcessing;
 
   const grouped = useMemo(() => {
@@ -87,15 +95,16 @@ export default function Plan() {
             </h1>
           </header>
           <section className="dark:bg-[#15152f] border dark:border-[#15152f]/50 rounded-lg p-12 text-center">
-            <div className="h-12 w-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="h-12 w-12 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <RotateCcw className="h-6 w-6" />
             </div>
             <h2 className="text-[26px] tracking-tight mb-2">
-              Falha técnica
+              Vamos gerar seu plano de ação?
             </h2>
-            <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
-              Houve um problema inesperado durante o processamento da sua análise.
-              Seus dados estão salvos, podemos tentar gerar o plano novamente.
+            <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+              Por algum motivo não foi possível gerar o plano de ação
+              automaticamente. <br />
+              Clique no botão abaixo para gerar novamente.
             </p>
             <button
               onClick={async () => {
@@ -108,7 +117,7 @@ export default function Plan() {
               }}
               className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90"
             >
-              <RotateCcw className="h-4 w-4" /> Tentar novamente
+              <RotateCcw className="h-4 w-4" /> Gerar plano de ação
             </button>
           </section>
         </div>
@@ -135,8 +144,9 @@ export default function Plan() {
               Dados insuficientes
             </h2>
             <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
-              Não encontramos informações suficientes nos seus lançamentos para gerar recomendações precisas.
-              Tente importar mais extratos ou detalhar melhor suas categorias.
+              Não encontramos informações suficientes nos seus lançamentos para
+              gerar recomendações precisas. Tente importar mais extratos ou
+              detalhar melhor suas categorias.
             </p>
             <Link
               to="/importar"
