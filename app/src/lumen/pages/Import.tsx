@@ -176,7 +176,7 @@ function PasteModal({
           setText(next);
         }}
         disabled={submitting}
-        className="w-full h-56 bg-background border border-[#171132] rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-[#96ff7e] mt-3"
+        className="w-full h-56 bg-cream-deep dark:bg-[#0b0918] text-ink dark:text-cream border border-[#171132] rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-[#96ff7e] mt-3"
         placeholder={
           "Data\tDescrição\tValor\n01/09/2026\tCliente Vértice MRR\t14.200,00\n02/09/2026\tMeta Ads\t-22.840,00\n..."
         }
