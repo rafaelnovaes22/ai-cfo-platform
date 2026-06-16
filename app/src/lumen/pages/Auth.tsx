@@ -43,8 +43,12 @@ export default function Auth() {
   // Destino pós-login: a rota que o ProtectedRoute tentou acessar (state.from),
   // ou "/" como padrão. Inclui a query (?token=...) para o fluxo /whatsapp/auth
   // não perder o token ao passar pelo login.
-  const fromLoc = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
-  const from = fromLoc ? `${fromLoc.pathname ?? "/"}${fromLoc.search ?? ""}` : "/";
+  const fromLoc = (
+    location.state as { from?: { pathname?: string; search?: string } } | null
+  )?.from;
+  const from = fromLoc
+    ? `${fromLoc.pathname ?? "/"}${fromLoc.search ?? ""}`
+    : "/";
   const [mode, setMode] = useState<Mode>("signin");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -98,7 +102,7 @@ export default function Auth() {
       // Cadastro = captação de lead. O acesso ao painel é liberado só para
       // assinante; o SubscriberRoute decide o destino (app ou tela de lead).
       toast.success("Cadastro recebido!");
-      navigate(from, { replace: true });
+      navigate("/importar", { replace: true });
     } catch (err) {
       const msg =
         err instanceof ApiProblem
