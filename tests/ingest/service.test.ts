@@ -5,8 +5,11 @@ import {
   lastClosedMonth,
   computeDirectionInferred,
   groupIndicesByMonth,
+  persistMonth,
 } from "@/ingest/service.js";
 import type { RawLedger } from "@/ingest/types.js";
+import type { getPrisma } from "@/persistence/prisma.js";
+import { SubscriptionMode } from "@prisma/client";
 
 vi.mock("@/persistence/prisma.js", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/queue/index.js", () => ({
@@ -169,5 +172,78 @@ describe("ingest/service groupIndicesByMonth (distribuição multi-mês do extra
 
   it("lista vazia → mapa vazio", () => {
     expect(groupIndicesByMonth([]).size).toBe(0);
+  });
+});
+
+describe("ingest/service persistMonth (revínculo de órfãos no reenvio)", () => {
+  function makeDb(opts: { existing?: { id: string } | null; createdCount: number; reattachedCount: number }) {
+    const analysis = { id: "analysis-1" };
+    const createMany = vi.fn().mockResolvedValue({ count: opts.createdCount });
+    const updateMany = vi.fn().mockResolvedValue({ count: opts.reattachedCount });
+    const tx = {
+      monthlyAnalysis: {
+        findUnique: vi.fn().mockResolvedValue(opts.existing ?? null),
+        create: vi.fn().mockResolvedValue(analysis),
+        update: vi.fn().mockResolvedValue(analysis),
+      },
+      ledgerEntry: { deleteMany: vi.fn() },
+      narrativeCard: { deleteMany: vi.fn() },
+      actionPlanItem: { deleteMany: vi.fn() },
+    };
+    const db = {
+      $transaction: vi.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
+      ledgerEntry: { createMany, updateMany },
+      monthlyAnalysis: { update: vi.fn().mockResolvedValue(analysis) },
+    };
+    return { db: db as unknown as ReturnType<typeof getPrisma>, createMany, updateMany };
+  }
+
+  function row(dedupeHash: string): { entry: RawLedger; dedupeHash: string; inferred: boolean } {
+    return { entry: entry({ date: "2026-05-01" }), dedupeHash, inferred: false };
+  }
+
+  it("readota lançamentos órfãos (analysisId null) do extrato para a análise corrente", async () => {
+    const { db, updateMany } = makeDb({ createdCount: 0, reattachedCount: 2 });
+    await persistMonth({
+      db,
+      tenantId: "t1",
+      referenceMonth: "2026-05",
+      rows: [row("h1"), row("h2")],
+      minEntries: 100,
+      subscriptionMode: SubscriptionMode.shadow,
+      skipAnalysis: true,
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { tenantId: "t1", analysisId: null, dedupeHash: { in: ["h1", "h2"] } },
+      data: { analysisId: "analysis-1" },
+    });
+  });
+
+  it("não readota de outras análises: o filtro é estritamente analysisId null", async () => {
+    const { db, updateMany } = makeDb({ createdCount: 2, reattachedCount: 0 });
+    await persistMonth({
+      db,
+      tenantId: "t1",
+      referenceMonth: "2026-05",
+      rows: [row("h1"), row("h2")],
+      minEntries: 100,
+      subscriptionMode: SubscriptionMode.shadow,
+      skipAnalysis: true,
+    });
+    expect(updateMany.mock.calls[0]?.[0].where).toMatchObject({ analysisId: null });
+  });
+
+  it("não chama updateMany quando não há dedupeHash no extrato", async () => {
+    const { db, updateMany } = makeDb({ createdCount: 1, reattachedCount: 0 });
+    await persistMonth({
+      db,
+      tenantId: "t1",
+      referenceMonth: "2026-05",
+      rows: [row("")],
+      minEntries: 100,
+      subscriptionMode: SubscriptionMode.shadow,
+      skipAnalysis: true,
+    });
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

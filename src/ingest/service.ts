@@ -278,7 +278,7 @@ export async function ingest(params: {
  * tem lançamentos suficientes e não é cash-flow-only. Cada mês em sua própria
  * transação de upsert — um mês que falhe não derruba os outros.
  */
-async function persistMonth(args: {
+export async function persistMonth(args: {
   db: ReturnType<typeof getPrisma>;
   tenantId: string;
   referenceMonth: string;
@@ -349,6 +349,25 @@ async function persistMonth(args: {
       { tenantId, referenceMonth, analysisId: analysis.id, inserted: created.count, skippedDuplicates: skipped },
       "Ingest: lançamentos duplicados ignorados (já enviados antes)",
     );
+  }
+
+  // Reenvio depois que a análise anterior foi apagada deixa o lançamento órfão (a
+  // relação analysis é SetNull). O createMany acima NÃO o readota — o dedupeHash já
+  // existe, então skipDuplicates o pula — e a análise nova sairia sem esses lançamentos
+  // (DRE zerada). Readota os órfãos DESTE extrato para a análise corrente. Restrito a
+  // analysisId=null: nunca rouba lançamentos de outra análise legítima.
+  const extractHashes = rows.map((r) => r.dedupeHash).filter((h) => h.length > 0);
+  if (extractHashes.length > 0) {
+    const reattached = await db.ledgerEntry.updateMany({
+      where: { tenantId, analysisId: null, dedupeHash: { in: extractHashes } },
+      data: { analysisId: analysis.id },
+    });
+    if (reattached.count > 0) {
+      logger.info(
+        { tenantId, referenceMonth, analysisId: analysis.id, reattached: reattached.count },
+        "Ingest: lançamentos órfãos revinculados à análise corrente",
+      );
+    }
   }
 
   // Dispara a análise LLM do mês quando há lançamentos suficientes e não é
