@@ -188,9 +188,10 @@ describe("graph telemetria — costs + traces acumulam até o finalize (achado A
       "normalization",
     ]);
 
-    // costCents totalizados: 11 + 13 + 17 + 19 + 23 + 29 = 112
+    // costCents totalizados: 11 + 13 + 17 + 19 + 23 + 0 = 83
+    // (financial-qa-review é determinístico agora → emite AgentCost mas com costCents 0)
     const total = result.costs.reduce((acc: number, c: { costCents: number }) => acc + c.costCents, 0);
-    expect(total).toBe(112);
+    expect(total).toBe(83);
   });
 
   it("emite AgentTrace tanto para nós LLM quanto para nós rule-based", async () => {
@@ -233,7 +234,7 @@ describe("graph telemetria — costs + traces acumulam até o finalize (achado A
     expect(finalizeUpdateMock).toHaveBeenCalled();
     const last = finalizeUpdateMock.mock.calls.at(-1)!;
     const data = (last[0] as { data: { costCents: number } }).data;
-    expect(data.costCents).toBe(112);
+    expect(data.costCents).toBe(83);
   });
 });
 

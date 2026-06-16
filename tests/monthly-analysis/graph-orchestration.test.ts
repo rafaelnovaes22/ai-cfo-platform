@@ -230,7 +230,7 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     expect(result.actionPlan!.actions.filter((a) => a.horizon === "short").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("invoca callLlm exatamente 7 vezes (normalize + clarity + business-profile + classification + narrative + action + QA)", async () => {
+  it("invoca callLlm exatamente 6 vezes (normalize + clarity + business-profile + classification + narrative + action)", async () => {
     setupHappyPath();
     const graph = buildMonthlyAnalysisGraph();
 
@@ -243,6 +243,7 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
     });
 
     const tasksInvoked = callLlmMock.mock.calls.map((call) => (call[0] as { task: string }).task);
+    // financial-qa-review NÃO entra: o QA é 100% determinístico (sem LLM).
     expect(tasksInvoked).toEqual(
       expect.arrayContaining([
         "normalization",
@@ -251,10 +252,10 @@ describe("monthly-analysis graph orchestration (3.C.1)", () => {
         "dre-classification",
         "narrative-synthesis",
         "action-planning",
-        "financial-qa-review",
       ]),
     );
-    expect(tasksInvoked).toHaveLength(7);
+    expect(tasksInvoked).not.toContain("financial-qa-review");
+    expect(tasksInvoked).toHaveLength(6);
   });
 
   it("propaga tenantId em todas as chamadas LLM (C8 — sem leakage de tenant)", async () => {
