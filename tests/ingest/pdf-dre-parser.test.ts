@@ -61,6 +61,28 @@ describe("ingest/parsers/pdf-dre — DRE consolidado", () => {
     });
   });
 
+  it("parseDreText extrai DRE colado como texto (sem PDF), reusando o extrator LLM", async () => {
+    const { parseDreText } = await import("@/ingest/parsers/pdf-dre.js");
+
+    const dreColado = [
+      "DEMONSTRACAO DO RESULTADO DO EXERCICIO",
+      "Periodo de competencia: 01/03/2026 a 31/03/2026",
+      "Servicos recorrentes (MRR) 146.600,00",
+      "Midia paga (38.700,00)",
+    ].join("\n");
+
+    const result = await parseDreText(dreColado, "2026-05", "tenant-test");
+
+    expect(result.entries).toHaveLength(2);
+    expect(result.referenceMonth).toBe("2026-03");
+    expect(result.entries[0]).toMatchObject({
+      description: "Servicos recorrentes MRR",
+      direction: "credit",
+      confirmedCategory: "receita_bruta",
+      correctionSource: "dre-import",
+    });
+  });
+
   it("detecta competência por padrões comuns de DRE", async () => {
     const { detectDreReferenceMonth } = await import("@/ingest/parsers/pdf-dre.js");
 

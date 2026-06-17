@@ -4,7 +4,7 @@ import { enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
 import { parseCsv } from "@/ingest/parsers/csv.js";
 import { parseText } from "@/ingest/parsers/text.js";
-import { parsePdfDre } from "@/ingest/parsers/pdf-dre.js";
+import { parsePdfDre, parseDreText } from "@/ingest/parsers/pdf-dre.js";
 import { parsePdfStatement } from "@/ingest/parsers/pdf-statement.js";
 import { parseManual } from "@/ingest/parsers/manual.js";
 import { inferDirectionFromDescription } from "@/ingest/normalize.js";
@@ -381,7 +381,20 @@ export async function persistMonth(args: {
   return { analysisId: analysis.id, inserted: created.count };
 }
 
-async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResult> {
+// Texto colado "tem cara de DRE" quando traz várias linhas e vários valores
+// monetários no formato BR. Gate barato antes de gastar token no extrator LLM:
+// paste trivial (uma frase, um nome) devolve vazio. Aceita valor com separador
+// de milhar com ou sem centavos (641.726 / 641.726,01) e valor com centavos
+// (2.840,00 / 50,00); o separador de milhar OU os centavos evitam casar ano
+// solto (2026) ou número avulso, que deixariam o gate frouxo demais.
+const BR_CURRENCY = /\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+,\d{2}/g;
+export function looksLikeDreText(text: string): boolean {
+  const lineCount = text.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
+  const valueCount = (text.match(BR_CURRENCY) ?? []).length;
+  return lineCount >= 3 && valueCount >= 3;
+}
+
+export async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResult> {
   switch (params.source) {
     case "excel":
       return parseExcel(params.buffer!);
@@ -402,9 +415,19 @@ async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResu
       if (params.skipAnalysis) return statement;
       return parsePdfDre(params.buffer!, params.referenceMonth, params.tenantId);
     }
-    case "text":
+    case "text": {
       // Datas coladas sem ano ("01/09") assumem o ano do mês de referência (YYYY-MM).
-      return parseText(params.text!, params.referenceMonth.slice(0, 4));
+      const result = parseText(params.text!, params.referenceMonth.slice(0, 4));
+      if (result.entries.length > 0) return result;
+      // 0 lançamentos por coluna: o texto pode ser um DRE consolidado colado (relatório
+      // do contador colado como texto em vez de PDF). Espelha o fallback do PDF
+      // (parsePdfStatement → parsePdfDre) e tenta a extração via LLM.
+      // - Free tier (skipAnalysis): nunca cai no LLM (custo R$0), igual ao PDF.
+      // - Heurística looksLikeDreText: só gasta token quando o texto tem cara de DRE
+      //   (várias linhas com valores), evitando chamada à toa em paste trivial.
+      if (params.skipAnalysis || !looksLikeDreText(params.text!)) return result;
+      return parseDreText(params.text!, params.referenceMonth, params.tenantId);
+    }
     case "manual":
       return parseManual(params.entries!);
   }

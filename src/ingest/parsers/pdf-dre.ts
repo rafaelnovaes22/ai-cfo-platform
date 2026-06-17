@@ -108,24 +108,26 @@ Regras:
 - Interprete valores em formato BR: 1.234,56 = 1234.56`;
 }
 
-export async function parsePdfDre(
-  buffer: Buffer,
+/**
+ * Núcleo da extração de DRE: opera sobre TEXTO (já extraído do PDF, ou colado
+ * direto pelo cliente no fluxo "Cole sua planilha"). Usa LLM para mapear cada
+ * linha do demonstrativo para a taxonomia e devolve entradas sintéticas com
+ * confirmedCategory preenchida (pulam a classificação).
+ */
+export async function parseDreText(
+  dreText: string,
   referenceMonth: string,
   tenantId: string,
 ): Promise<ParseResult> {
-  const pdfText = (await extractPdfText(buffer)).trim();
+  const text = dreText.trim();
+  if (!text) return { entries: [], orphanCount: 0 };
 
-  if (!pdfText) {
-    logger.warn({ tenantId, referenceMonth }, "parsePdfDre: PDF sem texto extraível");
-    return { entries: [], orphanCount: 0 };
-  }
-
-  const detectedReferenceMonth = detectDreReferenceMonth(pdfText);
+  const detectedReferenceMonth = detectDreReferenceMonth(text);
   const effectiveReferenceMonth = detectedReferenceMonth ?? referenceMonth;
   if (detectedReferenceMonth && detectedReferenceMonth !== referenceMonth) {
     logger.info(
       { tenantId, requestedReferenceMonth: referenceMonth, detectedReferenceMonth },
-      "parsePdfDre: competência do PDF difere do mês informado; usando mês detectado",
+      "parseDreText: competência do documento difere do mês informado; usando mês detectado",
     );
   }
 
@@ -135,7 +137,7 @@ export async function parsePdfDre(
     const response = await callLlm({
       task: "dre-extraction",
       systemPrompt: buildSystemPrompt(),
-      userPrompt: pdfText,
+      userPrompt: text,
       tenantId,
       jsonMode: true,
     });
@@ -144,11 +146,11 @@ export async function parsePdfDre(
     const cleaned = response.content.replace(/```(?:json)?\s*/gi, "").trim();
     logger.info(
       { tenantId, referenceMonth: effectiveReferenceMonth, contentPreview: cleaned.slice(0, 200) },
-      "parsePdfDre: resposta LLM recebida",
+      "parseDreText: resposta LLM recebida",
     );
     parsed = DreLineSchema.parse(JSON.parse(cleaned));
   } catch (err) {
-    logger.error({ err, tenantId, referenceMonth: effectiveReferenceMonth }, "parsePdfDre: erro na extração LLM");
+    logger.error({ err, tenantId, referenceMonth: effectiveReferenceMonth }, "parseDreText: erro na extração LLM");
     return { entries: [], orphanCount: 0 };
   }
 
@@ -179,8 +181,23 @@ export async function parsePdfDre(
 
   logger.info(
     { tenantId, referenceMonth: effectiveReferenceMonth, entryCount: entries.length },
-    "parsePdfDre: extração concluída",
+    "parseDreText: extração concluída",
   );
 
   return { entries, orphanCount: 0, referenceMonth: effectiveReferenceMonth };
+}
+
+export async function parsePdfDre(
+  buffer: Buffer,
+  referenceMonth: string,
+  tenantId: string,
+): Promise<ParseResult> {
+  const pdfText = (await extractPdfText(buffer)).trim();
+
+  if (!pdfText) {
+    logger.warn({ tenantId, referenceMonth }, "parsePdfDre: PDF sem texto extraível");
+    return { entries: [], orphanCount: 0 };
+  }
+
+  return parseDreText(pdfText, referenceMonth, tenantId);
 }

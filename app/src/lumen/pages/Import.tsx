@@ -33,7 +33,7 @@ const cards: {
     id: "paste",
     eyebrow: "Recomendado",
     title: "Cole sua planilha",
-    desc: "Cole qualquer formato direto da sua planilha — categorizamos automaticamente.",
+    desc: "Cole as linhas com data, descrição e valor. Categorizamos automaticamente.",
     icon: ClipboardPaste,
   },
   {
@@ -140,6 +140,11 @@ function PasteModal({
   const [text, setText] = useState("");
   const [referenceMonth, setReferenceMonth] = useState(thisMonth());
   const [submitting, setSubmitting] = useState(false);
+  // Conta tentativas que não geraram lançamentos. Na 1ª, um toast basta; a partir
+  // da 2ª (insistência), abrimos o painel com o formato esperado. Foi o caso da
+  // CEO colando a saída de uma análise (% e crescimento), que nunca vira lançamento.
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const showFormatHelp = failedAttempts >= 2;
 
   async function handleSubmit() {
     if (!text.trim()) return;
@@ -150,6 +155,15 @@ function PasteModal({
     setSubmitting(true);
     try {
       const result = await api.ingest.clipboard({ referenceMonth, text });
+      // Mesmo guard do FileModal: 0 lançamentos não é sucesso. Sem isto, colar um
+      // texto sem colunas reconhecíveis (ex: uma DRE já formatada) devolvia
+      // outcome:"failed"/entryCount:0 e ainda assim mostrava toast verde e
+      // navegava para o dashboard vazio "Vamos começar?", sem pista do erro.
+      if (!result || result.outcome === "failed" || result.entryCount === 0) {
+        setFailedAttempts((n) => n + 1);
+        toast.error("Não reconhecemos lançamentos nesse texto.");
+        return;
+      }
       toast.success(
         `${result.entryCount} lançamentos importados (${result.outcome}).`
       );
@@ -164,8 +178,9 @@ function PasteModal({
   return (
     <ModalShell onClose={onClose} title="Cole sua planilha">
       <p className="text-[13px] dark:text-[#96ff7e] mb-4">
-        Copie qualquer formato — extrato, DRE, lançamentos. A IA identifica
-        colunas e categoriza automaticamente.
+        Cole as linhas do extrato ou da planilha (uma por linha, com data,
+        descrição e valor). Categorizamos automaticamente. Para um DRE fechado
+        do contador, use “DRE em PDF”.
       </p>
       <MonthField value={referenceMonth} onChange={setReferenceMonth} />
       <textarea
@@ -189,6 +204,26 @@ function PasteModal({
           "Data\tDescrição\tValor\n01/09/2026\tCliente Vértice MRR\t14.200,00\n02/09/2026\tMeta Ads\t-22.840,00\n..."
         }
       />
+      {showFormatHelp && (
+        <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-[12.5px] text-ink dark:text-cream">
+          <p className="font-medium mb-1">Esperamos uma lista de lançamentos, não um relatório pronto.</p>
+          <p className="dark:text-[#96ff7e] mb-2">
+            Cole uma linha por lançamento, com data, descrição e valor (use o
+            valor negativo para saídas):
+          </p>
+          <pre className="whitespace-pre overflow-x-auto rounded bg-cream-deep dark:bg-[#0b0918] border border-[#171132] p-3 text-[11.5px] leading-relaxed">
+{`Data        Descrição              Valor
+01/07/2026  Cliente Alfa (MRR)     14.200,00
+03/07/2026  Meta Ads               -2.840,00
+05/07/2026  Aluguel                -6.500,00`}
+          </pre>
+          <p className="dark:text-[#96ff7e] mt-3">
+            Se o que você tem é um <strong>DRE fechado do contador</strong>, feche
+            este aviso e use o card “DRE em PDF”. Uma planilha exportada do banco
+            ou ERP vai melhor em “Excel ou CSV”.
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-end gap-2 mt-5">
         <div className="mr-auto">
           <ImportLoading show={submitting} />
