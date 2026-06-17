@@ -198,7 +198,6 @@ export default function Transactions() {
                 <td className="px-5 py-3.5 text-right">
                   <StatusBadge
                     status={t.reviewStatus}
-                    confidence={t.confidence}
                     classifying={t.pending && classifying}
                   />
                 </td>
@@ -277,11 +276,9 @@ function SummaryCard({
 
 function StatusBadge({
   status,
-  confidence,
   classifying = false,
 }: {
   status: ReviewStatus;
-  confidence: number | null;
   classifying?: boolean;
 }) {
   // A IA ainda não devolveu a categoria deste lançamento — pipeline em andamento.
@@ -307,9 +304,8 @@ function StatusBadge({
       </span>
     );
   }
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-      IA {confidence !== null ? `${(confidence * 100).toFixed(0)}%` : ""}
-    </span>
-  );
+  // Lançamento classificado normalmente não exibe badge: a categorização não é
+  // apresentada como "IA" e o percentual de confiança não agrega ao usuário.
+  // As tags "Revisar"/"Corrigido" acima seguem destacando só o que pede atenção.
+  return null;
 }
