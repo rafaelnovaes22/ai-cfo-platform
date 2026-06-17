@@ -233,7 +233,7 @@ const CREDIT_DESC_TERMS = [
   "faturamento", "mensalidade recebida", "honorarios recebidos",
 ] as const;
 
-function normalizeDescription(description: string): string {
+export function normalizeDescription(description: string): string {
   return ` ${description
     .toLowerCase()
     .normalize("NFD")

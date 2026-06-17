@@ -25,6 +25,7 @@ vi.mock("@/classification/business-profile.js", () => ({
 
 vi.mock("@/monthly-analysis/graph/instrumentation.js", () => ({
   buildAgentTelemetry: () => ({ costs: [], traces: [] }),
+  buildRuleBasedTrace: () => ({ costs: [], traces: [] }),
   NOOP_LLM_RESPONSE: {},
 }));
 
@@ -53,12 +54,15 @@ function baseState(overrides: Partial<MonthlyAnalysisState>): MonthlyAnalysisSta
   };
 }
 
+// Descrição genérica de propósito: não casa nenhum termo do pré-classificador
+// determinístico (rule-classifier), garantindo que estes testes exercitem o
+// caminho do LLM (direção/confirmedCategory/write-back), não a regra.
 function normalized(entryId: string, direction: "in" | "out") {
   return {
     entryId,
     date: "2026-04-20",
-    description: "DAS Simples Nacional",
-    normalizedDescription: "das simples nacional",
+    description: "Pagamento avulso ref 4521",
+    normalizedDescription: "pagamento avulso ref 4521",
     amountCents: 387000,
     direction,
     probableCounterparty: null,
@@ -72,7 +76,7 @@ function raw(entryId: string, direction: "in" | "out", directionInferred: boolea
   return {
     entryId,
     date: "2026-04-20",
-    description: "DAS Simples Nacional",
+    description: "Pagamento avulso ref 4521",
     amountCents: 387000,
     direction,
     directionInferred,
@@ -193,8 +197,8 @@ describe("monthly-analysis/dre-classifier — categoria confirmada na origem (pa
   });
 
   it("todas confirmadas → nenhuma chamada LLM (skip total, como o BullMQ)", async () => {
-    // runChunkedWithTelemetry real curto-circuita lista vazia sem chamar runFn;
-    // aqui validamos que o nó nem invoca o chunk-runner com itens.
+    // Sem item ambíguo (tudo confirmado na origem), o nó nem invoca o chunk-runner:
+    // pula o LLM por completo (zero custo/latência), emitindo só o trace rule-based.
     runChunkedMock.mockResolvedValue({ data: [], response: {}, latencyMs: 0 });
 
     await dreClassifierNode(baseState({
@@ -205,8 +209,7 @@ describe("monthly-analysis/dre-classifier — categoria confirmada na origem (pa
       normalizedEntries: [normalized("e1", "out"), normalized("e2", "in")],
     }));
 
-    const inputs = runChunkedMock.mock.calls[0]?.[0] as unknown[];
-    expect(inputs).toHaveLength(0);
+    expect(runChunkedMock).not.toHaveBeenCalled();
     expect(updateManyMock).not.toHaveBeenCalled();
   });
 

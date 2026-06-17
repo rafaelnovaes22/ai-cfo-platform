@@ -3,16 +3,31 @@ import {
   runDreClassificationAgentWithTelemetry,
 } from "@/monthly-analysis/agents/classification.js";
 import { runChunkedWithTelemetry } from "@/monthly-analysis/agents/chunk-runner.js";
-import { buildAgentTelemetry } from "@/monthly-analysis/graph/instrumentation.js";
+import {
+  buildAgentTelemetry,
+  buildRuleBasedTrace,
+} from "@/monthly-analysis/graph/instrumentation.js";
 import type { EntryForClassification } from "@/classification/prompts.js";
 import { inferBusinessProfile } from "@/classification/business-profile.js";
-import { CATEGORY_NATURE, type DreCategory } from "@/classification/taxonomy.js";
+import { classifyByRule } from "@/classification/rule-classifier.js";
+import { normalizeDescription } from "@/ingest/normalize.js";
+import {
+  CATEGORY_NATURE,
+  DRE_CATEGORIES,
+  type DreCategory,
+} from "@/classification/taxonomy.js";
+import type {
+  AgentCost,
+  AgentTrace,
+  DreClassificationResult,
+} from "@/monthly-analysis/schemas/agents.js";
 import { DIRECTION_SAFEGUARD_CONFIDENCE } from "@/classification/direction-fix.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 
 const NATURE_TO_FLOW = { credit: "in", debit: "out" } as const;
+const FLOW_TO_NATURE = { in: "credit", out: "debit" } as const;
 
 export async function dreClassifierNode(
   state: MonthlyAnalysisState,
@@ -36,15 +51,6 @@ export async function dreClassifierNode(
       "monthly-analysis.dre-classifier: entries com categoria confirmada na origem — puladas do LLM",
     );
   }
-  const inputs: EntryForClassification[] = (state.normalizedEntries ?? [])
-    .filter((entry) => !confirmedIds.has(entry.entryId))
-    .map((entry) => ({
-      entryId: entry.entryId,
-      date: entry.date,
-      description: entry.normalizedDescription,
-      amountCents: entry.amountCents,
-      direction: inferredById.has(entry.entryId) ? "unknown" : entry.direction,
-    }));
   const tenantFacts = (state.tenantMemory?.facts ?? [])
     .filter((f): f is { content: { description: string; category: string }; confidence: number } =>
       typeof (f.content as Record<string, unknown>)?.description === "string" &&
@@ -55,39 +61,124 @@ export async function dreClassifierNode(
       category: (f.content as { description: string; category: string }).category,
     }));
 
-  // Perfil do negócio inferido das descrições (1 chamada curta): diz quais
-  // lançamentos são a receita-fim deste negócio, evitando que serviços vendidos
-  // virem despesa quando a direção é "unknown".
-  const businessProfile = await inferBusinessProfile(inputs, {
-    tenantId: state.tenantId,
-    traceId: state.traceId,
-  });
+  // Pré-classificador determinístico: termos inequívocos (aluguel, pró-labore,
+  // DAS, contador...) e correções idênticas que o cliente já fez (flywheel)
+  // recebem categoria por regra com confiança 1.0 e PULAM o LLM. Reduz a
+  // superfície probabilística do financeiro. Roda depois de confirmedIds (origem
+  // manda) e antes de montar os inputs do modelo.
+  const factByDesc = new Map<string, string>();
+  for (const f of tenantFacts) {
+    if (DRE_CATEGORIES.includes(f.category as DreCategory)) {
+      factByDesc.set(normalizeDescription(f.description), f.category);
+    }
+  }
+  const ruleById = new Map<string, DreClassificationResult>();
+  for (const entry of state.normalizedEntries ?? []) {
+    if (confirmedIds.has(entry.entryId)) continue;
+    // 1. Flywheel: descrição idêntica já corrigida pelo cliente tem precedência.
+    const factCat = factByDesc.get(normalizeDescription(entry.normalizedDescription));
+    if (factCat) {
+      ruleById.set(entry.entryId, { entryId: entry.entryId, category: factCat, confidence: 1 });
+      continue;
+    }
+    // 2. Regra por termo-âncora inequívoco (null = ambíguo/sem regra → LLM).
+    // Converte fluxo do extrato (in/out) → natureza contábil (credit/debit) que a
+    // regra e CATEGORY_NATURE falam; direção inferida vira "unknown" (não é fato).
+    const dir = inferredById.has(entry.entryId)
+      ? "unknown"
+      : FLOW_TO_NATURE[entry.direction];
+    const rule = classifyByRule(entry.normalizedDescription, dir);
+    if (rule) {
+      ruleById.set(entry.entryId, {
+        entryId: entry.entryId,
+        category: rule.category,
+        confidence: rule.confidence,
+      });
+    }
+  }
 
-  // Lotes paralelos: tenantFacts + segment + businessProfile vão a todos os lotes
-  // para manter a consistência de categoria entre eles (ver chunk-runner.ts).
-  const { data: classifications, response, latencyMs } = await runChunkedWithTelemetry(
-    inputs,
-    {
+  const inputs: EntryForClassification[] = (state.normalizedEntries ?? [])
+    .filter((entry) => !confirmedIds.has(entry.entryId) && !ruleById.has(entry.entryId))
+    .map((entry) => ({
+      entryId: entry.entryId,
+      date: entry.date,
+      description: entry.normalizedDescription,
+      amountCents: entry.amountCents,
+      direction: inferredById.has(entry.entryId) ? "unknown" : entry.direction,
+    }));
+
+  const ruleClassifications = [...ruleById.values()];
+  if (ruleClassifications.length > 0) {
+    logger.info(
+      {
+        analysisId: state.analysisId,
+        ruleClassified: ruleClassifications.length,
+        llmClassified: inputs.length,
+        total: ruleClassifications.length + inputs.length,
+      },
+      "monthly-analysis.dre-classifier: lançamentos resolvidos por regra determinística (pulam o LLM)",
+    );
+  }
+
+  // Só chama o LLM se sobrou item ambíguo. Tudo resolvido por regra/origem →
+  // pula o modelo (zero custo, zero latência), emitindo só o trace rule-based.
+  let businessProfile: string | undefined;
+  let llmClassifications: DreClassificationResult[] = [];
+  let costs: AgentCost[];
+  let traces: AgentTrace[];
+  if (inputs.length > 0) {
+    // Perfil do negócio inferido das descrições (1 chamada curta): diz quais
+    // lançamentos são a receita-fim deste negócio, evitando que serviços vendidos
+    // virem despesa quando a direção é "unknown".
+    businessProfile = await inferBusinessProfile(inputs, {
       tenantId: state.tenantId,
       traceId: state.traceId,
-      segment: state.segment,
-      tenantFacts,
-      businessProfile,
-    },
-    runDreClassificationAgentWithTelemetry,
-  );
-  const finalClassifications =
-    state.clarityResults && state.clarityResults.length > 0
-      ? applyClarityCaps(classifications, state.clarityResults)
-      : classifications;
+    });
 
-  const { costs, traces } = buildAgentTelemetry({
-    agent: "dre-classification",
-    response,
-    latencyMs,
-    inputPayload: inputs,
-    outputPayload: finalClassifications,
+    // Lotes paralelos: tenantFacts + segment + businessProfile vão a todos os lotes
+    // para manter a consistência de categoria entre eles (ver chunk-runner.ts).
+    const { data: classifications, response, latencyMs } = await runChunkedWithTelemetry(
+      inputs,
+      {
+        tenantId: state.tenantId,
+        traceId: state.traceId,
+        segment: state.segment,
+        tenantFacts,
+        businessProfile,
+      },
+      runDreClassificationAgentWithTelemetry,
+    );
+    llmClassifications =
+      state.clarityResults && state.clarityResults.length > 0
+        ? applyClarityCaps(classifications, state.clarityResults)
+        : classifications;
+
+    ({ costs, traces } = buildAgentTelemetry({
+      agent: "dre-classification",
+      response,
+      latencyMs,
+      inputPayload: inputs,
+      outputPayload: llmClassifications,
+    }));
+  } else {
+    ({ costs, traces } = buildRuleBasedTrace({
+      agent: "dre-classification",
+      inputPayload: ruleClassifications,
+      outputPayload: ruleClassifications,
+    }));
+  }
+
+  // Regra (confiança 1.0) + LLM. Saneia a saída do LLM removendo repetições e
+  // entryIds já resolvidos por regra (o determinístico tem precedência; o remap
+  // por alias pode repetir id quando o modelo devolve mais linhas que o pedido).
+  // Os de regra não passam por clarity caps — são determinísticos, nada a rebaixar.
+  const seenLlm = new Set<string>();
+  const sanitizedLlm = llmClassifications.filter((c) => {
+    if (seenLlm.has(c.entryId) || ruleById.has(c.entryId)) return false;
+    seenLlm.add(c.entryId);
+    return true;
   });
+  const finalClassifications = [...sanitizedLlm, ...ruleClassifications];
 
   // PRINCÍPIO: o caixa é fato contábil, não pode ser probabilístico. A direção
   // (entrada/saída) vem do parsing DETERMINÍSTICO do extrato (sinal/coluna Tipo >
