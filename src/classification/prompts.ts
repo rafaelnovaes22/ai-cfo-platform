@@ -28,6 +28,10 @@ REGRAS DE CATEGORIA
 - DAS / Simples → "simples_nacional". IRPJ/CSLL separados → "irpj_csll".
 - Valores de entrada de empréstimo → "emprestimos_entrada" (não "receita_bruta").
 - Estorno (credit) de tarifa/multa → "despesas_financeiras" (reverte despesa, não é receita).
+- REFEIÇÃO/ALIMENTAÇÃO: copa, café, água, lanche, almoço/jantar de reunião interna ou da equipe
+  → "despesas_administrativas". Almoço/jantar com CLIENTE (representação) → "despesas_comerciais".
+  "despesas_viagem" SÓ quando houver deslocamento/viagem explícito (passagem, hospedagem, diária,
+  destino fora da cidade). Alimentação do dia a dia NUNCA é "despesas_viagem".
 - direction="unknown": o arquivo de origem NÃO informou se o lançamento é entrada ou saída.
   Classifique APENAS pela semântica da descrição — contas/impostos/fornecedores/folha são
   despesas mesmo sem sinal. NÃO assuma que é receita.

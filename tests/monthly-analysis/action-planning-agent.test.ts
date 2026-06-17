@@ -165,9 +165,11 @@ describe("action-planning agent prompts", () => {
     expect(prompt.toLowerCase()).toContain("classificar lançamentos");
     // Passo 4 — raciocínio setorial via PERFIL DO NEGÓCIO inferido (segment costuma ser "geral")
     expect(prompt).toContain("PERFIL DO NEGÓCIO");
-    // Anti-enchimento: não inventar 3ª short imaterial só para completar a cota
-    expect(prompt).toMatch(/3ª ação short/);
+    // Anti-enchimento: não inventar micro-corte imaterial só para completar a cota,
+    // mas SEMPRE entregar 5+ ações (vagas preenchidas por alavancas ofensivas).
     expect(prompt.toLowerCase()).toContain("micro-corte");
+    expect(prompt).toMatch(/SEMPRE no mínimo 5 ações/);
+    expect(prompt.toLowerCase()).toMatch(/ofensiv/);
   });
 
   it("user prompt inclui o perfil do negócio inferido", () => {
@@ -378,6 +380,35 @@ describe("runActionPlanningAgent", () => {
       },
       { tenantId: "tenant-1" },
     )).rejects.toThrow();
+  });
+
+  it("faz retry local com reforço quando o 1º plano vem incompleto (não derruba a análise)", async () => {
+    const incompleto = { actions: validPayload.actions.slice(0, 4) }; // 4 ações, sem long → < min 5
+    const ok = (payload: unknown) => ({
+      content: JSON.stringify(payload),
+      provider: "google", model: "gemini-2.5-flash",
+      inputTokens: 10, outputTokens: 10, costCents: 1, traceId: null,
+    });
+    callLlmMock
+      .mockResolvedValueOnce(ok(incompleto))
+      .mockResolvedValueOnce(ok(validPayload));
+
+    const result = await runActionPlanningAgent(
+      {
+        dre: baseDre,
+        anomalies: baseAnomalies,
+        narrativeCards: baseCards,
+        marginDiagnosis: baseMargin,
+        cashflowRisk: baseCashflow,
+      },
+      { tenantId: "tenant-1" },
+    );
+
+    expect(result.actions).toHaveLength(5);
+    expect(callLlmMock).toHaveBeenCalledTimes(2);
+    // a 2ª tentativa leva o reforço pedindo o mínimo de ações
+    const secondPrompt = (callLlmMock.mock.calls[1]![0] as { userPrompt: string }).userPrompt;
+    expect(secondPrompt).toMatch(/no mínimo 5 ações/i);
   });
 });
 

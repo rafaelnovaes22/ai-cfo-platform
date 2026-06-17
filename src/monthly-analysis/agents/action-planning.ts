@@ -52,20 +52,37 @@ export async function runActionPlanningAgent(
   return data;
 }
 
+// Reforço enviado na 2ª tentativa quando o 1º plano não bate o mínimo do schema
+// (< 5 ações ou faltando horizonte). Re-chamar SÓ o agente é muito mais barato que
+// deixar a exceção derrubar o grafo e o worker reprocessar a análise inteira (~50s+).
+const PLAN_REINFORCE = `\n\nIMPORTANTE: o plano anterior foi REJEITADO por ter menos de 5 ações ou faltar um horizonte. Gere OBRIGATORIAMENTE no mínimo 5 ações — pelo menos 2 short, 1 medium e 1 long. Esta empresa, mesmo saudável, tem alavancas de CFO suficientes: complete com ações OFENSIVAS materiais (reserva/runway, diversificação de receita, reinvestimento, precificação, eficiência fiscal). Não é enchimento — é alocação de capital.`;
+
 export async function runActionPlanningAgentWithTelemetry(
   input: ActionPlanningAgentInput,
   options: MonthlyAgentRunOptions,
 ): Promise<{ data: ActionPlanDraft; response: LlmResponse; latencyMs: number }> {
   const start = Date.now();
-  const response = await callLlm({
-    task: "action-planning",
-    systemPrompt: buildSystemPrompt(),
-    userPrompt: buildUserPrompt(input),
-    tenantId: options.tenantId,
-    traceId: options.traceId,
-    jsonMode: true,
-  });
+  const systemPrompt = buildSystemPrompt();
+  const baseUserPrompt = buildUserPrompt(input);
 
-  const data = sortShortsByRoi(parseAgentJson(response.content, ActionPlanDraftSchema));
-  return { data, response, latencyMs: Date.now() - start };
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await callLlm({
+      task: "action-planning",
+      systemPrompt,
+      userPrompt: attempt === 0 ? baseUserPrompt : baseUserPrompt + PLAN_REINFORCE,
+      tenantId: options.tenantId,
+      traceId: options.traceId,
+      jsonMode: true,
+    });
+    try {
+      const data = sortShortsByRoi(parseAgentJson(response.content, ActionPlanDraftSchema));
+      return { data, response, latencyMs: Date.now() - start };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  // Esgotou o retry local: propaga para o tratamento de erro do grafo (mantém o
+  // contrato — um plano que insiste em vir incompleto não é entregue silenciosamente).
+  throw lastErr;
 }

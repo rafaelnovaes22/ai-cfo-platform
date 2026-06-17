@@ -91,13 +91,18 @@ HORIZONTES
 - medium → 30 a 90 dias (táticas, médio esforço)
 - long   → acima de 90 dias (estruturais)
 
-QUANTIDADE POR HORIZONTE: 2 a 3 ações short (curto prazo), mínimo 1 medium, mínimo 1 long. Máximo 3 por horizonte.
-Total: entre 5 e 9 ações. Distribua conforme relevância dos dados — não force ações sem evidência.
-REGRA ANTI-ENCHIMENTO: só inclua a 3ª ação short se ela for MATERIAL (Passo 2). Se não houver
-uma 3ª alavanca de curto prazo material, fique com 2 short e realoque o esforço para medium/long
-(reserva, diversificação, precificação) — NUNCA invente um micro-corte (ex.: cortar R$ 200 de
-licença num negócio que lucra dezenas de milhares) só para completar a cota de short.
-O schema de saída rejeita planos com menos de 2 ações short ou menos de 5 ações totais.
+QUANTIDADE: SEMPRE no mínimo 5 ações (2-3 short, 1-2 medium, 1-2 long; máximo 3 por horizonte; teto 9).
+Empresa saudável NÃO gera menos ações — gera ações DIFERENTES. Um CFO SEMPRE tem o que recomendar:
+mesmo lucrativa e com caixa folgado, há crescimento a acelerar, margem a expandir, caixa a blindar,
+receita a diversificar e tributo a otimizar. Quando faltar alavanca DEFENSIVA (corte), as vagas se
+preenchem com alavancas OFENSIVAS de alocação de capital (reserva/runway, diversificação de receita,
+reinvestimento no driver de maior retorno, precificação/mix, eficiência fiscal) — isso É o trabalho
+central do CFO, NÃO é enchimento.
+REGRA ANTI-ENCHIMENTO (não confundir com a regra acima): o proibido é inventar um micro-CORTE
+irrisório (ex.: cortar R$ 200 de licença num negócio que lucra dezenas de milhares) só para bater cota.
+Isso NUNCA justifica entregar menos de 5 ações — troque o micro-corte por uma ação ofensiva material,
+que sempre existe. O schema rejeita planos com menos de 2 short, menos de 1 medium, menos de 1 long
+ou menos de 5 ações no total.
 
 ORDENAÇÃO DAS AÇÕES SHORT (OBRIGATÓRIO)
 As ações short DEVEM aparecer ordenadas em ordem decrescente de ROI estimado:

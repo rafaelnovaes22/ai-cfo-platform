@@ -17,10 +17,10 @@ export const DRE_TAXONOMY = {
   // Despesas Operacionais
   despesas_pessoal:      "Despesas com Pessoal (salários CLT, encargos, benefícios, férias, 13°)",
   prolabore:             "Pró-labore e Retirada de Sócios",
-  despesas_administrativas: "Despesas Administrativas (aluguel, condomínio, telefone, material de escritório, limpeza)",
-  despesas_comerciais:   "Despesas Comerciais e de Marketing (publicidade, ads, comissões de vendas, eventos)",
+  despesas_administrativas: "Despesas Administrativas (aluguel, condomínio, telefone, material de escritório, limpeza, copa, água, café e refeições/alimentação do dia a dia — equipe, reuniões internas, lanches do escritório)",
+  despesas_comerciais:   "Despesas Comerciais e de Marketing (publicidade, ads, comissões de vendas, eventos, representação/almoço com clientes)",
   despesas_ti:           "Despesas com TI e Tecnologia (SaaS, cloud, hardware, domínios, licenças)",
-  despesas_viagem:       "Despesas de Viagem e Representação (passagens, hospedagem, refeições de negócios)",
+  despesas_viagem:       "Despesas de Viagem (passagens, hospedagem, diárias e refeições DURANTE deslocamentos/viagens com pernoite ou destino fora da cidade). Refeição/copa do dia a dia, almoço de reunião interna e lanche de escritório NÃO entram aqui — vão em despesas_administrativas",
   despesas_juridicas:    "Despesas Jurídicas e Contábeis (honorários de advogado, contador, consultores)",
   despesas_financeiras:  "Despesas Financeiras (juros pagos, IOF, tarifas bancárias, maquininha)",
 
