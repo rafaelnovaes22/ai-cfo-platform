@@ -1,10 +1,12 @@
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
+import { Prisma } from "@prisma/client";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { HarnessJob, HarnessJobCorrected, HarnessJobValidated } from "@/queue/index.js";
 import { evaluateAutonomyGate, updateTenantAutonomy } from "@/learning/autonomy-gate.js";
 import { checkAndPromoteToGlobal } from "@/learning/global-signal-promoter.js";
+import { isDiscriminativeDescription } from "@/classification/rule-classifier.js";
 
 function createRedisForWorker(): IORedis {
   const url = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -26,46 +28,49 @@ export async function handleClassificationCorrected(data: HarnessJobCorrected): 
   const db = getPrisma();
   const now = new Date().toISOString();
 
-  await db.$transaction([
-    db.tenantMemoryItem.create({
-      data: {
-        tenantId: data.tenantId,
-        kind: "fact",
-        content: {
-          description: data.description,
-          category: data.correctedCategory,
-          originalPrediction: data.predictedCategory ?? null,
-          source: "client_correction",
-        },
-        confidence: 1.0,
-        evidenceRefs: [
-          {
-            source: "ledger_entry",
-            refId: data.entryId,
-            observedAt: now,
-          },
-        ],
+  // Descrição genérica ("Pagamento", "TED 500", "PIX") não é transferível: memorizá-la
+  // como fact faz o flywheel reaplicar a categoria a QUALQUER lançamento com a mesma
+  // descrição genérica, com confiança 1.0 — falsa certeza. O sinal negativo (métrica e
+  // gate de autonomia) continua valendo; só a memória/promoção global é pulada.
+  const memorizable = isDiscriminativeDescription(data.description);
+
+  const metricOp = db.validationMetric.create({
+    data: {
+      tenantId: data.tenantId,
+      agentName: "classification",
+      signal: "negative",
+      refType: "ledger_entry",
+      refId: data.entryId,
+      confidenceBand: resolveConfidenceBand(data.confidence),
+    },
+  });
+  const factOp = db.tenantMemoryItem.create({
+    data: {
+      tenantId: data.tenantId,
+      kind: "fact",
+      content: {
+        description: data.description,
+        category: data.correctedCategory,
+        originalPrediction: data.predictedCategory ?? null,
+        source: "client_correction",
       },
-    }),
-    db.validationMetric.create({
-      data: {
-        tenantId: data.tenantId,
-        agentName: "classification",
-        signal: "negative",
-        refType: "ledger_entry",
-        refId: data.entryId,
-        confidenceBand: resolveConfidenceBand(data.confidence),
-      },
-    }),
-  ]);
+      confidence: 1.0,
+      evidenceRefs: [{ source: "ledger_entry", refId: data.entryId, observedAt: now }],
+    },
+  });
+  const ops: Prisma.PrismaPromise<unknown>[] = memorizable ? [factOp, metricOp] : [metricOp];
+  await db.$transaction(ops);
 
   logger.info(
-    { tenantId: data.tenantId, entryId: data.entryId },
+    { tenantId: data.tenantId, entryId: data.entryId, memorizedFact: memorizable },
     "self-harness: classification.corrected processado",
   );
 
-  // Verifica concordância intra-segmento para promoção ao pool global (ADR-011 §2)
-  await checkAndPromoteToGlobal(data.tenantId, data.segment, data.description, data.correctedCategory);
+  // Promoção ao pool global só para descrição discriminativa (ADR-011 §2) — genérica
+  // não vira sinal global pelo mesmo motivo que não vira fact de tenant.
+  if (memorizable) {
+    await checkAndPromoteToGlobal(data.tenantId, data.segment, data.description, data.correctedCategory);
+  }
 
   // Reavalia gate de autonomia após cada sinal negativo (ADR-011 §3 — auto-rebaixamento)
   const newLevel = await evaluateAutonomyGate(data.tenantId, "classification");

@@ -108,3 +108,26 @@ export function classifyByRule(
   }
   return { category, confidence: 1 };
 }
+
+// Termos de MEIO/MOVIMENTO sem objeto: descrevem o canal do dinheiro, não o que
+// ele é. Uma descrição feita só destes (+ números) não discrimina nada — "Pagamento"
+// pode ser qualquer despesa, "PIX 500" qualquer coisa.
+const GENERIC_DESC_TOKENS = new Set([
+  "pagamento", "pagamentos", "pgto", "pag", "recebimento", "recebimentos", "recebido",
+  "recebida", "ted", "doc", "pix", "transferencia", "transferencias", "transf",
+  "deposito", "depositos", "saque", "saques", "boleto", "boletos", "debito", "credito",
+  "valor", "conta", "lancamento", "movimentacao", "transacao", "cobranca", "de", "da",
+  "do", "para", "ref",
+]);
+
+/**
+ * Uma descrição é DISCRIMINATIVA quando tem ao menos um token de conteúdo (≥3 letras,
+ * não-numérico e fora de GENERIC_DESC_TOKENS). Usada para BLOQUEAR o flywheel de
+ * memorizar/aplicar correções de descrições genéricas ("Pagamento", "TED 500"): elas
+ * não são transferíveis — o próximo lançamento com a mesma descrição genérica é outra
+ * coisa, e aplicar a correção antiga com confiança 1.0 propaga erro com falsa certeza.
+ */
+export function isDiscriminativeDescription(description: string): boolean {
+  const tokens = normalizeDescription(description).trim().split(/\s+/);
+  return tokens.some((t) => t.length >= 3 && !/^\d+$/.test(t) && !GENERIC_DESC_TOKENS.has(t));
+}

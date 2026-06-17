@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyByRule } from "@/classification/rule-classifier.js";
+import { classifyByRule, isDiscriminativeDescription } from "@/classification/rule-classifier.js";
 
 describe("classifyByRule — pré-classificador determinístico", () => {
   it("classifica termos inequívocos de despesa", () => {
@@ -59,5 +59,23 @@ describe("classifyByRule — pré-classificador determinístico", () => {
 
   it("guarda de natureza: equipamento com direção de ENTRADA confiável → null (venda, não compra)", () => {
     expect(classifyByRule("Venda câmera usada", "credit")).toBeNull();
+  });
+});
+
+describe("isDiscriminativeDescription — guarda do flywheel", () => {
+  it("rejeita descrições genéricas de meio/movimento (não memorizáveis)", () => {
+    expect(isDiscriminativeDescription("Pagamento")).toBe(false);
+    expect(isDiscriminativeDescription("PIX")).toBe(false);
+    expect(isDiscriminativeDescription("TED 500")).toBe(false);
+    expect(isDiscriminativeDescription("PIX 1200")).toBe(false);
+    expect(isDiscriminativeDescription("Transferência")).toBe(false);
+    expect(isDiscriminativeDescription("Recebimento")).toBe(false);
+  });
+
+  it("aceita descrições com token de conteúdo (transferíveis)", () => {
+    expect(isDiscriminativeDescription("Aluguel escritório")).toBe(true);
+    expect(isDiscriminativeDescription("PIX João Silva sócio")).toBe(true);
+    expect(isDiscriminativeDescription("Pagamento fornecedor materiais")).toBe(true);
+    expect(isDiscriminativeDescription("Microfone Shure")).toBe(true);
   });
 });

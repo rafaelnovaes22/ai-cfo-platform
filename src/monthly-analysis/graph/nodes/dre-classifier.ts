@@ -9,7 +9,7 @@ import {
 } from "@/monthly-analysis/graph/instrumentation.js";
 import type { EntryForClassification } from "@/classification/prompts.js";
 import { inferBusinessProfile } from "@/classification/business-profile.js";
-import { classifyByRule } from "@/classification/rule-classifier.js";
+import { classifyByRule, isDiscriminativeDescription } from "@/classification/rule-classifier.js";
 import { normalizeDescription } from "@/ingest/normalize.js";
 import {
   CATEGORY_NATURE,
@@ -66,12 +66,21 @@ export async function dreClassifierNode(
   // recebem categoria por regra com confiança 1.0 e PULAM o LLM. Reduz a
   // superfície probabilística do financeiro. Roda depois de confirmedIds (origem
   // manda) e antes de montar os inputs do modelo.
+  // Flywheel só memoriza descrições DISCRIMINATIVAS: uma correção de "Pagamento"
+  // (genérico) não é transferível ao próximo "Pagamento". Conflito (mesma descrição
+  // → categorias diferentes em facts distintos) é sinal de que a descrição não
+  // discrimina — descarta a chave em vez de aplicar uma categoria arbitrária com 1.0.
   const factByDesc = new Map<string, string>();
+  const conflictingDesc = new Set<string>();
   for (const f of tenantFacts) {
-    if (DRE_CATEGORIES.includes(f.category as DreCategory)) {
-      factByDesc.set(normalizeDescription(f.description), f.category);
-    }
+    if (!DRE_CATEGORIES.includes(f.category as DreCategory)) continue;
+    if (!isDiscriminativeDescription(f.description)) continue;
+    const key = normalizeDescription(f.description);
+    const existing = factByDesc.get(key);
+    if (existing && existing !== f.category) conflictingDesc.add(key);
+    else if (!existing) factByDesc.set(key, f.category);
   }
+  for (const k of conflictingDesc) factByDesc.delete(k);
   // Categoria confirmada na origem, por entryId — vira contexto do batch do LLM.
   const confirmedCatById = new Map(
     (state.rawEntries ?? [])
