@@ -149,14 +149,14 @@ export default function Transactions() {
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal">
                 Descrição
               </th>
+              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px] text-right">
+                Status
+              </th>
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[220px]">
                 Categoria
               </th>
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[140px] text-right">
                 Valor
-              </th>
-              <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px] text-right">
-                Status
               </th>
             </tr>
           </thead>
@@ -174,6 +174,13 @@ export default function Transactions() {
                   {formatDate(t.date)}
                 </td>
                 <td className="px-5 py-3.5">{t.description}</td>
+                <td className="px-5 py-3.5 text-right">
+                  <StatusBadge
+                    status={t.reviewStatus}
+                    confidence={t.confidence}
+                    classifying={t.pending && classifying}
+                  />
+                </td>
                 <td className="px-5 py-3.5">
                   <select
                     value={t.rawCategory}
@@ -194,13 +201,6 @@ export default function Transactions() {
                 >
                   {t.type === "income" ? "+" : "−"}
                   {formatBRL(Number(t.amount))}
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                  <StatusBadge
-                    status={t.reviewStatus}
-                    confidence={t.confidence}
-                    classifying={t.pending && classifying}
-                  />
                 </td>
               </tr>
             ))}
@@ -308,7 +308,7 @@ function StatusBadge({
   const low = status === "needs_review" || (pct !== null && pct < 70);
   if (low) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
         Revisar{pct !== null ? ` · ${pct}%` : ""}
       </span>
     );
