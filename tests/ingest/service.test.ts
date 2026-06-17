@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   filterEntriesByReferenceMonth,
   predominantMonth,
@@ -6,7 +6,11 @@ import {
   computeDirectionInferred,
   groupIndicesByMonth,
   persistMonth,
+  dispatch,
+  looksLikeDreText,
 } from "@/ingest/service.js";
+import { parseText } from "@/ingest/parsers/text.js";
+import { parseDreText } from "@/ingest/parsers/pdf-dre.js";
 import type { RawLedger } from "@/ingest/types.js";
 import type { getPrisma } from "@/persistence/prisma.js";
 import { SubscriptionMode } from "@prisma/client";
@@ -17,7 +21,7 @@ vi.mock("@/queue/index.js", () => ({
 }));
 vi.mock("@/ingest/parsers/excel.js", () => ({ parseExcel: vi.fn() }));
 vi.mock("@/ingest/parsers/text.js", () => ({ parseText: vi.fn() }));
-vi.mock("@/ingest/parsers/pdf-dre.js", () => ({ parsePdfDre: vi.fn() }));
+vi.mock("@/ingest/parsers/pdf-dre.js", () => ({ parsePdfDre: vi.fn(), parseDreText: vi.fn() }));
 vi.mock("@/ingest/parsers/manual.js", () => ({ parseManual: vi.fn() }));
 vi.mock("@/observability/tracing.js", () => ({ createTrace: vi.fn() }));
 vi.mock("@/observability/logger.js", () => ({ logger: { error: vi.fn(), info: vi.fn() } }));
@@ -245,5 +249,82 @@ describe("ingest/service persistMonth (revínculo de órfãos no reenvio)", () =
       skipAnalysis: true,
     });
     expect(updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("ingest/service looksLikeDreText (gate antes do extrator LLM)", () => {
+  const DRE = [
+    "DRE — março de 2026",
+    "Receita Bruta 641.726,01",
+    "Custos 245.480,01",
+    "Despesas Operacionais 165.145,00",
+    "Resultado Líquido 231.101,01",
+  ].join("\n");
+
+  it("texto com várias linhas e valores BR tem cara de DRE", () => {
+    expect(looksLikeDreText(DRE)).toBe(true);
+  });
+
+  it("paste trivial (uma frase, sem valores) não tem cara de DRE", () => {
+    expect(looksLikeDreText("oi, quero ver meus números")).toBe(false);
+  });
+
+  it("poucos valores não bastam, mesmo com linhas suficientes", () => {
+    expect(looksLikeDreText("linha um\nlinha dois 10,00\nlinha três")).toBe(false);
+  });
+
+  it("DRE curto com valores em milhar SEM centavos também roteia", () => {
+    // Contador cola um DRE enxuto com valores formatados sem ',00'.
+    expect(looksLikeDreText("Receita 641.726\nCustos 245.480\nResultado 396.246")).toBe(true);
+  });
+
+  it("não confunde ano/número solto com valor (gate não afrouxa)", () => {
+    // "2026" e "10" não têm separador de milhar nem centavos: não contam como valor.
+    expect(looksLikeDreText("relatório 2026\nperíodo 1\ntotal 10")).toBe(false);
+  });
+});
+
+describe("ingest/service dispatch — roteamento de texto colado", () => {
+  const DRE = [
+    "DRE — março de 2026",
+    "Receita Bruta 641.726,01",
+    "Custos 245.480,01",
+    "Despesas Operacionais 165.145,00",
+    "Resultado Líquido 231.101,01",
+  ].join("\n");
+
+  const emptyParse = { entries: [], orphanCount: 3 };
+  const dreParse = { entries: [entry({ confirmedCategory: "receita_bruta" })], orphanCount: 0 };
+
+  beforeEach(() => {
+    vi.mocked(parseText).mockReset();
+    vi.mocked(parseDreText).mockReset();
+  });
+
+  it("texto com colunas reconhecíveis usa parseText e NÃO chama o extrator de DRE", async () => {
+    vi.mocked(parseText).mockReturnValue({ entries: [entry()], orphanCount: 0 });
+    const result = await dispatch({ tenantId: "t1", referenceMonth: "2026-03", source: "text", text: "Data\tDescrição\tValor\n01/03/2026\tCliente\t100,00" });
+    expect(result.entries).toHaveLength(1);
+    expect(parseDreText).not.toHaveBeenCalled();
+  });
+
+  it("texto sem colunas mas com cara de DRE cai no extrator LLM", async () => {
+    vi.mocked(parseText).mockReturnValue(emptyParse);
+    vi.mocked(parseDreText).mockResolvedValue(dreParse);
+    const result = await dispatch({ tenantId: "t1", referenceMonth: "2026-03", source: "text", text: DRE });
+    expect(parseDreText).toHaveBeenCalledWith(DRE, "2026-03", "t1");
+    expect(result.entries[0]).toMatchObject({ confirmedCategory: "receita_bruta" });
+  });
+
+  it("free tier (skipAnalysis) nunca cai no extrator LLM — custo R$0", async () => {
+    vi.mocked(parseText).mockReturnValue(emptyParse);
+    await dispatch({ tenantId: "t1", referenceMonth: "2026-03", source: "text", text: DRE, skipAnalysis: true });
+    expect(parseDreText).not.toHaveBeenCalled();
+  });
+
+  it("paste sem cara de DRE não dispara o extrator LLM", async () => {
+    vi.mocked(parseText).mockReturnValue(emptyParse);
+    await dispatch({ tenantId: "t1", referenceMonth: "2026-03", source: "text", text: "texto aleatório sem valores" });
+    expect(parseDreText).not.toHaveBeenCalled();
   });
 });
