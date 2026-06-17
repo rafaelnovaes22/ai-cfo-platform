@@ -14,7 +14,7 @@ export default function AppLayout() {
           <Topbar />
           <main
             key={pathname}
-            className="flex-1 px-8 md:px-20 pt-7 pb-14 w-full mx-auto"
+            className="flex-1 px-8 md:px-20 pt-7 pb-14 w-full mx-auto relative"
           >
             <Outlet />
           </main>

@@ -1,13 +1,21 @@
 import { useMemo, useState } from "react";
-import { Loader2, Search, X } from "lucide-react";
+import { Check, Loader2, Search, X } from "lucide-react";
 import { formatBRL } from "../data/categories.ts";
 import {
   useTransactions,
   BACKEND_CATEGORIES,
   type ReviewStatus,
+  type Source,
 } from "../data/useTransactions.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import { toast } from "@/components/ui/sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip.tsx";
+
+const LOW_CONFIDENCE_THRESHOLD = 70;
 
 export default function Transactions() {
   const { transactions, loading, correct, classifying } = useTransactions();
@@ -50,9 +58,13 @@ export default function Transactions() {
     setCategory("all");
   };
 
-  const handleCorrect = async (entryId: string, newCategory: string) => {
+  const handleCorrect = async (
+    entryId: string,
+    newCategory: string,
+    source?: Source
+  ) => {
     try {
-      await correct(entryId, newCategory);
+      await correct(entryId, newCategory, source);
       toast.success("Categoria atualizada.");
     } catch {
       toast.error("Erro ao corrigir categoria.");
@@ -62,6 +74,15 @@ export default function Transactions() {
   const formatDate = (iso: string) => {
     const [y, m, d] = iso.split("-");
     return `${d}/${m}/${y.slice(2)}`;
+  };
+
+  const handleLowConfidence = (confidence: number, status: ReviewStatus) => {
+    const pct = confidence !== null ? Math.round(confidence * 100) : null;
+    return (
+      status === "needs_review" &&
+      pct !== null &&
+      pct < LOW_CONFIDENCE_THRESHOLD
+    );
   };
 
   return (
@@ -182,17 +203,28 @@ export default function Transactions() {
                   />
                 </td>
                 <td className="px-5 py-3.5">
-                  <select
-                    value={t.rawCategory}
-                    onChange={(e) => handleCorrect(t.id, e.target.value)}
-                    className="dark:bg-[#15152f] border dark:border-[#171132] rounded px-2 py-1 text-[11.5px] w-full focus:outline-none focus:border-[#96ff7e]"
-                  >
-                    {BACKEND_CATEGORIES.map((c) => (
-                      <option key={c.key} value={c.key}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={t.rawCategory}
+                      onChange={(e) => handleCorrect(t.id, e.target.value)}
+                      className="dark:bg-[#15152f] border dark:border-[#171132] rounded px-2 py-1 text-[11.5px] w-full focus:outline-none focus:border-[#96ff7e]"
+                    >
+                      {BACKEND_CATEGORIES.map((c) => (
+                        <option key={c.key} value={c.key}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    {handleLowConfidence(t.confidence, t.reviewStatus) && (
+                      <ConfidenceCheckmark
+                        confidence={t.confidence}
+                        category={t.rawCategory}
+                        onClick={(value: string, source?: Source) =>
+                          handleCorrect(t.id, value, source)
+                        }
+                      />
+                    )}
+                  </div>
                 </td>
                 <td
                   className={`px-5 py-3.5 font-semibold text-[13px] text-right ${
@@ -305,12 +337,21 @@ function StatusBadge({
   // chamando atenção pros lançamentos que o sistema não classificou com segurança
   // (ex.: "Pagamento" genérico). Confiança alta fica discreta, só o percentual.
   const pct = confidence !== null ? Math.round(confidence * 100) : null;
-  const low = status === "needs_review" || (pct !== null && pct < 70);
+  const low =
+    status === "needs_review" ||
+    (pct !== null && pct < LOW_CONFIDENCE_THRESHOLD);
   if (low) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
-        Revisar{pct !== null ? ` · ${pct}%` : ""}
-      </span>
+      <Tooltip>
+        <TooltipTrigger>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+            Revisar{pct !== null ? ` · ${pct}%` : ""}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center">
+          Selecione a categoria que mais representa esta transação
+        </TooltipContent>
+      </Tooltip>
     );
   }
   if (pct !== null) {
@@ -321,4 +362,48 @@ function StatusBadge({
     );
   }
   return null;
+}
+
+function ConfidenceCheckmark({
+  confidence,
+  onClick,
+  category,
+}: {
+  confidence: number | null;
+  onClick: (v: string | null, s?: Source) => void;
+  category: string;
+}) {
+  if (confidence === null) {
+    return null;
+  }
+  return (
+    <div className="flex items-center">
+      <Tooltip>
+        <TooltipTrigger>
+          <button
+            className="border border-[#ff9191] text-[#ff9191] rounded-l p-1 mr-[-1px]"
+            onClick={() => onClick("nao_classificado", "needs_review")}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center">
+          Rejeitar sugestão
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger>
+          <button
+            className="border border-[#29c89b] text-[#29c89b] rounded-r p-1"
+            onClick={() => onClick(category)}
+          >
+            <Check className="h-3 w-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center">
+          Aceitar sugestão
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
 }

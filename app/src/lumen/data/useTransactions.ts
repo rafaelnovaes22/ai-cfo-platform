@@ -5,7 +5,12 @@ import { useAnalyses } from "./useAnalyses.ts";
 import { CATEGORY_LABELS } from "./categoryLabels.ts";
 
 export type TransactionType = "income" | "expense";
-export type TransactionSource = "manual" | "spreadsheet" | "pdf" | "pasted" | "ai";
+export type TransactionSource =
+  | "manual"
+  | "spreadsheet"
+  | "pdf"
+  | "pasted"
+  | "ai";
 
 export type ReviewStatus = "needs_review" | "confirmed" | "corrected";
 
@@ -43,13 +48,22 @@ export type NewTransaction = {
   analysis_id?: string;
 };
 
-export const BACKEND_CATEGORIES = Object.entries(CATEGORY_LABELS).map(([key, label]) => ({
-  key,
-  label,
-  type: ["receita_bruta", "receita_financeira", "outras_receitas", "emprestimos_entrada"].includes(key)
-    ? "income" as const
-    : "expense" as const,
-}));
+export type Source = Parameters<typeof api.classification.correct>[1]["source"];
+
+export const BACKEND_CATEGORIES = Object.entries(CATEGORY_LABELS).map(
+  ([key, label]) => ({
+    key,
+    label,
+    type: [
+      "receita_bruta",
+      "receita_financeira",
+      "outras_receitas",
+      "emprestimos_entrada",
+    ].includes(key)
+      ? ("income" as const)
+      : ("expense" as const),
+  })
+);
 
 function mapEntry(
   entry: {
@@ -65,12 +79,19 @@ function mapEntry(
   },
   analysisId: string
 ): Transaction {
-  const rawCategory = entry.confirmedCategory ?? entry.predictedCategory ?? "nao_classificado";
-  const type: TransactionType = entry.direction === "in" || entry.direction === "credit" ? "income" : "expense";
+  const rawCategory =
+    entry.confirmedCategory ?? entry.predictedCategory ?? "nao_classificado";
+  const type: TransactionType =
+    entry.direction === "in" || entry.direction === "credit"
+      ? "income"
+      : "expense";
   const reviewStatus: ReviewStatus =
-    entry.correctionSource === "needs_review" ? "needs_review"
-    : entry.correctionSource === "rafael" || entry.correctionSource === "client" ? "corrected"
-    : "confirmed";
+    entry.correctionSource === "needs_review"
+      ? "needs_review"
+      : entry.correctionSource === "operator" ||
+          entry.correctionSource === "client"
+        ? "corrected"
+        : "confirmed";
   return {
     id: entry.id,
     analysis_id: analysisId,
@@ -87,7 +108,8 @@ function mapEntry(
     rawCategory,
     confidence: entry.classificationConfidence,
     reviewStatus,
-    pending: entry.predictedCategory === null && entry.confirmedCategory === null,
+    pending:
+      entry.predictedCategory === null && entry.confirmedCategory === null,
   };
 }
 
@@ -101,25 +123,30 @@ export function useTransactions() {
   // A análise ativa ainda está no pipeline de IA (status não-terminal).
   const classifying = activeAnalysis?.status === "generating";
 
-  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!user || !activeId) {
-      setTransactions([]);
-      setLoading(false);
-      return;
-    }
-    // silent: atualização de fundo durante a classificação — sem flash de spinner
-    if (!opts?.silent) setLoading(true);
-    try {
-      const { data } = await api.classification.review(activeId);
-      setTransactions(data.map((e) => mapEntry(e, activeId)));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar lançamentos");
-      if (!opts?.silent) setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, activeId]);
+  const refresh = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!user || !activeId) {
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
+      // silent: atualização de fundo durante a classificação — sem flash de spinner
+      if (!opts?.silent) setLoading(true);
+      try {
+        const { data } = await api.classification.review(activeId);
+        setTransactions(data.map((e) => mapEntry(e, activeId)));
+        setError(null);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Erro ao carregar lançamentos"
+        );
+        if (!opts?.silent) setTransactions([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [user, activeId]
+  );
 
   useEffect(() => {
     refresh();
@@ -143,9 +170,12 @@ export function useTransactions() {
   }, [classifying, refresh]);
 
   const correct = useCallback(
-    async (entryId: string, category: string) => {
+    async (entryId: string, category: string, source?: Source) => {
       await api.classification.correct(entryId, {
-        category: category as Parameters<typeof api.classification.correct>[1]["category"],
+        category: category as Parameters<
+          typeof api.classification.correct
+        >[1]["category"],
+        source: source ?? "client",
       });
       await refresh();
     },
