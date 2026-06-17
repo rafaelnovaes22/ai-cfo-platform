@@ -72,13 +72,29 @@ export async function dreClassifierNode(
       factByDesc.set(normalizeDescription(f.description), f.category);
     }
   }
+  // Categoria confirmada na origem, por entryId — vira contexto do batch do LLM.
+  const confirmedCatById = new Map(
+    (state.rawEntries ?? [])
+      .filter((r) => r.confirmedCategory != null && r.confirmedCategory !== "")
+      .map((r) => [r.entryId, r.confirmedCategory as string]),
+  );
   const ruleById = new Map<string, DreClassificationResult>();
+  // Lançamentos resolvidos sem LLM (origem/flywheel/regra) viajam como CONTEXTO ao
+  // classificador: repõem a âncora do negócio que o pré-classificador tira do batch,
+  // sem reabri-los para reclassificação (corrige a regressão em ambíguos como
+  // "Microfone novo"/"Alimentação reunião", que perdiam contexto).
+  const contextEntries: { description: string; category: string }[] = [];
   for (const entry of state.normalizedEntries ?? []) {
-    if (confirmedIds.has(entry.entryId)) continue;
+    if (confirmedIds.has(entry.entryId)) {
+      const conf = confirmedCatById.get(entry.entryId);
+      if (conf) contextEntries.push({ description: entry.normalizedDescription, category: conf });
+      continue;
+    }
     // 1. Flywheel: descrição idêntica já corrigida pelo cliente tem precedência.
     const factCat = factByDesc.get(normalizeDescription(entry.normalizedDescription));
     if (factCat) {
       ruleById.set(entry.entryId, { entryId: entry.entryId, category: factCat, confidence: 1 });
+      contextEntries.push({ description: entry.normalizedDescription, category: factCat });
       continue;
     }
     // 2. Regra por termo-âncora inequívoco (null = ambíguo/sem regra → LLM).
@@ -94,8 +110,19 @@ export async function dreClassifierNode(
         category: rule.category,
         confidence: rule.confidence,
       });
+      contextEntries.push({ description: entry.normalizedDescription, category: rule.category });
     }
   }
+  // Amostra distinta e limitada — é contexto, não o batch inteiro (não inflar prompt).
+  const seenCtx = new Set<string>();
+  const contextSample = contextEntries
+    .filter((c) => {
+      const k = c.description.toLowerCase();
+      if (seenCtx.has(k)) return false;
+      seenCtx.add(k);
+      return true;
+    })
+    .slice(0, 50);
 
   const inputs: EntryForClassification[] = (state.normalizedEntries ?? [])
     .filter((entry) => !confirmedIds.has(entry.entryId) && !ruleById.has(entry.entryId))
@@ -106,6 +133,13 @@ export async function dreClassifierNode(
       amountCents: entry.amountCents,
       direction: inferredById.has(entry.entryId) ? "unknown" : entry.direction,
     }));
+
+  // Perfil inferido de TODOS os lançamentos não-confirmados (regra + ambíguos), não
+  // só dos ambíguos: sem as despesas óbvias o perfil do negócio fica pobre e degrada
+  // a distinção receita/despesa dos itens que sobram para o LLM.
+  const profileEntries = (state.normalizedEntries ?? [])
+    .filter((entry) => !confirmedIds.has(entry.entryId))
+    .map((entry) => ({ description: entry.normalizedDescription }));
 
   const ruleClassifications = [...ruleById.values()];
   if (ruleClassifications.length > 0) {
@@ -130,13 +164,14 @@ export async function dreClassifierNode(
     // Perfil do negócio inferido das descrições (1 chamada curta): diz quais
     // lançamentos são a receita-fim deste negócio, evitando que serviços vendidos
     // virem despesa quando a direção é "unknown".
-    businessProfile = await inferBusinessProfile(inputs, {
+    businessProfile = await inferBusinessProfile(profileEntries, {
       tenantId: state.tenantId,
       traceId: state.traceId,
     });
 
-    // Lotes paralelos: tenantFacts + segment + businessProfile vão a todos os lotes
-    // para manter a consistência de categoria entre eles (ver chunk-runner.ts).
+    // Lotes paralelos: tenantFacts + segment + businessProfile + contextEntries vão
+    // a todos os lotes para manter a consistência de categoria entre eles e dar ao
+    // LLM a visão dos lançamentos já resolvidos (ver chunk-runner.ts).
     const { data: classifications, response, latencyMs } = await runChunkedWithTelemetry(
       inputs,
       {
@@ -145,6 +180,7 @@ export async function dreClassifierNode(
         segment: state.segment,
         tenantFacts,
         businessProfile,
+        contextEntries: contextSample,
       },
       runDreClassificationAgentWithTelemetry,
     );

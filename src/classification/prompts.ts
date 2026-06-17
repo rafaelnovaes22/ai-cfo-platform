@@ -129,16 +129,29 @@ function buildBusinessProfileBlock(businessProfile?: string): string {
   return `PERFIL DO NEGÓCIO (inferido dos lançamentos — use para distinguir receita de despesa). Lançamentos que correspondem à RECEITA-FIM descrita aqui devem ser "receita_bruta", mesmo com direction="unknown" e mesmo contendo palavras como "comercial"/"serviço":\n${businessProfile.trim()}\n\n`;
 }
 
+// Lançamentos já resolvidos deterministicamente (regra/origem) que NÃO entram no
+// batch a classificar, mas viajam como CONTEXTO: o pré-classificador tira os óbvios
+// do lote do LLM, e sem eles o modelo perde a âncora que ajuda a classificar os
+// ambíguos (ex.: ver "Aluguel", "Salário" no mesmo extrato situa "Microfone novo"
+// como ativo, não despesa difusa). Não reclassificar.
+function buildContextEntriesBlock(contextEntries?: TenantFact[]): string {
+  if (!contextEntries || contextEntries.length === 0) return "";
+  const lines = contextEntries.map((c) => `- "${c.description}" → ${c.category}`).join("\n");
+  return `LANÇAMENTOS DESTE MESMO EXTRATO JÁ CLASSIFICADOS (contexto do negócio — NÃO reclassifique estes; use apenas para entender a empresa e manter coerência ao classificar os de baixo):\n${lines}\n\n`;
+}
+
 export function buildUserPrompt(
   entries: EntryForClassification[],
   segment?: string,
   tenantFacts?: TenantFact[],
   businessProfile?: string,
+  contextEntries?: TenantFact[],
 ): string {
   const profileBlock = buildBusinessProfileBlock(businessProfile);
   const segmentLine = segment
     ? `Segmento da empresa: ${segment}. Use o vocabulário típico do setor ao classificar (ex: mensalidades → receita_bruta para SaaS; CMV → custos_diretos para varejo).\n\n`
     : "";
   const factsBlock = tenantFacts && tenantFacts.length > 0 ? buildTenantFactsBlock(tenantFacts) : "";
-  return `${factsBlock}${profileBlock}${segmentLine}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
+  const contextBlock = buildContextEntriesBlock(contextEntries);
+  return `${factsBlock}${profileBlock}${segmentLine}${contextBlock}Classifique os seguintes lançamentos:\n${JSON.stringify(entries, null, 2)}`;
 }

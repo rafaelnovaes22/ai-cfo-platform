@@ -49,3 +49,26 @@ describe("buildUserPrompt — tenant facts injection (ADR-011 Etapa 4)", () => {
     expect(occurrences).toBe(3);
   });
 });
+
+describe("buildUserPrompt — contexto de lançamentos já classificados", () => {
+  it("não inclui bloco de contexto quando contextEntries é undefined/vazio", () => {
+    expect(buildUserPrompt(sampleEntries, undefined, undefined, undefined, undefined))
+      .not.toContain("JÁ CLASSIFICADOS");
+    expect(buildUserPrompt(sampleEntries, undefined, undefined, undefined, []))
+      .not.toContain("JÁ CLASSIFICADOS");
+  });
+
+  it("injeta os lançamentos determinísticos como contexto (não como batch a classificar)", () => {
+    const ctx: TenantFact[] = [
+      { description: "aluguel escritorio", category: "despesas_administrativas" },
+      { description: "salario equipe", category: "despesas_pessoal" },
+    ];
+    const prompt = buildUserPrompt(sampleEntries, undefined, undefined, undefined, ctx);
+    expect(prompt).toContain("JÁ CLASSIFICADOS");
+    expect(prompt).toContain("NÃO reclassifique");
+    expect(prompt).toContain(`"aluguel escritorio" → despesas_administrativas`);
+    expect(prompt).toContain(`"salario equipe" → despesas_pessoal`);
+    // O contexto precede a instrução de classificar o batch.
+    expect(prompt.indexOf("JÁ CLASSIFICADOS")).toBeLessThan(prompt.indexOf("Classifique os seguintes"));
+  });
+});
