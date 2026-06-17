@@ -12,7 +12,10 @@ import { logger } from "@/observability/logger.js";
 
 const CorrectBody = z.object({
   category: z.enum(DRE_CATEGORIES as [string, ...string[]]),
-  source: z.enum(["rafael", "client"]).default("client"),
+  // operator = correção do operador interno (revisão SHADOW); client = cliente no app;
+  // needs_review = rejeita a categoria (botão X) e devolve o lançamento pra revisão.
+  // "rafael" (nome próprio) foi generalizado para "operator" — 0 registros usavam.
+  source: z.enum(["operator", "client", "needs_review"]).default("client"),
 });
 
 const ReviewEntrySchema = z.object({
