@@ -83,8 +83,8 @@ export default function Transactions() {
             <p className="mt-2 inline-flex items-center gap-2 text-[12.5px] text-amber-400/90">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               {pendingCount > 0
-                ? `IA classificando ${pendingCount} ${pendingCount === 1 ? "lançamento" : "lançamentos"}. A lista atualiza sozinha.`
-                : "IA finalizando a análise. Você já pode revisar as categorias."}
+                ? `Classificando ${pendingCount} ${pendingCount === 1 ? "lançamento" : "lançamentos"}. A lista atualiza sozinha.`
+                : "Finalizando a análise. Você já pode revisar as categorias."}
             </p>
           )}
         </div>
@@ -284,19 +284,12 @@ function StatusBadge({
   confidence: number | null;
   classifying?: boolean;
 }) {
-  // A IA ainda não devolveu a categoria deste lançamento — pipeline em andamento.
+  // Categoria ainda não devolvida — pipeline em andamento.
   if (classifying) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-sky-500/15 text-sky-400 border border-sky-500/30 animate-pulse">
         <Loader2 className="h-2.5 w-2.5 animate-spin" />
         Classificando…
-      </span>
-    );
-  }
-  if (status === "needs_review") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-        Revisar
       </span>
     );
   }
@@ -307,9 +300,25 @@ function StatusBadge({
       </span>
     );
   }
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-      IA {confidence !== null ? `${(confidence * 100).toFixed(0)}%` : ""}
-    </span>
-  );
+  // O percentual de confiança ajuda o usuário a achar o que conferir: baixa
+  // confiança (<70%) ou item marcado para revisão vira "Revisar · X%" em amber,
+  // chamando atenção pros lançamentos que o sistema não classificou com segurança
+  // (ex.: "Pagamento" genérico). Confiança alta fica discreta, só o percentual.
+  const pct = confidence !== null ? Math.round(confidence * 100) : null;
+  const low = status === "needs_review" || (pct !== null && pct < 70);
+  if (low) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+        Revisar{pct !== null ? ` · ${pct}%` : ""}
+      </span>
+    );
+  }
+  if (pct !== null) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        {pct}%
+      </span>
+    );
+  }
+  return null;
 }
