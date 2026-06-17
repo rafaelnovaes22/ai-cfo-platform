@@ -14,7 +14,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   despesas_comerciais: "Comercial e Marketing",
   despesas_ti: "TI e Ferramentas",
   despesas_viagem: "Viagens",
-  despesas_juridicas: "Jurídico",
+  despesas_juridicas: "Jurídico e Contábil",
   despesas_financeiras: "Despesas Financeiras",
   simples_nacional: "Simples Nacional",
   irpj_csll: "IRPJ / CSLL",
