@@ -48,7 +48,24 @@ const CATEGORY_DESC_TERMS: Partial<Record<DreCategory, readonly string[]>> = {
     "tarifa bancaria", "tarifas bancarias", "iof", "taxa de maquininha",
     "anuidade cartao", "anuidade do cartao",
   ],
+  // Bens duráveis (ativo imobilizado). Só viram capex quando são AQUISIÇÃO — a
+  // guarda NON_ACQUISITION_TERMS abaixo barra manutenção/aluguel/serviço sobre o
+  // mesmo equipamento (ex.: "manutenção câmera", "aluguel notebook"), que é despesa.
+  // Nomes específicos, não a palavra "equipamento" (genérica demais: frete/aluguel).
+  capex: [
+    "microfone", "microfones", "camera", "cameras", "tripe",
+    "computador", "computadores", "notebook", "notebooks", "macbook", "desktop",
+    "lente", "lentes", "monitor", "monitores", "impressora", "impressoras",
+    "servidor", "drone", "drones", "headset", "projetor",
+  ],
 };
+
+// Termos que indicam que o lançamento NÃO é aquisição do bem (é despesa sobre ele):
+// manutenção, conserto, aluguel, assinatura, seguro. Anulam o match de capex.
+const NON_ACQUISITION_TERMS = [
+  "manutencao", "conserto", "reparo", "reparos", "revisao", "aluguel", "locacao",
+  "assinatura", "mensalidade", "assistencia", "seguro", "frete",
+] as const;
 
 const NATURE_TO_DIRECTION = { credit: "credit", debit: "debit" } as const;
 
@@ -80,6 +97,11 @@ export function classifyByRule(
   if (matched.size !== 1) return null;
 
   const category = [...matched][0]!;
+  // Equipamento durável só é capex se for AQUISIÇÃO — manutenção/aluguel/serviço
+  // sobre ele é despesa, deixa o LLM decidir.
+  if (category === "capex" && NON_ACQUISITION_TERMS.some((t) => norm.includes(` ${t} `))) {
+    return null;
+  }
   const nature = CATEGORY_NATURE[category];
   if (direction !== "unknown" && nature !== null && NATURE_TO_DIRECTION[nature] !== direction) {
     return null;

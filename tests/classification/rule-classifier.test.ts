@@ -43,4 +43,21 @@ describe("classifyByRule — pré-classificador determinístico", () => {
     // "contador" (jurídica) + "salario" (pessoal) na mesma descrição → ambíguo.
     expect(classifyByRule("Salário do contador interno", "debit")).toBeNull();
   });
+
+  it("classifica aquisição de equipamento durável como capex", () => {
+    expect(classifyByRule("Microfone Shure novo - Mercado Livre", "debit")?.category).toBe("capex");
+    expect(classifyByRule("Computador novo escritório", "debit")?.category).toBe("capex");
+    expect(classifyByRule("Câmera Sony A7", "debit")?.category).toBe("capex");
+  });
+
+  it("NÃO classifica como capex quando é manutenção/aluguel/serviço sobre o equipamento", () => {
+    expect(classifyByRule("Manutenção câmera - assistência técnica", "debit")).toBeNull();
+    expect(classifyByRule("Aluguel de notebook para evento", "debit")).toBeNull();
+    expect(classifyByRule("Conserto do microfone", "debit")).toBeNull();
+    expect(classifyByRule("Frete equipamento devolvido", "debit")).toBeNull();
+  });
+
+  it("guarda de natureza: equipamento com direção de ENTRADA confiável → null (venda, não compra)", () => {
+    expect(classifyByRule("Venda câmera usada", "credit")).toBeNull();
+  });
 });
