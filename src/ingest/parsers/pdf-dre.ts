@@ -91,7 +91,13 @@ ${INJECTION_GUARD}
 Taxonomia disponível:
 ${buildTaxonomyBlock()}
 
-Retorne SOMENTE um JSON array (sem texto adicional) com objetos:
+PRIMEIRO, decida se o texto é um documento contábil EXTRAÍVEL:
+- EXTRAÍVEL: DRE, balancete ou extrato com VALORES ABSOLUTOS em R$ por conta/linha de UM período (ex.: "Receita Bruta 641.726,01", "CMV 265.227,00").
+- NÃO-EXTRAÍVEL: relatório de ANÁLISE/INDICADORES — dominado por percentuais, margens ("X / Receita 43,1%"), índices, ou uma tabela de CRESCIMENTO/VARIAÇÃO mês a mês (colunas tipo "Abr vs Mar", "+78,1%"). Esses números são RESULTADO de uma análise, não lançamentos.
+
+Se for NÃO-EXTRAÍVEL, retorne [] (array vazio) e nada mais. Na dúvida, se a maioria dos números do texto forem percentuais ou variações, retorne []. NUNCA derive lançamentos de colunas de variação/crescimento nem de percentuais — só de valores absolutos em R$ daquele período.
+
+Se for EXTRAÍVEL, retorne SOMENTE um JSON array (sem texto adicional) com objetos:
 {
   "category": "<chave_da_taxonomia>",
   "description": "<nome original da linha no documento>",

@@ -83,6 +83,33 @@ describe("ingest/parsers/pdf-dre — DRE consolidado", () => {
     });
   });
 
+  it("retorna 0 quando o LLM classifica o texto como não-extraível (relatório de indicadores → [])", async () => {
+    // Caso da CEO: colou a saída de uma análise (percentuais + crescimento mês a
+    // mês), não um DRE com valores absolutos. O prompt instrui o LLM a devolver []
+    // nesse caso, e o ingest então cai no guard de 0 lançamentos (orienta, não
+    // importa parcial). Aqui validamos o contrato: [] do LLM → 0 entries.
+    const { callLlm } = await import("@/llm/index.js");
+    vi.mocked(callLlm).mockResolvedValueOnce({
+      content: "[]",
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 1,
+      outputTokens: 1,
+      costCents: 1,
+      traceId: null,
+    });
+    const { parseDreText } = await import("@/ingest/parsers/pdf-dre.js");
+
+    const resumoDeAnalise = [
+      "Lucro Bruto / Receita 43,1% 43,4%",
+      "CRESCIMENTO MÊS A MÊS",
+      "Receita Bruta 641.726,01 +78,1% +42,1%",
+    ].join("\n");
+
+    const result = await parseDreText(resumoDeAnalise, "2026-06", "tenant-test");
+    expect(result.entries).toHaveLength(0);
+  });
+
   it("detecta competência por padrões comuns de DRE", async () => {
     const { detectDreReferenceMonth } = await import("@/ingest/parsers/pdf-dre.js");
 
