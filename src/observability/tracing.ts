@@ -29,6 +29,15 @@ export interface TraceOptions {
 
 type ChildOpts = Record<string, unknown>;
 
+// Ambiente lógico do processo — separa traces de prod/staging/eval/local no LangSmith.
+// Sem isso, a amostragem da auditoria mensal (C6) mistura produção com teste/eval e
+// corrompe agreement/custo/latência. Fonte: APP_ENV > RAILWAY_ENVIRONMENT > NODE_ENV.
+export const APP_ENV =
+  process.env.APP_ENV ?? process.env.RAILWAY_ENVIRONMENT ?? process.env.NODE_ENV ?? "local";
+// Projeto LangSmith por ambiente: LANGSMITH_PROJECT explícito tem precedência; senão
+// deriva `aicfo-{env}` para não cair todo mundo no mesmo projeto.
+const LANGSMITH_PROJECT = process.env.LANGSMITH_PROJECT ?? `aicfo-${APP_ENV}`;
+
 export function createTrace(opts: TraceOptions) {
   if (!isConfigured()) return makeNoopTrace(opts.traceId ?? randomUUID());
 
@@ -37,8 +46,9 @@ export function createTrace(opts: TraceOptions) {
     name: opts.name,
     run_type: "chain",
     inputs: { tenantId: opts.tenantId },
-    metadata: opts.metadata ?? {},
-    project_name: process.env.LANGSMITH_PROJECT ?? "aicfo",
+    // `env` taggeia todo trace para filtro secundário mesmo dentro de um projeto.
+    metadata: { env: APP_ENV, ...opts.metadata },
+    project_name: LANGSMITH_PROJECT,
   });
   void run.postRun();
 

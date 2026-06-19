@@ -22,7 +22,13 @@
   },
 
   "telemetry": {
-    "llm_trace_provider": "langfuse",
+    "llm_trace_provider": "langsmith",
+    "llm_trace_project_per_env": {
+      "production": "aicfo-prod",
+      "staging": "aicfo-staging",
+      "ci_eval": "aicfo-ci",
+      "local": "aicfo-dev"
+    },
     "audit_log_provider": "postgres-audit",
     "structured_logging_provider": "custom",
     "metrics_provider": null,
@@ -54,9 +60,11 @@
       "note": "SHADOW: análise gerada mas não entregue ao cliente; humano (Rafael) revisa em paralelo"
     },
     "C6": {
-      "telemetry_default": "langfuse",
-      "langfuse_required": true,
-      "trace_coverage_target_pct": 100
+      "telemetry_default": "langsmith",
+      "langsmith_required": true,
+      "trace_coverage_target_pct": 100,
+      "env_separation_required": true,
+      "env_separation_note": "Cada ambiente usa projeto LangSmith próprio (ver telemetry.llm_trace_project_per_env) + tag metadata.env, para a auditoria isolar produção de teste/eval."
     },
     "C7": {
       "abstraction_layers_required_for": ["llm", "infra", "integrations", "payments", "storage"]
