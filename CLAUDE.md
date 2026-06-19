@@ -129,31 +129,46 @@ O sync `aios:sync` do `clickup-automation` casa PRs com módulos buscando termos
 
 **Module keys válidos**: `auth-tenant`, `workspace-setup`, `billing`, `tenant-config`, `ingest`, `classification`, `dre-narrative`, `action-plan`, `hub`, `export`, `cashflow`, `kpis`, `score`, `alerts`, `dashboard-ceo`, `decision-engine`, `scenarios`, `benchmarking`, `conversational-agent`, `integrations-banks`, `integrations-erp-crm-payroll`, `payment-execution`, `revenue-forecast`, `tax-suite`, `accounts-management`, `bank-reconciliation`, `profitability`, `anomaly-fraud-detection`, `audit-governance`, `financial-planning`.
 
-### Fluxo obrigatório: branch → PR → merge
+### Gitflow obrigatório: 2 níveis (`staging` → `main`)
 
-**Nunca fazer push direto em `main`.** Com frontend e backend no mesmo repo, múltiplos contribuidores (Rafael, Eduardo, agentes) podem trabalhar em paralelo. Push direto em `main` gera conflitos silenciosos e impossibilita revisão.
+**Nunca fazer push direto em `main` nem em `staging`.** Com frontend e backend no mesmo repo, múltiplos contribuidores (Rafael, Eduardo, agentes) trabalham em paralelo. Push direto gera conflitos silenciosos e pula a homologação.
 
-Fluxo padrão para qualquer trabalho:
+O repo tem **duas branches de longa duração**, cada uma com um ambiente Railway correspondente:
+
+| Branch | Ambiente | Deploy | Cobertura |
+|---|---|---|---|
+| `staging` | Homologação | auto-deploy no push | backend + frontend |
+| `main` | Produção | auto-deploy no push | backend + frontend |
+
+> A branch `dev` foi descontinuada (2026-06-19) — o fluxo praticado é de 2 níveis.
+
+**Fluxo padrão para qualquer trabalho:**
 
 ```bash
-# 1. Criar branch a partir de main atualizado
-git checkout main && git pull
+# 1. Criar branch a partir de staging atualizado
+git checkout staging && git pull
 git checkout -b feat/aicfo-{module}-{descrição}
 
 # 2. Commits convencionais na branch
 git commit -m "feat({module}): ..."
 
-# 3. Abrir PR (gh cli ou GitHub UI)
-gh pr create --title "feat({module}): ..." --base main
+# 3. Abrir PR com base staging (CI verde → auto-merge → deploy em homolog)
+gh pr create --title "feat({module}): ..." --base staging
 
-# 4. Merge via PR (squash preferido para features, merge para hotfixes)
+# 4. Validar em staging. Quando o lote estiver pronto para produção:
+gh pr create --title "release: staging → main" --base main --head staging
+#    PR para main exige merge DELIBERADO (sem auto-merge).
 ```
 
 **Regras de PR:**
+- PR com base `staging`: o job `auto-merge` do CI faz squash-merge automático quando `validate` passa ([ci.yml](.github/workflows/ci.yml)). Não precisa de aprovação manual.
+- PR com base `main`: merge **deliberado** (humano), preservando o gate de produção. PRs contra `main` **não** entram no auto-merge.
 - Título segue o padrão `feat/fix/docs({module}): descrição` para o sync ClickUp funcionar
 - Toda mudança em `src/` passa por `/acme:pre-merge-check` antes do merge
 - Frontend (`app/`) e backend (`src/`) podem ir no mesmo PR se fizerem parte da mesma feature
-- Exceção permitida: hotfix crítico de segurança com aprovação explícita do CEO
+- Exceção permitida: hotfix crítico de segurança com aprovação explícita do CEO (PR direto para `main`)
+
+**Ambientes (Railway):** backend e frontend têm cada um **dois serviços** — um seguindo `staging`, outro seguindo `main`. O `VITE_API_URL` do frontend é **build-time** (Dockerfile `ARG`): o serviço de frontend-staging builda apontando para o backend-staging; o de produção, para o backend-prod.
 
 ---
 

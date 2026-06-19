@@ -50,7 +50,7 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
     name: req.task,
     tenantId: req.tenantId,
     traceId: req.traceId,
-    metadata: { provider: route.provider, model: route.model },
+    metadata: { provider: route.provider, model: route.model, ...req.metadata },
   });
 
   const generation = trace.generation({

@@ -41,6 +41,9 @@ export interface LlmRequest {
   tenantId: string;
   traceId?: string;
   jsonMode?: boolean;
+  // Metadata extra anexado ao trace LangSmith (C6). Mesclado com { provider, model }
+  // em callLlm — ex: contadores do split de classificação para auditoria de risco.
+  metadata?: Record<string, unknown>;
 }
 
 export interface LlmResponse {
