@@ -14,7 +14,7 @@ const workspace = [
   { to: "/plano", label: "Plano de Ação", icon: ListChecks, soon: false },
   { to: "/dre", label: "DRE", icon: FileBarChart2, soon: false },
   { to: "/lancamentos", label: "Lançamentos", icon: Receipt, soon: false },
-  { to: "/caixa", label: "Caixa", icon: ArrowDownUp },
+  { to: "/caixa", label: "Fluxo de Caixa", icon: ArrowDownUp },
   { to: "/credito", label: "Crédito", icon: CircleDollarSign, soon: true },
 ];
 const dados = [

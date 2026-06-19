@@ -27,7 +27,8 @@
     "shadow:graph": "tsx --env-file=.env scripts/run-monthly-analysis-graph-shadow.ts",
     "promote-tenant": "tsx --env-file=.env scripts/promote-tenant.ts",
     "audit:collect": "tsx --env-file=.env scripts/audit-collect-runtime.ts",
-    "audit:collect:traces": "tsx --env-file=.env scripts/audit-collect-langsmith.ts"
+    "audit:collect:traces": "tsx --env-file=.env scripts/audit-collect-langsmith.ts",
+    "reset:qa-tenant": "tsx --env-file=.env scripts/reset-qa-tenant.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
