@@ -3,7 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "serve -s dist -l 3000"
+# Sem startCommand: o CMD do Dockerfile governa e ouve em $PORT (injetado pelo Railway).
+# Fixar a porta aqui quebrava o healthcheck (serve em 3000, Railway sondava outra porta).
 healthcheckPath = "/"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

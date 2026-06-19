@@ -17,6 +17,7 @@ FROM node:20-alpine AS run
 WORKDIR /app
 RUN npm i -g serve
 COPY --from=build /app/dist ./dist
-ENV PORT=3000
+# Railway injeta PORT em runtime e faz o healthcheck nessa porta — ouvir em $PORT
+# (não numa porta fixa) é o que faz o healthcheck passar. Fallback 3000 p/ `docker run` local.
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["sh", "-c", "serve -s dist -l ${PORT:-3000}"]
