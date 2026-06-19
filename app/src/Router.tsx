@@ -46,7 +46,7 @@ const Router = () => {
         }
       />
       {/* Shell aberto a qualquer logado. O grátis (lead/student) entra e usa o fluxo
-          de caixa; as páginas de análise (geradas com IA) ficam travadas com teaser. */}
+          de caixa; as páginas de análise ficam embaçadas com upsell na frente. */}
       <Route
         element={
           <ProtectedRoute>
@@ -54,14 +54,15 @@ const Router = () => {
           </ProtectedRoute>
         }
       >
-        {/* Home de análise: grátis é redirecionado para o caixa. */}
-        <Route path="/" element={<SubscriberGate redirectTo="/caixa"><Dashboard /></SubscriberGate>} />
-        <Route path="/dashboard" element={<SubscriberGate redirectTo="/caixa"><Dashboard /></SubscriberGate>} />
-        {/* Análise (IA) — teaser bloqueado para o grátis. */}
+        {/* Visão Geral: restaurada — renderiza normal para qualquer logado. */}
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        {/* Análise — teaser bloqueado (fundo embaçado + mensagem) para o grátis. */}
         <Route path="/dre" element={<SubscriberGate feature="DRE facilitado"><DRE /></SubscriberGate>} />
         <Route path="/plano" element={<SubscriberGate feature="Plano de ação"><Plan /></SubscriberGate>} />
         <Route path="/lancamentos" element={<SubscriberGate feature="Lançamentos classificados"><Transactions /></SubscriberGate>} />
-        <Route path="/credito" element={<SubscriberGate feature="Crédito"><Credit /></SubscriberGate>} />
+        {/* Crédito: disponível (com badge "Em Breve") — não é teaser de plano. */}
+        <Route path="/credito" element={<Credit />} />
         {/* Aberto ao grátis. */}
         <Route path="/importar" element={<Import />} />
         <Route path="/caixa" element={<CashFlow />} />
