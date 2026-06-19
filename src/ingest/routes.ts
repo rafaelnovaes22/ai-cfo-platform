@@ -5,10 +5,23 @@ import { requireAuth, requireWrite } from "@/auth/middleware.js";
 import { problemDetail, ProblemDetailSchema } from "@/http/problem-detail.js";
 import { ingest } from "@/ingest/service.js";
 import { ClipboardBody, ManualBody, IngestResponse } from "@/ingest/schemas.js";
+import { getPrisma } from "@/persistence/prisma.js";
+import { isSubscriber } from "@/auth/subscription-access.js";
 
 // Mutação: humano precisa ser admin/editor (viewer não importa lançamentos);
 // api token precisa de ingest:write.
 const ingestWrite = requireWrite(["admin", "editor"], ["ingest:write"]);
+
+// A análise (DRE + classificação + narrativa, tudo com LLM) é feature PAGA: roda
+// só para assinante ativo. Lead/free (student/trial/sem assinatura/inadimplente)
+// importa em modo cashflow-only — parse+store determinístico, zero IA, custo R$0.
+export async function resolveSkipAnalysis(tenantId: string): Promise<boolean> {
+  const sub = await getPrisma().subscription.findUnique({
+    where: { tenantId },
+    select: { plan: true, status: true },
+  });
+  return !isSubscriber(sub?.plan, sub?.status);
+}
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
@@ -62,7 +75,8 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
       }
       const buffer = await data.toBuffer();
 
-      const result = await ingest({ tenantId: req.auth!.tenantId, referenceMonth, source, buffer });
+      const skipAnalysis = await resolveSkipAnalysis(req.auth!.tenantId);
+      const result = await ingest({ tenantId: req.auth!.tenantId, referenceMonth, source, buffer, skipAnalysis });
       return reply.send(result);
     },
   });
@@ -77,6 +91,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         referenceMonth: req.body.referenceMonth,
         source: "text",
         text: req.body.text,
+        skipAnalysis: await resolveSkipAnalysis(req.auth!.tenantId),
       });
       return reply.send(result);
     },
@@ -92,6 +107,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         referenceMonth: req.body.referenceMonth,
         source: "manual",
         entries: req.body.entries,
+        skipAnalysis: await resolveSkipAnalysis(req.auth!.tenantId),
       });
       return reply.send(result);
     },
