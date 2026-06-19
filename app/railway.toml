@@ -1,9 +1,9 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "npm install && npm run build"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npx serve -s dist"
+startCommand = "serve -s dist -l 3000"
 healthcheckPath = "/"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
@@ -11,3 +11,4 @@ restartPolicyMaxRetries = 3
 
 # Variáveis obrigatórias em prod (configurar no dashboard Railway):
 # VITE_API_URL — URL pública do backend (ex: https://api.aicfo.com.br)
+#   É build-time: o Railway passa a env como build arg (ARG VITE_API_URL no Dockerfile).
