@@ -11,7 +11,7 @@ import Auth from "./lumen/pages/Auth.tsx";
 import ResetPassword from "./lumen/pages/ResetPassword.tsx";
 import { AuthProvider } from "./lumen/auth/AuthContext.tsx";
 import { ProtectedRoute } from "./lumen/auth/ProtectedRoute.tsx";
-import { SubscriberRoute } from "./lumen/auth/SubscriberRoute.tsx";
+import { SubscriberGate } from "./lumen/auth/SubscriberGate.tsx";
 import { AnalysisProvider } from "./lumen/data/useAnalyses.ts";
 import NotFound from "./pages/NotFound.tsx";
 import { useEffect } from "react";
@@ -45,21 +45,26 @@ const Router = () => {
           </ProtectedRoute>
         }
       />
+      {/* Shell aberto a qualquer logado. O grátis (lead/student) entra e usa o fluxo
+          de caixa; as páginas de análise (geradas com IA) ficam travadas com teaser. */}
       <Route
         element={
-          <SubscriberRoute>
+          <ProtectedRoute>
             <AppLayout />
-          </SubscriberRoute>
+          </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/dre" element={<DRE />} />
-        <Route path="/plano" element={<Plan />} />
+        {/* Home de análise: grátis é redirecionado para o caixa. */}
+        <Route path="/" element={<SubscriberGate redirectTo="/caixa"><Dashboard /></SubscriberGate>} />
+        <Route path="/dashboard" element={<SubscriberGate redirectTo="/caixa"><Dashboard /></SubscriberGate>} />
+        {/* Análise (IA) — teaser bloqueado para o grátis. */}
+        <Route path="/dre" element={<SubscriberGate feature="DRE facilitado"><DRE /></SubscriberGate>} />
+        <Route path="/plano" element={<SubscriberGate feature="Plano de ação"><Plan /></SubscriberGate>} />
+        <Route path="/lancamentos" element={<SubscriberGate feature="Lançamentos classificados"><Transactions /></SubscriberGate>} />
+        <Route path="/credito" element={<SubscriberGate feature="Crédito"><Credit /></SubscriberGate>} />
+        {/* Aberto ao grátis. */}
         <Route path="/importar" element={<Import />} />
-        <Route path="/lancamentos" element={<Transactions />} />
         <Route path="/caixa" element={<CashFlow />} />
-        <Route path="/credito" element={<Credit />} />
         <Route path="/config/usuario" element={<UserConfig />} />
         <Route path="/config/notificacoes" element={<NotificationsConfig />} />
       </Route>
