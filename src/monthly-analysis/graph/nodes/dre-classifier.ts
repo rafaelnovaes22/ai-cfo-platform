@@ -190,6 +190,14 @@ export async function dreClassifierNode(
         tenantFacts,
         businessProfile,
         contextEntries: contextSample,
+        // Split anexado ao trace LangSmith → torna o % ao LLM (superfície de risco)
+        // mensurável por run na auditoria, sem pareamento nem ruído de eval.
+        classificationSplit: {
+          ruleClassified: ruleClassifications.length,
+          llmClassified: inputs.length,
+          confirmed: confirmedIds.size,
+          total: ruleClassifications.length + inputs.length + confirmedIds.size,
+        },
       },
       runDreClassificationAgentWithTelemetry,
     );

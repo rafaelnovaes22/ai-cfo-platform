@@ -32,6 +32,9 @@ export interface MonthlyAgentRunOptions {
   // Lançamentos já resolvidos por regra/origem, enviados como contexto (não para
   // reclassificar) — repõem a âncora que o pré-classificador tirou do batch.
   contextEntries?: TenantFact[];
+  // Split de classificação (determinístico vs LLM) anexado ao trace LangSmith para
+  // auditoria de superfície de risco do C4. Preenchido pelo dre-classifier node.
+  classificationSplit?: { ruleClassified: number; llmClassified: number; confirmed: number; total: number };
 }
 
 export type DreClassificationAgentInput = EntryForClassification;
@@ -174,6 +177,7 @@ export async function runDreClassificationAgentWithTelemetry(
     tenantId: options.tenantId,
     traceId: options.traceId,
     jsonMode: true,
+    metadata: options.classificationSplit,
   });
 
   const data = parseAgentJson(response.content, DreClassificationResultsSchema).map((result, i) => ({
