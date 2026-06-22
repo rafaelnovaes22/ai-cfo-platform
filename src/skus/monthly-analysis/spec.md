@@ -2,8 +2,8 @@
 product_code: "monthly-analysis"
 product_name: "Análise Financeira Mensal Aicfo"
 category: "self-serve-product"
-status: "discovery"
-constitution_version: "0.2.0"
+status: "pilot"
+constitution_version: "0.3.0"
 linked_diagnostic: "N/A — produto self-serve sem diagnóstico individual por cliente"
 linked_unit_economics: "docs/onda-0/unit_economics.md"
 linked_lifecycle: "docs/onda-0/lifecycle_monthly_analysis.md"
@@ -11,8 +11,8 @@ owners:
   product_lead: "Rafael Novaes"
   tech_lead: "Rafael Novaes"
 created_at: "2026-05-08"
-last_updated: "2026-05-08"
-version: "0.1.0"
+last_updated: "2026-06-22"
+version: "0.2.0"
 aios_modules:
   - ingest
   - classification
@@ -124,7 +124,7 @@ Tempo total esperado: < 7 min do cadastro à primeira análise visível
 | 2 | **DRE Facilitado** | DRE clássico (Receita Bruta → Lucro Líquido) com peso visual + 3 toggles (R$/%/vs. mês ant.) + section "Leitura da história" com 3 cards | Expandir linha do DRE / ler card |
 | 3 | **Plano de Ação** | 3 horizontes (Curto/Médio/Longo) + projeção de impacto somada + cards executáveis com prazo/esforço/risco/impacto R$ | Marcar ação como "feita" (Onda 2) |
 
-> Mockups em `imagens_front/` são apenas referência visual. Design final é responsabilidade do dev frontend (repositório separado). Backend serve via contratos OpenAPI gerados pelo Contract Agent.
+> Mockups em `imagens_front/` são apenas referência visual. O frontend React está no monorepo sob `app/` (ADR-006). Backend serve via contratos OpenAPI gerados pelo Contract Agent.
 
 ### 3.3. Inputs do cliente
 
@@ -143,27 +143,32 @@ Tempo total esperado: < 7 min do cadastro à primeira análise visível
 | Etapa | Agente / Módulo | Modelo | Responsabilidade | Output |
 |---|---|---|---|---|
 | 1 | `ingest` | (parser determinístico) | Detectar formato, extrair lançamentos, validar shape mínimo | `RawLedger[]` |
-| 2 | `classification` | Sonnet 4.6 (prompt + few-shot) | Classificar cada lançamento em categoria DRE + tags (#6, #7) | `ClassifiedLedger[]` + confidence |
+| 2 | `classification` | Google Gemini 2.5 Flash (Vertex AI) com regras prévias | Classificar cada lançamento em categoria DRE + tags (#6, #7); split rule-vs-LLM auditável | `ClassifiedLedger[]` + confidence |
 | 3 | `dre-narrative.aggregator` | (regra) | Agregar lançamentos em linhas DRE | `DRESnapshot` |
-| 4 | `dre-narrative.narrator` | Sonnet 4.6 (chain-of-thought) | Gerar 3 cards (gargalo / atenção / saudável) com causa + evidência numérica | `NarrativeCards[3]` |
-| 5 | `action-plan.generator` | Sonnet 4.6 / Opus 4.7 (decisional) | Gerar plano 3-horizontes com impacto R$ estimado | `ActionPlan` |
-| 6 | `qa-gate` | (regra) | Validar acurácia mínima + completude antes de publicar análise | passa ou retry |
+| 4 | `dre-narrative.narrator` | Google Gemini 2.5 Pro (Vertex AI) | Gerar 3 cards (gargalo / atenção / saudável) com causa + evidência numérica | `NarrativeCards[3]` |
+| 5 | `action-plan.generator` | Google Gemini 2.5 Pro (Vertex AI) | Gerar plano 3-horizontes com impacto R$ estimado | `ActionPlan` |
+| 6 | `qa-review` | (regra + LLM judge) | Validar acurácia mínima + completude antes de publicar análise; retry em caso de falha | passa ou retry |
 
 ### 4.2. Telemetria (C6)
 
-Toda chamada LLM em `src/skus/monthly-analysis/nodes/**` instrumentada via wrapper:
+Toda chamada LLM em `src/monthly-analysis/graph/nodes/**` instrumentada via wrapper LangSmith:
 
 ```ts
-import { createTrace } from "@/observability/tracing";
+import { traceable } from "langsmith/traceable";
 
-const span = trace.start({
-  name: "narrative-card-generator",
-  input: { tenantId, dreSnapshot },
-  metadata: { sku: "monthly-analysis", outcomeType: "narrative_generated", monthRef: "2026-09" },
-});
-const response = await llm.call({ model, messages, ... });
-span.end({ output: response, costBrl: calculateCost(response.usage) });
+const classifyOutcome = traceable(
+  async (input: { tenantId: string; payload: unknown }) => {
+    const response = await llm.call(...);
+    return response;
+  },
+  {
+    name: "outcome-classifier",
+    metadata: { sku: "monthly-analysis", outcomeType: "classification" },
+  },
+);
 ```
+
+Sem trace, não conta como outcome auditável (C6).
 
 ---
 
@@ -196,7 +201,7 @@ span.end({ output: response, costBrl: calculateCost(response.usage) });
 
 | Stage atual | Critérios para promover |
 |---|---|
-| **discovery** | Spec aprovada + eval suite seed + onda-0 assinada → MVP |
+| **pilot** | Eval suite passing + N execuções em SHADOW/PILOT + aprovação humana → ASSISTED → AUTONOMOUS (ver ADR-013 para Synthetic pre-validation) |
 
 ---
 
@@ -219,14 +224,14 @@ Storage: `Tenant.productConfig.monthlyAnalysis.*` (Prisma JSON column).
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | **Repositório separado** (dev interno define design) |
+| Frontend | React 18 + Vite + TailwindCSS + TanStack Query + React Router 6 (monorepo em `app/`) |
 | Auth | JWT + Fastify (módulo `auth-tenant`) |
-| Backend / API | Fastify 5 + LangGraph 1.2 |
-| LLM | Anthropic Sonnet 4.6 (primário) + Opus 4.7 (decisional, action-plan) |
-| Observability | Langfuse 3.38 |
+| Backend / API | Fastify 5 + LangGraph 1.4 |
+| LLM | Google Vertex AI Gemini 2.5 Pro/Flash (primário, `southamerica-east1` / `us-central1`) — ADR-009/019; OpenAI `gpt-4.1-mini` fallback — ADR-010 |
+| Observability | LangSmith 0.7+ (tracing LLM canônico — C6) |
 | Pagamentos | Stripe (módulo `billing`, Onda 0) |
 | DB | PostgreSQL 16 + Prisma 6 |
-| Filas | BullMQ 5 (processamento assíncrono de análise) |
+| Filas | BullMQ 5 (job queue assíncrona); LangGraph orquestra o grafo de análise |
 
 ---
 
@@ -266,3 +271,4 @@ Storage: `Tenant.productConfig.monthlyAnalysis.*` (Prisma JSON column).
 | Versão | Data | Mudança | Autor |
 |---|---|---|---|
 | 0.1.0 | 2026-05-08 | Spec inicial — discovery | Rafael Novaes |
+| 0.2.0 | 2026-06-22 | Atualização para implementação real: monorepo frontend, Vertex AI primário, LangSmith, status pilot | Rafael Novaes |

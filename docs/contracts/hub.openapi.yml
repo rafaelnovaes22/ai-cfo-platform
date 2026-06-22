@@ -1,0 +1,127 @@
+openapi: 3.0.3
+info:
+  title: Hub — Aicfo API
+  description: Contract for the hub module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /hub:
+    get:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscription:
+                    type: object
+                    properties:
+                      plan:
+                        type: string
+                      mode:
+                        type: string
+                      status:
+                        type: string
+                    required:
+                      - plan
+                      - mode
+                      - status
+                    additionalProperties: false
+                  latestAnalysis:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      referenceMonth:
+                        type: string
+                      status:
+                        type: string
+                      mode:
+                        type: string
+                      deliveredAt:
+                        type: string
+                        nullable: true
+                      approvedAt:
+                        type: string
+                        nullable: true
+                      dre:
+                        type: object
+                        properties:
+                          receitaBruta:
+                            type: number
+                          lucroLiquido:
+                            type: number
+                          margemLiquida:
+                            type: number
+                          ebitda:
+                            type: number
+                          margemEbitda:
+                            type: number
+                        required:
+                          - receitaBruta
+                          - lucroLiquido
+                          - margemLiquida
+                          - ebitda
+                          - margemEbitda
+                        additionalProperties: false
+                        nullable: true
+                      cards:
+                        type: object
+                        properties:
+                          critical_gap:
+                            type: number
+                          attention:
+                            type: number
+                          healthy:
+                            type: number
+                        required:
+                          - critical_gap
+                          - attention
+                          - healthy
+                        additionalProperties: false
+                      actionPlan:
+                        type: object
+                        properties:
+                          total:
+                            type: number
+                          shortImpactCents:
+                            type: number
+                          mediumImpactCents:
+                            type: number
+                          longImpactCents:
+                            type: number
+                          totalImpactCents:
+                            type: number
+                        required:
+                          - total
+                          - shortImpactCents
+                          - mediumImpactCents
+                          - longImpactCents
+                          - totalImpactCents
+                        additionalProperties: false
+                        nullable: true
+                    required:
+                      - id
+                      - referenceMonth
+                      - status
+                      - mode
+                      - deliveredAt
+                      - approvedAt
+                      - dre
+                      - cards
+                      - actionPlan
+                    additionalProperties: false
+                    nullable: true
+                required:
+                  - subscription
+                  - latestAnalysis
+                additionalProperties: false
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

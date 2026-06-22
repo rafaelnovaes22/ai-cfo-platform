@@ -1,0 +1,34 @@
+openapi: 3.0.3
+info:
+  title: Export — Aicfo API
+  description: Contract for the export module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /analysis/{analysisId}/export/{type}:
+    get:
+      parameters:
+        - schema:
+            type: string
+          in: path
+          name: analysisId
+          required: true
+        - schema:
+            type: string
+            enum:
+              - monthly
+              - investors
+              - partners
+          in: path
+          name: type
+          required: true
+      responses:
+        '200':
+          description: Default Response
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

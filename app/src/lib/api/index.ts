@@ -178,10 +178,10 @@ export const tenantConfig = {
 };
 
 export const notificationConfig = {
-  get: () => apiFetch<any>("/config/whatsapp"),
+  get: () => apiFetch<Req200<"/config/whatsapp", "get">>("/config/whatsapp"),
 
   update: (body: Body<"/config/whatsapp", "patch">) =>
-    apiFetch<Record<string, unknown>>("/config/whatsapp", {
+    apiFetch<Req200<"/config/whatsapp", "patch">>("/config/whatsapp", {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
@@ -320,12 +320,27 @@ export const analyses = {
     ),
 };
 
+type CashflowListParameters =
+  paths["/cashflow"]["get"]["parameters"]["query"];
+type CashflowListResponse = Req200<"/cashflow", "get">;
+type CashflowSummaryResponse = Req200<"/cashflow/summary", "get">;
+
 export const cashflow = {
-  list: async (parameters) => {
-    const query = new URLSearchParams(parameters);
-    return await apiFetch<any>(`/cashflow/?${query.toString()}`);
+  list: async (parameters: CashflowListParameters) => {
+    const query = new URLSearchParams(
+      Object.entries(parameters).reduce<Record<string, string>>(
+        (acc, [key, value]) => {
+          if (value !== undefined && value !== null) {
+            acc[key] = String(value);
+          }
+          return acc;
+        },
+        {}
+      )
+    );
+    return await apiFetch<CashflowListResponse>(`/cashflow/?${query.toString()}`);
   },
-  summary: () => apiFetch<any>("/cashflow/summary"),
+  summary: () => apiFetch<CashflowSummaryResponse>("/cashflow/summary"),
 };
 
 export const exportApi = {

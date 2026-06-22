@@ -1,15 +1,15 @@
 ---
 adr_id: "002"
-title: "Estratégia de modelo LLM por task — Gemini default + framework de benchmarking"
-status: "proposta"
-constitution_version: "0.2.0"
+title: "Estratégia de modelo LLM por task — Vertex AI Gemini default + framework de benchmarking"
+status: "aceita"
+constitution_version: "0.3.0"
 created_at: "2026-05-12"
-last_updated: "2026-05-12"
+last_updated: "2026-06-22"
 authors: ["Rafael Novaes"]
 supersedes: []
 superseded_by: []
 linked_principles: [C3, C6, C7]
-related_adrs: ["001"]
+related_adrs: ["001", "009", "010", "019"]
 ---
 
 # ADR-002 — Estratégia de modelo LLM por task + framework de benchmarking
@@ -26,13 +26,13 @@ related_adrs: ["001"]
 
 ### 1.1. Divergência detectada
 
-ADR-001 declarou stack default como **Anthropic SDK (Sonnet 4.6 / Opus 4.7)**. A implementação real da Onda 1 (commits `02ea90b`, `cab4d85`, `4d5892a`) usa **Google Gemini 2.5 Flash** como provider primário em:
+ADR-001 declarou stack default como **Anthropic SDK (Sonnet 4.6 / Opus 4.7)**. A implementação evoluiu para **Google Vertex AI Gemini 2.5 Pro/Flash** como provider primário (ADR-009/019) em:
 
-- `classification` — Gemini 2.0 Flash (categorização DRE em 23 categorias)
-- `dre-narrative` — Gemini 2.5 Flash (3 cards de narrativa)
-- `action-plan` — Gemini 2.5 Flash (geração de ações 3-horizontes)
+- `classification` — Gemini 2.5 Flash (categorização DRE em categorias padrão)
+- `dre-narrative` — Gemini 2.5 Pro (3 cards de narrativa)
+- `action-plan` — Gemini 2.5 Pro (geração de ações 3-horizontes)
 
-Anthropic continua presente como **fallback automático** via `src/llm/router.ts` (acionado quando o adapter Google falha — exatamente o cenário que rodou em 2026-05-11 quando a quota gratuita esgotou).
+OpenAI `gpt-4.1-mini` é o **fallback canônico** (ADR-010) via `src/llm/router.ts`, acionado quando o adapter Google falha. Anthropic SDK continua disponível como adapter adicional (C7), mas não é fallback padrão.
 
 O review AIOS de 2026-05-12 levantou isso como BLOCKER do `action-plan` ("divergência de modelo afeta C3 sem ADR"). Esta ADR é a resposta a esse BLOCKER.
 
@@ -61,9 +61,9 @@ Em ordem de peso na decisão:
 
 | Task | Modelo primário | Fallback | Justificativa |
 |---|---|---|---|
-| `classification` | Gemini 2.0 Flash | Claude Haiku 4.5 | Volume alto (centenas de lançamentos/análise); accuracy ≥0.95 atingida nos testes |
-| `dre-narrative` | Gemini 2.5 Flash | Claude Sonnet 4.6 | 3 cards estruturados, raciocínio leve; latência crítica |
-| `action-plan` | Gemini 2.5 Flash | Claude Sonnet 4.6 | Geração estruturada de itens; raciocínio médio mas previsível |
+| `classification` | Vertex AI Gemini 2.5 Flash | OpenAI gpt-4.1-mini | Volume alto (centenas de lançamentos/análise); accuracy ≥0.95 atingida nos testes |
+| `dre-narrative` | Vertex AI Gemini 2.5 Pro | OpenAI gpt-4.1-mini | 3 cards estruturados, raciocínio leve; latência crítica |
+| `action-plan` | Vertex AI Gemini 2.5 Pro | OpenAI gpt-4.1-mini | Geração estruturada de itens; raciocínio médio mas previsível |
 
 Não há mudança de código necessária; esta ADR ratifica o estado existente.
 
@@ -107,8 +107,8 @@ Cada modelo candidato é medido nos 5 eixos abaixo. **Nenhum eixo é dispensáve
 | Eixo | Métrica | Como medir | Limite mínimo |
 |---|---|---|---|
 | **Qualidade** | pass_rate da eval suite | execução automática do `/acme:eval` | ≥ baseline atual − 1pp |
-| **Latência p95** | tempo entre prompt enviado e response completo | telemetria Langfuse | dre-narrative ≤ 15s; classification batch ≤ 30s; action-plan ≤ 30s |
-| **Custo por outcome** | (input_tokens × $in + output_tokens × $out) × R$/USD | telemetria Langfuse + tabela de preços | ≤ 25% do preço do plano (C3) |
+| **Latência p95** | tempo entre prompt enviado e response completo | telemetria LangSmith | dre-narrative ≤ 15s; classification batch ≤ 30s; action-plan ≤ 30s |
+| **Custo por outcome** | (input_tokens × $in + output_tokens × $out) × R$/USD | telemetria LangSmith + tabela de preços | ≤ 25% do preço do plano (C3) |
 | **Determinismo** | variância em 5 reruns do mesmo caso (temperature=0) | execução repetida do eval | < 5% mudança no diff de strings críticos |
 | **Compliance** | inferência local OU residência de dados garantida pelo provider | leitura do contrato/SLA do provider | obrigatório antes de ASSISTED |
 
@@ -132,13 +132,13 @@ Lista não-exaustiva; benchmarks pontuais podem incluir outros. Atualização de
 | Modelo | Quando faz sentido testar | Custo relativo vs Flash 2.5 | Observação |
 |---|---|---|---|
 | **Gemini 2.5 Pro** | Onda 3 (decision-engine, scenarios) — raciocínio multi-passo | ~5× | Mesmo provider; troca trivial via router |
-| **Claude Haiku 4.5** | Classification — disputar custo com qualidade similar | ~1.5× | Já é fallback do classification |
-| **Claude Sonnet 4.6** | Tasks onde qualidade > custo (ex: anomaly detection) | ~8× | Já fallback do dre-narrative + action-plan |
+| **OpenAI gpt-4.1-mini** | Diversificação de provider + fallback canônico | similar a Flash | Fallback ativo em `src/llm/router.ts` |
+| **Claude Haiku 4.5** | Classification — disputar custo com qualidade similar | ~1.5× | Adapter disponível; não é fallback padrão |
+| **Claude Sonnet 4.6** | Tasks onde qualidade > custo (ex: anomaly detection) | ~8× | Adapter disponível |
 | **Claude Opus 4.7** | Casos extremos de raciocínio (audit, fraud) | ~25× | Reservado para Onda 7 (anomaly-fraud-detection) |
 | **Llama 3.1 8B fine-tuned local** | LGPD obrigatório + fine-tune disponível | ~0.1× (custo de infra) | Fase 3 do roadmap; exige dataset de fine-tune |
 | **Qwen 2.5 7B fine-tuned local** | Alternativa a Llama; melhor em pt-BR em alguns benchmarks | ~0.1× | Fase 2 conforme memory |
-| **GPT-4o-mini / GPT-5-mini** | Diversificação de provider (não-bloqueio Google + Anthropic) | similar a Flash | Adicionar adapter se ICP demandar |
-| **Vertex AI Gemini** | LGPD pre-ASSISTED (dados não usados para treino) | igual ao Studio | Migração obrigatória; mesmo prompt |
+| **Vertex AI Gemini** | LGPD pre-ASSISTED (dados não usados para treino) | igual ao Studio | **Adotado** em 2026-06 (ADR-009/019); mesmo prompt |
 
 ---
 
@@ -158,7 +158,7 @@ Para evitar que cada spec amarre a stack, a partir desta ADR:
 
 - **C3 (custo ≤ 25%)** factível com Gemini Flash em Onda 1 — confirmação requer recalcular unit economics em `docs/onda-0/unit_economics.md`
 - **C7 (portability)** reforçado: router absorve o provider; ADR define quando trocar; benchmarks são auditáveis
-- **C6 (telemetry)** ganha utilidade: telemetria Langfuse já estava lá; agora os triggers automáticos de re-avaliação consomem essa telemetria
+- **C6 (telemetry)** ganha utilidade: telemetria LangSmith já estava lá; agora os triggers automáticos de re-avaliação consomem essa telemetria
 - Decisão de modelo deixa de ser política (quem prefere o quê) e vira mecânica (quem passa nos 5 eixos)
 
 ### 3.2. Negativas
@@ -186,12 +186,12 @@ Para evitar que cada spec amarre a stack, a partir desta ADR:
 
 ## 5. Aprovação
 
-- [ ] CEO leu e aprovou (eval framework + triggers)
-- [ ] Tech Lead leu e aprovou (modelos candidatos + reversibilidade)
-- [ ] Unit Economist validou §3.1 (recalc com Gemini → C3 OK)
-- [ ] ADR commitada em `docs/adr/002-llm-model-strategy.md`
+- [x] CEO leu e aprovou (eval framework + triggers)
+- [x] Tech Lead leu e aprovou (modelos candidatos + reversibilidade)
+- [x] Unit Economist validou §3.1 (recalc com Vertex AI Gemini → C3 OK)
+- [x] ADR commitada em `docs/adr/002-llm-model-strategy.md`
 
-**Decisão final em**: `[ ___ / ___ / ___ ]`
+**Decisão final em**: 2026-06-22
 
 ---
 

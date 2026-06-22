@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: Cashflow — Aicfo API
+  description: Contract for the cashflow module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /cashflow:
+    get:
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+          in: query
+          name: startDate
+          required: true
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+          in: query
+          name: endDate
+          required: true
+        - schema:
+            type: string
+            enum:
+              - daily
+              - weekly
+              - monthly
+              - quarterly
+            default: monthly
+          in: query
+          name: granularity
+          required: false
+        - schema:
+            type: string
+            maxLength: 100
+          in: query
+          name: category
+          required: false
+        - schema:
+            type: string
+            format: uuid
+          in: query
+          name: bankAccountId
+          required: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period:
+                    type: object
+                    properties:
+                      startDate:
+                        type: string
+                      endDate:
+                        type: string
+                      granularity:
+                        type: string
+                        enum:
+                          - daily
+                          - weekly
+                          - monthly
+                          - quarterly
+                    required:
+                      - startDate
+                      - endDate
+                      - granularity
+                    additionalProperties: false
+                  summary:
+                    type: object
+                    properties:
+                      openingBalanceCents:
+                        type: number
+                        nullable: true
+                      closingBalanceCents:
+                        type: number
+                        nullable: true
+                      totalCreditsCents:
+                        type: number
+                      totalDebitsCents:
+                        type: number
+                      creditCount:
+                        type: number
+                      debitCount:
+                        type: number
+                    required:
+                      - openingBalanceCents
+                      - closingBalanceCents
+                      - totalCreditsCents
+                      - totalDebitsCents
+                      - creditCount
+                      - debitCount
+                    additionalProperties: false
+                  chart:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        period:
+                          type: string
+                        creditsCents:
+                          type: number
+                        debitsCents:
+                          type: number
+                      required:
+                        - period
+                        - creditsCents
+                        - debitsCents
+                      additionalProperties: false
+                  table:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category:
+                          type: string
+                        parentCategory:
+                          type: string
+                          nullable: true
+                        totalCents:
+                          type: number
+                        byPeriod:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              period:
+                                type: string
+                              amountCents:
+                                type: number
+                            required:
+                              - period
+                              - amountCents
+                            additionalProperties: false
+                      required:
+                        - category
+                        - parentCategory
+                        - totalCents
+                        - byPeriod
+                      additionalProperties: false
+                  requestId:
+                    type: string
+                required:
+                  - period
+                  - summary
+                  - chart
+                  - table
+                  - requestId
+                additionalProperties: false
+  /cashflow/summary:
+    get:
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+          in: query
+          name: date
+          required: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                  balanceCents:
+                    type: number
+                    nullable: true
+                  creditsCents:
+                    type: number
+                  debitsCents:
+                    type: number
+                  requestId:
+                    type: string
+                required:
+                  - date
+                  - balanceCents
+                  - creditsCents
+                  - debitsCents
+                  - requestId
+                additionalProperties: false
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -64,6 +64,36 @@ jobs:
         # `|| true` mantém o passo verde. ADR-003 documenta o risco residual.
         # Quando o `xlsx` ganhar fix upstream, remover o `|| true` e revisar a ADR.
 
+  validate-frontend:
+    name: frontend lint • typecheck • build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      - name: Frontend lint
+        working-directory: app
+        run: npm run lint
+
+      - name: Frontend typecheck
+        working-directory: app
+        run: npx tsc --noEmit
+
+      - name: Frontend build
+        working-directory: app
+        run: npm run build
+
   # ─── Auto-merge para staging ────────────────────────────────────────
   # Permite que contribuidores (ex: Edu) tenham PRs absorvidos em `staging`
   # sem aprovação manual, desde que o job `validate` esteja verde.
@@ -72,7 +102,7 @@ jobs:
   # deliberado, preservando a regra de CLAUDE.md.
   auto-merge:
     name: auto-merge → staging
-    needs: validate
+    needs: [validate, validate-frontend]
     if: >-
       github.event_name == 'pull_request' &&
       github.base_ref == 'staging' &&

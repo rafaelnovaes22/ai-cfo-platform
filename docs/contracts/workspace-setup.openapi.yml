@@ -1,0 +1,211 @@
+openapi: 3.0.3
+info:
+  title: Workspace Setup — Aicfo API
+  description: Contract for the workspace-setup module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /workspace/profile:
+    get:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  cnpj:
+                    type: string
+                    nullable: true
+                  industrySegment:
+                    type: string
+                  taxRegime:
+                    type: string
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - cnpj
+                  - industrySegment
+                  - taxRegime
+                  - createdAt
+                additionalProperties: false
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                cnpj:
+                  type: string
+                industrySegment:
+                  type: string
+                  enum:
+                    - agencia
+                    - industria-leve
+                    - servicos-b2b
+                    - saas
+                    - varejo
+                    - geral
+                taxRegime:
+                  type: string
+                  enum:
+                    - simples
+                    - lucro-presumido
+                    - lucro-real
+              additionalProperties: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  cnpj:
+                    type: string
+                    nullable: true
+                  industrySegment:
+                    type: string
+                  taxRegime:
+                    type: string
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - cnpj
+                  - industrySegment
+                  - taxRegime
+                  - createdAt
+                additionalProperties: false
+  /workspace/members:
+    get:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    email:
+                      type: string
+                    role:
+                      type: string
+                    emailVerified:
+                      type: boolean
+                    lastLoginAt:
+                      type: string
+                      nullable: true
+                  required:
+                    - id
+                    - name
+                    - email
+                    - role
+                    - emailVerified
+                    - lastLoginAt
+                  additionalProperties: false
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                  minLength: 2
+                role:
+                  type: string
+                  enum:
+                    - admin
+                    - editor
+                    - viewer
+                  default: editor
+              required:
+                - email
+                - name
+              additionalProperties: false
+      responses:
+        '201':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  role:
+                    type: string
+                  emailVerified:
+                    type: boolean
+                  lastLoginAt:
+                    type: string
+                    nullable: true
+                  tempPassword:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - email
+                  - role
+                  - emailVerified
+                  - lastLoginAt
+                  - tempPassword
+                additionalProperties: false
+  /workspace/members/{userId}:
+    delete:
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          in: path
+          name: userId
+          required: true
+      responses:
+        '204':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                enum:
+                  - 'null'
+                nullable: true
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

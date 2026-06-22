@@ -10,6 +10,9 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    // Forks evita segmentation fault intermitente causado por bibliotecas nativas
+    // (pdf-parse, bcryptjs, etc.) no pool padrão de worker threads no Windows.
+    pool: "forks",
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
@@ -22,7 +25,7 @@ export default defineConfig({
         "src/ingest/parsers/excel.ts",
         "src/dre-narrative/aggregator.ts",
         "src/auth/middleware.ts",
-        "src/classification/classifier.ts",
+        "src/classification/rule-classifier.ts",
         "src/action-plan/generator.ts",
         "src/export/predicates.ts",
       ],

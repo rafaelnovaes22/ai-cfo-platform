@@ -28,7 +28,8 @@
     "promote-tenant": "tsx --env-file=.env scripts/promote-tenant.ts",
     "audit:collect": "tsx --env-file=.env scripts/audit-collect-runtime.ts",
     "audit:collect:traces": "tsx --env-file=.env scripts/audit-collect-langsmith.ts",
-    "reset:qa-tenant": "tsx --env-file=.env scripts/reset-qa-tenant.ts"
+    "reset:qa-tenant": "tsx --env-file=.env scripts/reset-qa-tenant.ts",
+    "contracts:generate": "tsx scripts/generate-openapi.ts && tsx scripts/split-contracts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -59,6 +60,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/pdfkit": "^0.17.6",
