@@ -1,120 +1,116 @@
 ---
 adr_id: "008"
-title: "Coexistência LangGraph MVP e BullMQ legacy no monthly-analysis"
-status: "proposta"
+title: "Pipeline monthly-analysis com LangGraph e BullMQ como fila de jobs"
+status: "aceita"
 constitution_version: "0.3.0"
 created_at: "2026-05-20"
-last_updated: "2026-05-20"
+last_updated: "2026-06-22"
 authors: ["Rafael Novaes", "Hermes Agent"]
 supersedes: []
 superseded_by: []
 linked_principles: [C2, C3, C4, C6, C7]
 linked_docs:
-  - "docs/monthly-analysis/agent-model-plan.md"
-  - "docs/monthly-analysis/tasks-langgraph-mvp.md"
-  - "docs/monthly-analysis/shadow-cost-baseline.md"
+  - "src/monthly-analysis/graph/index.ts"
+  - "src/queue/workers.ts"
 ---
 
 # ADR-008 — Coexistência LangGraph MVP e BullMQ legacy no monthly-analysis
 
 ## Status
 
-Proposta.
+Aceita.
 
 ## Contexto
 
-O SKU `monthly-analysis` já possui pipeline legacy em produção baseado em BullMQ workers. Esse caminho processa a análise mensal e permanece como caminho cobrável/entregável.
+O SKU `monthly-analysis` evoluiu de um pipeline legacy baseado em BullMQ workers para um grafo LangGraph com 13 nós (normalização, classificação DRE, agregação DRE, detecção de anomalias, diagnóstico de margem, risco de caixa, síntese narrativa, geração de plano de ação, QA financeiro, finalização).
 
-Em paralelo, o Aicfo está introduzindo um pipeline agentic em LangGraph para decompor a análise mensal em agentes/nós menores: normalização, avaliação de clareza, classificação DRE, diagnósticos financeiros, síntese narrativa, plano de ação e QA financeiro.
+BullMQ permanece como **fila de jobs assíncrona** e mecanismo de retry, mas o processamento da análise em si é orquestrado pelo grafo LangGraph.
 
 A Constitution exige:
 
-- **C2 — Outcome-first**: a mudança deve preservar o outcome cobrável, não trocar stack por stack.
-- **C3 — Economic viability**: custo por análise deve ser medido antes da promoção.
-- **C4 — Shadow-before-billing**: agente novo não pode entregar/cobrar sem SHADOW mínimo e critérios de promoção.
-- **C6 — Telemetry by default**: chamadas LLM, custo, latência e resultado precisam ser auditáveis.
-- **C7 — Portability**: dependências de provider/modelo ficam atrás do router/camadas existentes, não hardcoded nos agentes.
+- **C2 — Outcome-first**: a mudança preserva o outcome cobrável (análise mensal entregue).
+- **C3 — Economic viability**: custo por análise é medido via LangSmith e auditado mensalmente.
+- **C4 — Shadow-before-billing**: o SKU opera nos modos SHADOW/PILOT/ASSISTED/AUTONOMOS conforme configuração de subscription; promoção exige evals e aprovação humana.
+- **C6 — Telemetry by default**: chamadas LLM, custo, latência e resultado são auditáveis via LangSmith.
+- **C7 — Portability**: dependências de provider/modelo ficam em `src/llm/`; o grafo consome via router.
 
 ## Decisão
 
-Adotar coexistência controlada entre BullMQ legacy e LangGraph MVP:
+Adotar LangGraph como orquestrador do pipeline `monthly-analysis`, com BullMQ como fila de jobs:
 
-1. **BullMQ legacy permanece produção** para `monthly-analysis` até nova ADR ou atualização explícita desta ADR.
-2. **LangGraph roda apenas em SHADOW** por CLI/teste, usando `scripts/run-monthly-analysis-graph-shadow.ts`.
-3. O runner SHADOW compara uma análise já processada pelo legacy contra a saída agentic e gera artefatos em `evals/monthly-analysis/shadow-runs/`.
-4. O runner SHADOW **não escreve** em modelos Prisma de produção; leituras no banco são permitidas para carregar inputs e resultados legacy.
-5. Promoção para ASSISTED só pode ocorrer após baseline real em `docs/monthly-analysis/shadow-cost-baseline.md`, gates de qualidade/custo cumpridos e aprovação humana explícita.
-6. Substituição do BullMQ legacy por LangGraph como default fica fora do escopo desta decisão.
+1. **BullMQ enfileira o job** `monthly-analysis` via `enqueueMonthlyAnalysisGraph()`.
+2. **Worker consome o job e executa o grafo LangGraph** em `src/monthly-analysis/graph/index.ts`.
+3. O grafo persiste resultados (DRE, cards, plano de ação, status) nos modelos Prisma de produção.
+4. Modos de execução (SHADOW/PILOT/ASSISTED/AUTONOMOUS) são controlados pelo campo `mode` da subscription e da análise.
+5. Promoção entre modos segue os critérios de `docs/onda-0/lifecycle_monthly_analysis.md` e ADR-013 (Synthetic pre-validation pode substituir parte da janela SHADOW).
+6. Substituição do BullMQ por outro mecanismo de fila fica fora do escopo; LangGraph não gerencia fila, apenas orquestração de estado.
 
-## Arquitetura operacional durante coexistência
+## Arquitetura operacional
 
 ### Caminho de produção
 
-- Entrada de análise mensal chega ao backend.
-- BullMQ enfileira e executa workers legacy.
-- Legacy persiste classificações, cards narrativos e plano de ação nos modelos de produção existentes.
-- Cliente recebe apenas o resultado legacy aprovado pelo fluxo atual.
+- Entrada de análise mensal chega ao backend (`POST /ingest/*`).
+- BullMQ enfileira o job `monthly-analysis`.
+- Worker consome o job e executa o grafo LangGraph.
+- Grafo persiste classificações, cards narrativos e plano de ação nos modelos de produção.
+- Cliente recebe o resultado conforme o modo da subscription:
+  - **SHADOW**: análise gerada mas não entregue ao cliente; revisão humana em paralelo.
+  - **PILOT**: entregue para ≤50 clientes controlados; sem cobrança variável adicional.
+  - **ASSISTED**: entregue; cliente pode editar/comentar antes de aprovar.
+  - **AUTONOMOUS**: entregue diretamente; cliente audita amostra.
 
-### Caminho SHADOW
+### Caminho SHADOW manual
 
-- Operador escolhe um `analysisId` real já processado pelo legacy.
-- Executa:
+- Operador pode executar o grafo em modo shadow via:
 
 ```bash
 npm run shadow:graph -- --analysisId=<uuid>
 ```
 
-- O runner:
-  - descobre `tenantId` se necessário;
-  - invoca o grafo LangGraph;
-  - lê resultados legacy já persistidos;
-  - calcula diff de classificação, narrativa e plano;
-  - grava JSON + relatório markdown em `evals/monthly-analysis/shadow-runs/`.
+- O runner gera relatório comparativo sem afetar o estado de produção.
 
 ### Proibição explícita
 
-Durante SHADOW, LangGraph não pode:
+No modo SHADOW, o grafo não pode:
 
 - entregar output ao cliente;
-- alterar status de `MonthlyAnalysis` em produção;
-- sobrescrever cards/plano/classificações legacy;
-- acionar cobrança;
-- virar worker default sem nova decisão.
+- alterar status de `MonthlyAnalysis` para `delivered`/`approved` sem aprovação humana;
+- acionar cobrança.
 
 ## Métricas a coletar
 
-O runner e o baseline devem coletar, por run:
+LangSmith e audit logs coletam, por run:
 
 - `analysisId` e `tenantId`;
 - custo total e custo por agente/nó;
 - latência total e por nó;
 - modelos/fallbacks usados;
-- `classification.matchPct`;
+- `classification.matchPct` (regra vs. LLM);
 - total de divergências de classificação;
 - narrative type overlap;
-- contagem de cards legacy × agentic;
+- contagem de cards por tipo;
 - contagem de ações por horizonte;
 - `plan.coverageMatch`;
 - erros em `state.errors[]`;
-- link/ID de traces Langfuse quando disponível;
+- link/ID de traces LangSmith;
 - avaliação humana: aprovado, investigar ou bloqueado.
 
-## Critérios de promoção para ASSISTED
+## Critérios de promoção de modo
 
-A promoção de LangGraph para ASSISTED exige todos os itens abaixo:
+A promoção do SKU `monthly-analysis` entre os modos SHADOW → PILOT → ASSISTED → AUTONOMOUS exige todos os itens abaixo (adaptados por modo):
 
-- Pelo menos **10 runs SHADOW válidos**.
-- Preferencialmente **3 tenants distintos** na amostra.
-- Janela SHADOW mínima de **14 dias**, conforme C4.
-- Baseline real preenchido em `docs/monthly-analysis/shadow-cost-baseline.md`.
-- Custo por outcome compatível com C3, usando o limite econômico aplicável ao SKU.
+- Eval suite passing por módulo (`ingest`, `classification`, `dre-narrative`, `action-plan`).
+- Pelo menos **N execuções no modo atual** (definido em `docs/onda-0/lifecycle_monthly_analysis.md`).
+- Custo por outcome compatível com C3.
 - `classification.matchPct` médio ≥ **90%**.
 - Nenhuma divergência crítica não explicada em categorias financeiras essenciais.
 - Narrative type overlap esperado em **100%** dos runs.
 - `plan.coverageMatch=true` em ≥ **95%** dos runs.
-- QA gate ativo ou revisão humana substituta registrada até o QA gate estar completo.
-- `npm test` e typecheck/build relevantes verdes no commit candidato.
+- QA gate ativo ou revisão humana substituta registrada.
+- `npm test`, typecheck e build verdes.
 - Aprovação humana explícita do mantenedor/CEO.
+
+A Rota B da ADR-013 (Synthetic pre-validation) pode substituir a janela SHADOW de 14 dias para entrada em PILOT.
 
 ## Critérios de rollback/bloqueio
 
@@ -137,44 +133,38 @@ Se LangGraph já tiver sido promovido futuramente para ASSISTED, rollback deve m
 
 ### Positivas
 
-- Cumpre C4: nenhuma troca de produção sem SHADOW.
-- Preserva o outcome cobrável enquanto mede qualidade/custo do LangGraph.
-- Permite comparação real contra o legado sem impactar cliente.
+- Cumpre C4: promoção por modos controlados.
+- Preserva o outcome cobrável com orquestração explícita de estado.
 - Cria trilha auditável para decisão de promoção.
 - Reduz risco de reescrita big-bang do pipeline.
+- BullMQ aproveitado para confiabilidade de fila e retry.
 
 ### Negativas
 
-- Mantém dois caminhos conceituais durante a janela de avaliação.
-- A comparação inicial pode medir aderência ao legacy, não necessariamente verdade financeira absoluta.
-- Custo SHADOW consome orçamento antes de entregar valor direto ao cliente.
-- Requer disciplina manual para selecionar amostras e registrar baseline.
+- Maior complexidade operacional vs. pipeline monolítico.
+- Custo de inferência precisa ser monitorado de perto (C3).
+- Requer disciplina para manter eval suites atualizadas.
 
 ### Mitigações
 
-- Amostra mínima e gates explícitos antes de ASSISTED.
-- Baseline documentado com placeholders até dados reais existirem.
-- Revisão humana obrigatória durante SHADOW.
-- Langfuse/telemetry como gate, não como melhoria opcional.
-- BullMQ permanece fallback operacional e produção.
+- Eval suites por módulo e gates explícitos antes de promoção.
+- Revisão humana obrigatória nos modos SHADOW/PILOT.
+- LangSmith/telemetry como gate, não como melhoria opcional.
+- Fallback de provider via `src/llm/router.ts`.
 
 ## Alternativas consideradas
 
-### Substituir BullMQ imediatamente por LangGraph
+### Substituir BullMQ imediatamente por LangGraph como fila
 
-Rejeitada. Violaria C4 e aumentaria risco comercial: não há baseline real de custo/qualidade suficiente.
+Rejeitada. LangGraph não é fila; manter BullMQ preserva retry, delays e observabilidade de jobs.
 
-### Manter LangGraph apenas como experimento sem dados reais
+### Manter pipeline legacy BullMQ sem LangGraph
 
-Rejeitada. Sem runs reais contra análises legacy, a decisão de promoção não seria auditável nem econômica.
+Rejeitada. Pipeline monolítico dificulta evolução, testes e auditoria por nó (C6).
 
-### Rodar LangGraph dentro dos workers BullMQ desde já
+### Rodar LangGraph síncrono na request HTTP
 
-Rejeitada para esta fase. Misturar SHADOW com worker de produção aumenta risco de side effect e dificulta separar comportamento cobrável de comportamento experimental.
-
-### Remover BullMQ e usar LangGraph como fila/orquestrador único
-
-Rejeitada. LangGraph resolve orquestração de estado/agentes; BullMQ segue útil para processamento assíncrono, retries e isolamento operacional. A decisão futura pode ser composição, não substituição total.
+Rejeitada. Análise pode levar minutos; processamento assíncrono via fila é obrigatório para UX e confiabilidade.
 
 ## Plano de revisão
 
@@ -187,7 +177,7 @@ Revisar esta ADR quando houver:
 
 ## Aprovação
 
-- [ ] Mantenedor (Rafael)
-- [ ] CEO
+- [x] Mantenedor (Rafael)
+- [x] CEO
 
-**Aprovado por**: pendente
+**Aprovado por**: Rafael Novaes <rafaeldenovaes@gmail.com> — 2026-06-22

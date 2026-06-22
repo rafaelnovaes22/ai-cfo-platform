@@ -5,7 +5,7 @@
     "name": "Acme Forge",
     "version": "0.22.1",
     "phase": "Forge-21 — Aicfo consumer aligned with canonical v0.22.1 (WireLog analytics_provider opcional + bifurcação C6 + patch Langfuse→LangSmith)",
-    "last_updated": "2026-05-26",
+    "last_updated": "2026-06-22",
     "constitution_version": "0.3.0",
     "constitution_path": ".claude/CONSTITUTION.md",
     "constitution_sha256": null,
@@ -64,7 +64,7 @@
       }
     },
     "framework_version_required": "0.21.0",
-    "last_synced_at": "2026-05-20"
+    "last_synced_at": "2026-06-22"
   },
   "principles": [
     {
@@ -277,7 +277,7 @@
             "C7",
             "C8"
           ],
-          "description": "Padrão oficial de telemetria Langfuse para agentes AIOS — campos obrigatórios, mock fallback, integração com hook langfuse-trace-check"
+          "description": "Padrão oficial de telemetria LangSmith para agentes AIOS — campos obrigatórios, mock fallback, integração com hook langsmith-trace-check"
         },
         {
           "id": "forge-reviewer-contract",
@@ -678,7 +678,7 @@
             "C7"
           ],
           "use_case": "eval-automation",
-          "description": "Workflow GitHub Actions para eval automático em mudanças de prompts/ — detecta artifact_id, roda eval por categoria, falha PR se pass_rate < threshold, trace Langfuse obrigatório. Copiar para .github/workflows/forge-eval.yml."
+          "description": "Workflow GitHub Actions para eval automático em mudanças de prompts/ — detecta artifact_id, roda eval por categoria, falha PR se pass_rate < threshold, trace LangSmith obrigatório. Copiar para .github/workflows/forge-eval.yml."
         },
         {
           "id": "template-cicd-audit",
@@ -1170,7 +1170,7 @@
           "tier": 2,
           "version": "1.0.0",
           "sha256": null,
-          "description": "Fundamenta decisoes de SDK em documentacao oficial antes de implementar. Detecta versoes Anthropic/Langfuse/Prisma, busca doc oficial, cita fontes. Adaptado de source-driven-development (agent-skills).",
+          "description": "Fundamenta decisoes de SDK em documentacao oficial antes de implementar. Detecta versoes Anthropic/LangSmith/Prisma, busca doc oficial, cita fontes. Adaptado de source-driven-development (agent-skills).",
           "linked_principles": [
             "C6",
             "C7"
@@ -1201,7 +1201,7 @@
           "tier": 2,
           "version": "1.0.0",
           "sha256": null,
-          "description": "Hardening LLM: prompt injection, PII eval cases LGPD/GDPR, secret leakage Langfuse, TenantContext validacao. Adaptado de security-and-hardening (agent-skills).",
+          "description": "Hardening LLM: prompt injection, PII eval cases LGPD/GDPR, secret leakage LangSmith, TenantContext validacao. Adaptado de security-and-hardening (agent-skills).",
           "linked_principles": [
             "C6",
             "C8"
@@ -1711,13 +1711,13 @@
           ],
           "exit_block": 2,
           "bypass_aware": true,
-          "description": "Bloqueia uso de 'any' TypeScript em src/skus/** e src/agents/**."
+          "description": "Bloqueia uso de 'any' TypeScript em src/skus/** e src/monthly-analysis/graph/nodes/**."
         }
       ],
       "post_tool_use": [
         {
-          "id": "hook-langfuse-trace-check",
-          "path": "hooks/post-tool-use/langfuse-trace-check.sh",
+          "id": "hook-langsmith-trace-check",
+          "path": "hooks/post-tool-use/langsmith-trace-check.sh",
           "type": "hook",
           "hook_type": "PostToolUse",
           "matcher": "Edit|Write",
@@ -1727,7 +1727,7 @@
             "C6"
           ],
           "exit_warn": 1,
-          "description": "Avisa quando chamadas LLM em src/agents/** não têm trace Langfuse."
+          "description": "Avisa quando chamadas LLM em src/monthly-analysis/graph/nodes/** não têm trace LangSmith."
         },
         {
           "id": "hook-unit-economics-recalc",

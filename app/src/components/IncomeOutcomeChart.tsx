@@ -1,4 +1,5 @@
 import { getDateByGranularity } from "@/lumen/pages/CashFlow";
+import type { CashFlowChartEntry } from "@/lumen/data/useCashFlow";
 import {
   Chart as ChartJS,
   LinearScale,
@@ -11,6 +12,7 @@ import {
   LineController,
   BarController,
 } from "chart.js";
+import type { ChartData } from "chart.js";
 import { Chart } from "react-chartjs-2";
 
 ChartJS.register(
@@ -25,7 +27,10 @@ ChartJS.register(
   BarController
 );
 
-export const getData = (data, granularity) => ({
+export const getData = (
+  data: CashFlowChartEntry[],
+  granularity: string
+): ChartData<"bar", number[], string> => ({
   labels: data.map((item) => getDateByGranularity(item.period, granularity)),
   datasets: [
     {
@@ -57,11 +62,11 @@ export default function IncomeOutcomeChart({
   data,
   granularity,
 }: {
-  data: any;
+  data: CashFlowChartEntry[];
   granularity: string;
 }) {
   if (!data) return null;
-  const chartData: any = getData(data, granularity);
+  const chartData = getData(data, granularity);
 
   return (
     <article className="relative w-full max-h-[320px] grid grid-cols-12 pb-12">

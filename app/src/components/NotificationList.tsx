@@ -1,9 +1,15 @@
-import { useState } from "react";
+interface Notification {
+  id: string;
+  title: string;
+  description: string;
+  read: boolean;
+  timestamp: string;
+}
 
 export default function NotificationList({
   notifications,
 }: {
-  notifications: any[];
+  notifications: Notification[];
 }) {
   return (
     <div className="flex flex-col gap-2 bg-white dark:bg-[#1a1a40] p-2">

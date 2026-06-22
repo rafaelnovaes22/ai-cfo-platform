@@ -1,0 +1,213 @@
+openapi: 3.0.3
+info:
+  title: Tenant Configuration — Aicfo API
+  description: Contract for the tenant-config module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /config:
+    get:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                monthlyAnalysis:
+                  type: object
+                  properties:
+                    toneOfVoice:
+                      type: string
+                      enum:
+                        - formal
+                        - informal
+                    customInstructions:
+                      type: string
+                      maxLength: 500
+                    minEntries:
+                      type: integer
+                      minimum: 1
+                      maximum: 10000
+                  additionalProperties: false
+              additionalProperties: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+  /config/members/{userId}/role:
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                    - admin
+                    - editor
+                    - viewer
+              required:
+                - role
+              additionalProperties: false
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          in: path
+          name: userId
+          required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  role:
+                    type: string
+                required:
+                  - id
+                  - role
+                additionalProperties: false
+  /config/tokens:
+    get:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    scopes:
+                      type: array
+                      items:
+                        type: string
+                    lastUsedAt:
+                      type: string
+                      nullable: true
+                    expiresAt:
+                      type: string
+                      nullable: true
+                    createdAt:
+                      type: string
+                  required:
+                    - id
+                    - name
+                    - scopes
+                    - lastUsedAt
+                    - expiresAt
+                    - createdAt
+                  additionalProperties: false
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 60
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 50
+                  maxItems: 20
+                  default: []
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+              required:
+                - name
+              additionalProperties: false
+      responses:
+        '201':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  lastUsedAt:
+                    type: string
+                    nullable: true
+                  expiresAt:
+                    type: string
+                    nullable: true
+                  createdAt:
+                    type: string
+                  token:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - scopes
+                  - lastUsedAt
+                  - expiresAt
+                  - createdAt
+                  - token
+                additionalProperties: false
+  /config/tokens/{tokenId}:
+    delete:
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          in: path
+          name: tokenId
+          required: true
+      responses:
+        '204':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                enum:
+                  - 'null'
+                nullable: true
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

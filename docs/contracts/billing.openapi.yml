@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: Billing & Payments — Aicfo API
+  description: Contract for the billing module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /billing/subscription:
+    get:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    type: string
+                  mode:
+                    type: string
+                  status:
+                    type: string
+                  trialEndsAt:
+                    type: string
+                    nullable: true
+                  currentPeriodStart:
+                    type: string
+                    nullable: true
+                  currentPeriodEnd:
+                    type: string
+                    nullable: true
+                required:
+                  - plan
+                  - mode
+                  - status
+                  - trialEndsAt
+                  - currentPeriodStart
+                  - currentPeriodEnd
+                additionalProperties: false
+  /billing/checkout:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  type: string
+                  enum:
+                    - lite
+                    - pro
+                    - business
+              required:
+                - plan
+              additionalProperties: false
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkoutUrl:
+                    type: string
+                    format: uri
+                required:
+                  - checkoutUrl
+                additionalProperties: false
+  /billing/portal:
+    post:
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  portalUrl:
+                    type: string
+                    format: uri
+                required:
+                  - portalUrl
+                additionalProperties: false
+  /billing/webhook:
+    post:
+      responses:
+        '200':
+          description: Default Response
+  /billing/success:
+    get:
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: session_id
+          required: true
+      responses:
+        '200':
+          description: Default Response
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

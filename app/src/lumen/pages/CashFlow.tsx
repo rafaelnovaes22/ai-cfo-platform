@@ -9,24 +9,13 @@ import { categoryLabel } from "../data/categoryLabels.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
 import DemoRibbon from "@/components/DemoRibbon.tsx";
 import IncomeOutcomeChart from "@/components/IncomeOutcomeChart.tsx";
-import { useCashFlow } from "../data/useCashFlow.ts";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCashFlow,
+  type CashFlowTableRow,
+  type GranularityEnum,
+} from "../data/useCashFlow.ts";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-
-type CashFlowItem = {
-  amount: number;
-  category: string;
-};
-
-type MonthKey = "01" | "02" | "03";
-
-type CashFlowMonth = {
-  initialBalance: number;
-  entries: CashFlowItem[];
-  exits: CashFlowItem[];
-};
-
-type CashFlowData = Record<MonthKey, CashFlowMonth>;
 
 // "2026-04-01" → "01/04/2026" (sem new Date, evita shift de timezone).
 const fmtDateBR = (iso?: string): string => {
@@ -43,7 +32,7 @@ export const getDateByGranularity = (period: string, granularity: string) => {
       year: "2-digit",
     });
   }
-  if (granularity === "mothly") {
+  if (granularity === "monthly") {
     const [year, month] = period.split("-");
     return `${month}/${year}`;
   }
@@ -72,8 +61,7 @@ function periodForGranularity(
 
 export default function CashFlow() {
   const { activeAnalysis } = useAnalyses();
-  const [loading, setLoading] = useState(true);
-  const [granularity, setGranularity] = useState("daily");
+  const [granularity, setGranularity] = useState<string>("daily");
   const refMonth = activeAnalysis?.referenceMonth;
 
   const filters = useMemo(() => {
@@ -81,24 +69,12 @@ export default function CashFlow() {
     return { startDate, endDate, granularity };
   }, [refMonth, granularity]);
 
-  const { cashflow, refresh } = useCashFlow(filters);
+  const { cashflow, loading } = useCashFlow(filters);
   const { summary, chart, table, period } = cashflow;
 
-  useEffect(() => {
-    if (!loading) {
-      refresh(filters);
-    }
-  }, [filters, refresh]);
-
-  useEffect(() => {
-    if (cashflow) {
-      setLoading(false);
-    }
-  }, [cashflow]);
-
-  const getTableData = (tableData: any) => {
-    const entriesTable = tableData.filter((item: any) => item.totalCents >= 0);
-    const exitsTable = tableData.filter((item: any) => item.totalCents < 0);
+  const getTableData = (tableData: CashFlowTableRow[]) => {
+    const entriesTable = tableData.filter((item) => item.totalCents >= 0);
+    const exitsTable = tableData.filter((item) => item.totalCents < 0);
     return { entries: entriesTable, exits: exitsTable };
   };
 
@@ -108,12 +84,12 @@ export default function CashFlow() {
 
   const getColumns = () => {
     // get the biggest array of byPeriod in table to know how many columns we need to render
-    const biggestByPeriod = table.reduce(
-      (biggest: any, item: any) =>
+    const biggestByPeriod = table.reduce<CashFlowTableRow>(
+      (biggest, item) =>
         item.byPeriod.length > biggest.byPeriod.length ? item : biggest,
-      { byPeriod: [] }
+      { category: "", parentCategory: null, totalCents: 0, byPeriod: [] }
     );
-    return biggestByPeriod.byPeriod.map((item: any) =>
+    return biggestByPeriod.byPeriod.map((item) =>
       getDateByGranularity(item.period, filters.granularity)
     );
   };
@@ -341,7 +317,7 @@ function Row({
   list,
   cols,
 }: {
-  data: any;
+  data: CashFlowTableRow;
   list: "entries" | "exits";
   cols: number;
 }) {

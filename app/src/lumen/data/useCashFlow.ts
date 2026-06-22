@@ -1,27 +1,44 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { api } from "@/lib/api/index.js";
 import { useAuth } from "../auth/AuthContext";
 import { useAnalyses } from "./useAnalyses";
 
 export type GranularityEnum = "daily" | "weekly" | "monthly" | "quarterly";
 
+export interface CashFlowPeriod {
+  startDate: string;
+  endDate: string;
+  granularity: GranularityEnum;
+}
+
+export interface CashFlowSummary {
+  openingBalanceCents: number | null;
+  closingBalanceCents: number | null;
+  totalCreditsCents: number;
+  totalDebitsCents: number;
+  creditCount: number;
+  debitCount: number;
+}
+
+export interface CashFlowChartEntry {
+  period: string;
+  creditsCents: number;
+  debitsCents: number;
+}
+
+export interface CashFlowTableRow {
+  category: string;
+  parentCategory: string | null;
+  totalCents: number;
+  byPeriod: Array<{ period: string; amountCents: number }>;
+}
+
 export interface CashFlow {
-  period: {
-    startDate: string;
-    endDate: string;
-    granularity: GranularityEnum;
-  };
-  summary: {
-    openingBalanceCents: number | null;
-    closingBalanceCents: number | null;
-    totalCreditsCents: number;
-    totalDebitsCents: number;
-    creditCount: number;
-    debitCount: number;
-  };
-  chart: any;
-  table: any;
-  requestId: any;
+  period: CashFlowPeriod;
+  summary: CashFlowSummary;
+  chart: CashFlowChartEntry[];
+  table: CashFlowTableRow[];
+  requestId: string | null;
 }
 
 const emptyCashFlow: CashFlow = {
@@ -60,17 +77,19 @@ export function useCashFlow({
   const { activeId } = useAnalyses();
   const [cashflow, setCashflow] = useState<CashFlow>(emptyCashFlow);
   const [loading, setLoading] = useState(true);
-  const parameters: any = {
-    startDate,
-    endDate,
-    granularity,
-  };
-
-  if (category) parameters.category = category;
-  if (bankAccountId) parameters.bankAccountId = bankAccountId;
+  const parameters = useMemo(
+    () => ({
+      startDate,
+      endDate,
+      granularity,
+      ...(category ? { category } : {}),
+      ...(bankAccountId ? { bankAccountId } : {}),
+    }),
+    [startDate, endDate, granularity, category, bankAccountId]
+  );
 
   const refresh = useCallback(
-    async (filters?: any) => {
+    async (filters?: typeof parameters) => {
       if (!user || !activeId) {
         setCashflow(emptyCashFlow);
         setLoading(false);
@@ -86,7 +105,7 @@ export function useCashFlow({
         setLoading(false);
       }
     },
-    [user, activeId]
+    [user, activeId, parameters]
   );
 
   useEffect(() => {

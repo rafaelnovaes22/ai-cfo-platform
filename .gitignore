@@ -23,6 +23,9 @@ logs/
 # Claude Code overrides do dev (não versionar)
 .claude/settings.local.json
 
+# opencode config local do dev (não versionar)
+.opencode.json
+
 # IDE / OS
 .vscode/
 .idea/

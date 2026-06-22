@@ -1,0 +1,502 @@
+openapi: 3.0.3
+info:
+  title: Action Plan — Aicfo API
+  description: Contract for the action-plan module. Extracted from the canonical Aicfo OpenAPI spec.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /analysis/{analysisId}/action-plan:
+    get:
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          in: path
+          name: analysisId
+          required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  analysisStatus:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        horizon:
+                          type: string
+                          enum:
+                            - short
+                            - medium
+                            - long
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        effortLevel:
+                          type: string
+                          enum:
+                            - low
+                            - medium
+                            - high
+                        riskLevel:
+                          type: string
+                          enum:
+                            - low
+                            - medium
+                            - high
+                        impactCents:
+                          type: number
+                        deadlineDays:
+                          type: number
+                          nullable: true
+                        doneWhen:
+                          type: string
+                          nullable: true
+                        clientApproved:
+                          type: boolean
+                          nullable: true
+                        clientComment:
+                          type: string
+                          nullable: true
+                        status:
+                          type: string
+                        statusReason:
+                          type: string
+                          nullable: true
+                        lastStatusUpdatedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                      required:
+                        - id
+                        - horizon
+                        - title
+                        - description
+                        - effortLevel
+                        - riskLevel
+                        - impactCents
+                        - deadlineDays
+                        - doneWhen
+                        - clientApproved
+                        - clientComment
+                        - status
+                        - statusReason
+                        - lastStatusUpdatedAt
+                      additionalProperties: false
+                  summary:
+                    type: object
+                    properties:
+                      shortImpact:
+                        type: number
+                      mediumImpact:
+                        type: number
+                      longImpact:
+                        type: number
+                      totalImpact:
+                        type: number
+                    required:
+                      - shortImpact
+                      - mediumImpact
+                      - longImpact
+                      - totalImpact
+                    additionalProperties: false
+                required:
+                  - analysisStatus
+                  - items
+                  - summary
+                additionalProperties: false
+        '400':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '401':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '403':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '404':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '409':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '422':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '500':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+  /analysis/{analysisId}/action-plan/{itemId}/feedback:
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approved:
+                  type: boolean
+                comment:
+                  type: string
+                  maxLength: 500
+              required:
+                - approved
+              additionalProperties: false
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          in: path
+          name: analysisId
+          required: true
+        - schema:
+            type: string
+            format: uuid
+          in: path
+          name: itemId
+          required: true
+      responses:
+        '200':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                required:
+                  - id
+                additionalProperties: false
+        '400':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '401':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '403':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '404':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '409':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '422':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+        '500':
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  detail:
+                    type: string
+                  instance:
+                    type: string
+                  requestId:
+                    type: string
+                required:
+                  - type
+                  - title
+                  - status
+                additionalProperties: false
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
