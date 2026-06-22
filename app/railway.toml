@@ -10,6 +10,8 @@ healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-# Variáveis obrigatórias em prod (configurar no dashboard Railway):
-# VITE_API_URL — URL pública do backend (ex: https://api.aicfo.com.br)
-#   É build-time: o Railway passa a env como build arg (ARG VITE_API_URL no Dockerfile).
+# Variáveis obrigatórias por ambiente (configurar no dashboard Railway):
+# VITE_API_URL — URL pública do backend.
+#   staging: https://aicfo-staging-production.up.railway.app
+#   prod:    https://aicfo-api-production.up.railway.app
+# O Dockerfile gera /env.js em runtime, então a mesma imagem pode apontar para APIs diferentes.

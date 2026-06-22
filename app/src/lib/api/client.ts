@@ -1,4 +1,17 @@
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
+declare global {
+  interface Window {
+    __AICFO_CONFIG__?: {
+      VITE_API_URL?: string;
+    };
+  }
+}
+
+function runtimeApiUrl(): string | undefined {
+  const value = window.__AICFO_CONFIG__?.VITE_API_URL?.trim();
+  return value || undefined;
+}
+
+const BASE_URL = runtimeApiUrl() ?? (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
 
 const TOKEN_KEY = "aicfo.accessToken";
 const REFRESH_KEY = "aicfo.refreshToken";
