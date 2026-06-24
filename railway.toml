@@ -1,9 +1,10 @@
+# Backend usa Dockerfile na raiz (multi-stage). Secrets são injetadas em runtime
+# via ENV do Railway — nunca como ARG/ENV de build (evita warnings SecretsUsedInArgOrEnv).
 [build]
-builder = "NIXPACKS"
-buildCommand = "npm install --include=dev && npm run build && npx prisma generate"
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "npx prisma migrate deploy && node dist/server.js"
+# CMD do Dockerfile já executa `prisma migrate deploy && node dist/server.js`.
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
