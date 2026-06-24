@@ -202,7 +202,7 @@ describe("parseExcelDre", () => {
       orphanCount: 0,
     });
 
-    const result = await parseExcelDre(Buffer.from("fake"), "2026-08", "t1");
+    const result = await parseExcelDre(Buffer.from("fake"), "2026-08", "t1", { currentMonth: "2026-08" });
 
     expect(result.entries[0]!.date).toBe("2026-08-31");
     expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-08", "t1");
@@ -224,6 +224,59 @@ describe("parseExcelDre", () => {
     const result = await parseExcelDre(Buffer.from("fake"), "2026-06", "t1");
 
     expect(result.entries[0]!.date).toBe("2026-06-30");
+    expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-06", "t1");
+  });
+
+  it("usa o ano do nome do arquivo quando sheets trazem apenas meses", async () => {
+    xlsxReadMock.mockReturnValue(mockWorkbook({ GENNAIO: "", DICEMBRE: "" }));
+
+    sheetToJsonMock
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["VENDAS", 30000]],
+        [["PAYPAL", 20000], ["GOOGLE", 10000]],
+      ))
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["VENDAS", 30000]],
+        [["PAYPAL", 20000], ["GOOGLE", 10000]],
+      ));
+
+    parseDreTextMock
+      .mockResolvedValueOnce({ entries: dreEntries("2025-01"), orphanCount: 0 })
+      .mockResolvedValueOnce({ entries: dreEntries("2025-12"), orphanCount: 0 });
+
+    const result = await parseExcelDre(Buffer.from("fake"), "2026-06", "t1", {
+      fileName: "RELATORIO FINANCEIRO 2025.xlsx",
+      currentMonth: "2026-06",
+    });
+
+    expect(result.entries[0]!.date).toBe("2025-01-31");
+    expect(result.entries[1]!.date).toBe("2025-12-31");
+    expect(parseDreTextMock).toHaveBeenNthCalledWith(1, expect.any(String), "2025-01", "t1");
+    expect(parseDreTextMock).toHaveBeenNthCalledWith(2, expect.any(String), "2025-12", "t1");
+  });
+
+  it("não processa sheets resolvidos para competência posterior ao mês vigente", async () => {
+    xlsxReadMock.mockReturnValue(mockWorkbook({ GIUGNO: "", LUGLIO: "" }));
+
+    sheetToJsonMock
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["VENDAS", 30000]],
+        [["PAYPAL", 20000], ["GOOGLE", 10000]],
+      ))
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["VENDAS", 30000]],
+        [["PAYPAL", 20000], ["GOOGLE", 10000]],
+      ));
+
+    parseDreTextMock.mockResolvedValueOnce({ entries: dreEntries("2026-06"), orphanCount: 0 });
+
+    const result = await parseExcelDre(Buffer.from("fake"), "2026-06", "t1", {
+      currentMonth: "2026-06",
+    });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]!.date).toBe("2026-06-30");
+    expect(parseDreTextMock).toHaveBeenCalledTimes(1);
     expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-06", "t1");
   });
 

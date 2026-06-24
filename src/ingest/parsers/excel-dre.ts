@@ -24,14 +24,51 @@ function detectMonthFromSheetName(sheetName: string): string | null {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-  for (const [name, month] of Object.entries(MONTH_NAMES_EXT)) {
-    if (normalized.includes(name)) return month;
-  }
   const ymMatch = normalized.match(/(\d{4})[-/](\d{1,2})/);
   if (ymMatch) return `${ymMatch[1]}-${ymMatch[2]!.padStart(2, "0")}`;
   const myMatch = normalized.match(/(\d{1,2})[-/](\d{4})/);
   if (myMatch) return `${myMatch[2]}-${myMatch[1]!.padStart(2, "0")}`;
+  for (const [name, month] of Object.entries(MONTH_NAMES_EXT)) {
+    if (normalized.includes(name)) return month;
+  }
   return null;
+}
+
+function detectYearFromFileName(fileName?: string): string | null {
+  if (!fileName) return null;
+  const matches = fileName.match(/(?:^|\D)(20\d{2}|19\d{2})(?=\D|$)/g) ?? [];
+  const years = matches
+    .map((match) => match.match(/(20\d{2}|19\d{2})/)?.[1])
+    .filter((year): year is string => Boolean(year));
+  return years.at(-1) ?? null;
+}
+
+function currentMonthSaoPaulo(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  return `${year}-${month}`;
+}
+
+function resolveSheetReferenceMonth(params: {
+  monthFromContent: string | null;
+  monthFromName: string | null;
+  referenceMonth: string;
+  fileNameYear: string | null;
+}): string {
+  const { monthFromContent, monthFromName, referenceMonth, fileNameYear } = params;
+  if (monthFromContent) return monthFromContent;
+  if (!monthFromName) return referenceMonth;
+  if (/^\d{4}-\d{2}$/.test(monthFromName)) return monthFromName;
+  return `${fileNameYear ?? referenceMonth.slice(0, 4)}-${monthFromName}`;
+}
+
+function isFutureMonth(referenceMonth: string, currentMonth: string): boolean {
+  return /^\d{4}-\d{2}$/.test(referenceMonth) && referenceMonth > currentMonth;
 }
 
 function isSummarySheet(sheetName: string): boolean {
@@ -151,13 +188,15 @@ export async function parseExcelDre(
   buffer: Buffer,
   referenceMonth: string,
   tenantId: string,
+  options: { fileName?: string; currentMonth?: string } = {},
 ): Promise<ParseResult> {
   if (buffer.length === 0 || buffer.length > MAX_XLSX_BYTES) {
     return { entries: [], orphanCount: 0 };
   }
 
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const year = referenceMonth.slice(0, 4);
+  const fileNameYear = detectYearFromFileName(options.fileName);
+  const currentMonth = options.currentMonth ?? currentMonthSaoPaulo();
 
   const allEntries: ParseResult["entries"] = [];
   let totalOrphanCount = 0;
@@ -173,10 +212,20 @@ export async function parseExcelDre(
 
     const monthFromName = detectMonthFromSheetName(sheetName);
     const monthFromContent = detectDreReferenceMonth(sheetText);
-    const fullMonth =
-      monthFromContent ??
-      (monthFromName ? `${year}-${monthFromName}` : null) ??
-      referenceMonth;
+    const fullMonth = resolveSheetReferenceMonth({
+      monthFromContent,
+      monthFromName,
+      referenceMonth,
+      fileNameYear,
+    });
+
+    if (isFutureMonth(fullMonth, currentMonth)) {
+      logger.warn(
+        { tenantId, sheetName, referenceMonth: fullMonth, currentMonth, fileName: options.fileName },
+        "parseExcelDre: sheet ignorada por competência futura",
+      );
+      continue;
+    }
 
     logger.info(
       { tenantId, sheetName, referenceMonth: fullMonth, textPreview: sheetText.slice(0, 100) },

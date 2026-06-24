@@ -125,6 +125,7 @@ export async function ingest(params: {
   referenceMonth: string; // "YYYY-MM"
   source: IngestSource;
   buffer?: Buffer;        // para file uploads
+  fileName?: string;      // nome original do arquivo (usado por DRE Excel para inferir ano)
   text?: string;          // para clipboard
   entries?: unknown[];    // para manual
   skipAnalysis?: boolean; // true = parse+store apenas, sem enfileirar LLM (ex: plano student)
@@ -406,7 +407,7 @@ export async function dispatch(params: Parameters<typeof ingest>[0]): Promise<Pa
       if (transactional.entries.length > 0) return transactional;
       // Free tier (skipAnalysis): nunca cai no LLM (custo R$0), igual ao PDF.
       if (params.skipAnalysis) return transactional;
-      return parseExcelDre(params.buffer!, params.referenceMonth, params.tenantId);
+      return parseExcelDre(params.buffer!, params.referenceMonth, params.tenantId, { fileName: params.fileName });
     }
     case "csv":
       // CSV usa parser de texto dedicado, não o xlsx: este faz type-inference de

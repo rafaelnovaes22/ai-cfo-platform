@@ -149,7 +149,7 @@ describe("parseExcelDre (integração com xlsx real)", () => {
 
     parseDreTextMock.mockResolvedValueOnce({ entries: dreEntries("2026-08", 5), orphanCount: 0 });
 
-    const result = await parseExcelDre(buf, "2026-08", "t1");
+    const result = await parseExcelDre(buf, "2026-08", "t1", { currentMonth: "2026-08" });
 
     expect(result.entries[0]!.date).toBe("2026-08-31");
     expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-08", "t1");

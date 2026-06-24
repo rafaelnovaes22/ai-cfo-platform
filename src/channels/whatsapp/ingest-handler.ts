@@ -129,6 +129,7 @@ export async function handleIngestDocument(
       referenceMonth,
       source,
       buffer,
+      fileName: filename,
       skipAnalysis: opts.skipAnalysis,
     })
 

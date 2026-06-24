@@ -76,7 +76,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
       const buffer = await data.toBuffer();
 
       const skipAnalysis = await resolveSkipAnalysis(req.auth!.tenantId);
-      const result = await ingest({ tenantId: req.auth!.tenantId, referenceMonth, source, buffer, skipAnalysis });
+      const result = await ingest({ tenantId: req.auth!.tenantId, referenceMonth, source, buffer, fileName: data.filename, skipAnalysis });
       return reply.send(result);
     },
   });
