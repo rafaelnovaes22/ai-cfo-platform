@@ -117,10 +117,10 @@ describe("parseExcelDre (integração com xlsx real)", () => {
     const linhas = textoEnviado.split("\n").filter(Boolean);
 
     // Só ALEGRIA/BEM (custos) e PAYPAL/GOOGLE (receitas) — subtotais/total não aparecem
-    expect(linhas).toContain("ALEGRIA,R$ 305.022,00");
-    expect(linhas).toContain("BEM,R$ 3.700,00");
-    expect(linhas).toContain("PAYPAL,R$ 435.791,00");
-    expect(linhas).toContain("GOOGLE,R$ 25.624,00");
+    expect(linhas).toContain("CUSTOS - ALEGRIA,-R$ 305.022,00");
+    expect(linhas).toContain("CUSTOS - BEM,-R$ 3.700,00");
+    expect(linhas).toContain("RECEITAS - PAYPAL,R$ 435.791,00");
+    expect(linhas).toContain("RECEITAS - GOOGLE,R$ 25.624,00");
     expect(linhas.find((l) => l.startsWith("TOTAL"))).toBeUndefined();
     expect(linhas.find((l) => l.startsWith("LUCRO BRUTO"))).toBeUndefined();
     expect(linhas.find((l) => /^CUSTOS,/.test(l))).toBeUndefined();

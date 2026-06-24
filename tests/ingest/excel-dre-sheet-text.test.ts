@@ -39,13 +39,13 @@ describe("buildSheetText", () => {
 
     // Esperado: 3 custos + 3 receitas + 2 despesas = 8 linhas
     expect(lines.length).toBe(8);
-    expect(lines).toContain("ALEGRIA,R$ 173.545,00");
-    expect(lines).toContain("BEM BRASIL,R$ 800,00");
-    expect(lines).toContain("BRASIL SHOW,-R$ 570,00"); // sinal negativo preservado
-    expect(lines).toContain("PAYPAL MARCO EUROPA,R$ 464.000,00");
-    expect(lines).toContain("PAYPAL MARCO BRASIL,R$ 159.602,46");
-    expect(lines).toContain("MARKETING,R$ 3.000,00");
-    expect(lines).toContain("GOOGLE,R$ 7.908,10");
+    expect(lines).toContain("CUSTOS - ALEGRIA,-R$ 173.545,00");
+    expect(lines).toContain("CUSTOS - BEM BRASIL,-R$ 800,00");
+    expect(lines).toContain("CUSTOS - BRASIL SHOW,-R$ 570,00"); // CUSTOS sempre sai como débito
+    expect(lines).toContain("RECEITAS - PAYPAL MARCO EUROPA,R$ 464.000,00");
+    expect(lines).toContain("RECEITAS - PAYPAL MARCO BRASIL,R$ 159.602,46");
+    expect(lines).toContain("DESPESAS - MARKETING,-R$ 3.000,00");
+    expect(lines).toContain("DESPESAS - GOOGLE,-R$ 7.908,10");
 
     // Subtotais e cabeçalhos de seção NÃO aparecem
     expect(lines.find((l) => l.startsWith("TOTAL"))).toBeUndefined();
@@ -63,8 +63,8 @@ describe("buildSheetText", () => {
 
     const text = buildSheetText(stubSheet(matrix));
 
-    expect(text).toContain("ALGUM CUSTO,R$ 1.234.567,89");
-    expect(text).toContain("ALGUMA RECEITA,R$ 999,00");
+    expect(text).toContain("CUSTOS - ALGUM CUSTO,-R$ 1.234.567,89");
+    expect(text).toContain("RECEITAS - ALGUMA RECEITA,R$ 999,00");
   });
 
   it("pula células vazias e 'R$ -' (sem valor numérico)", () => {
@@ -77,7 +77,7 @@ describe("buildSheetText", () => {
     const text = buildSheetText(stubSheet(matrix));
     const lines = text.split("\n").filter(Boolean);
 
-    expect(lines).toContain("COM VALOR,R$ 1.000,00");
+    expect(lines).toContain("CUSTOS - COM VALOR,-R$ 1.000,00");
     // ZERO e SEM VALOR e TRACEJO pulados (sem valor numérico ou zerado)
     expect(lines.find((l) => l.startsWith("ZERO"))).toBeUndefined();
     expect(lines.find((l) => l.startsWith("SEM VALOR"))).toBeUndefined();
@@ -109,7 +109,7 @@ describe("buildSheetText", () => {
     const lines = text.split("\n").filter(Boolean);
 
     // toNumber interpreta tanto "1.234,56" (BR) quanto "R$ 2.500,00" (BR com prefixo)
-    expect(lines).toContain("CUSTO STR,R$ 1.234,56");
-    expect(lines).toContain("RECEITA STR,R$ 2.500,00");
+    expect(lines).toContain("CUSTOS - CUSTO STR,-R$ 1.234,56");
+    expect(lines).toContain("RECEITAS - RECEITA STR,R$ 2.500,00");
   });
 });

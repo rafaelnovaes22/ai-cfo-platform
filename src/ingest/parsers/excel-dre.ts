@@ -140,21 +140,32 @@ export function buildSheetText(sheet: XLSX.WorkSheet): string {
   });
 
   const lines: string[] = [];
+  const activeHeaders = new Map<number, string>(detailSections.map((s) => [s.labelCol, s.header]));
   for (const row of matrix) {
     if (!Array.isArray(row) || row.length === 0) continue;
 
+    // Algumas planilhas colocam DESPESAS abaixo de CUSTOS na mesma dupla de
+    // colunas A-B. A seção ativa precisa mudar no meio da sheet; caso contrário
+    // MARKETING/GOOGLE/SALÁRIOS entram como CUSTOS e distorcem a DRE.
     for (const sec of detailSections) {
       const label = String(row[sec.labelCol] ?? "").trim();
       if (!label) continue;
+
+      if (SECTION_HEADERS.test(label)) {
+        activeHeaders.set(sec.labelCol, label.toUpperCase());
+        continue;
+      }
+
       if (TOTAL_LABELS.test(label)) continue;
-      if (SECTION_HEADERS.test(label)) continue;
 
       const value = toNumber(row[sec.valueCol]);
       if (value === null || value === 0) continue; // sem valor numérico (célula vazia / "R$ -" / zerado)
 
-      const sign = value < 0 ? "-" : "";
-      const formatted = formatBRCurrency(Math.abs(value));
-      lines.push(`${label},${sign}${formatted}`);
+      const activeHeader = activeHeaders.get(sec.labelCol) ?? sec.header;
+      const signedValue = activeHeader === "RECEITAS" ? Math.abs(value) : -Math.abs(value);
+      const sign = signedValue < 0 ? "-" : "";
+      const formatted = formatBRCurrency(Math.abs(signedValue));
+      lines.push(`${activeHeader} - ${label},${sign}${formatted}`);
     }
   }
 

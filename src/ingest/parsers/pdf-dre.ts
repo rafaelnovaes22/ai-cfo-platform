@@ -108,6 +108,8 @@ Se for EXTRAÍVEL, retorne SOMENTE um JSON array (sem texto adicional) com objet
 Regras:
 - direction="credit" para receitas (receita_bruta, receita_financeira, outras_receitas, emprestimos_entrada)
 - direction="debit" para todos os demais (deduções, custos, despesas, impostos, amortizações)
+- Quando uma linha vier prefixada por seção, preserve a semântica da seção: "RECEITAS - ..." = credit/receita; "CUSTOS - ..." = debit/custo; "DESPESAS - ..." = debit/despesa. Nunca trate linhas sob CUSTOS como receita, mesmo que o nome pareça cliente/fornecedor.
+- Valores negativos no texto indicam debit; retorne value positivo e direction="debit".
 - Ignore linhas de subtotal/total que são somas de outras linhas (ex: Lucro Bruto, EBITDA, Receita Líquida, Total de Despesas)
 - Se não souber a categoria exata, use "outras_despesas" (debit) ou "outras_receitas" (credit)
 - value sempre positivo (sem sinal)
