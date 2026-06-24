@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Testa o parser de Excel Dre (multi-sheet com meses no nome do sheet).
+// Testa o parser de Excel DRE (multi-sheet com meses no nome do sheet).
 // Mocka parseDreText (do pdf-dre.ts) para isolar a logica de iteracao de sheets,
 // deteccao de mes pelo nome do sheet, e pulo de sheets de resumo.
+// Mocka XLSX.utils.sheet_to_json com matrizes numericas (layout 4-blocos),
+// refletindo o preprocessamento introduzido em fix(ingest): layout 4-blocos.
 
 const parseDreTextMock = vi.fn();
 vi.mock("@/ingest/parsers/pdf-dre.js", () => ({
@@ -11,15 +13,15 @@ vi.mock("@/ingest/parsers/pdf-dre.js", () => ({
 }));
 
 const xlsxReadMock = vi.fn();
-const sheetToCsvMock = vi.fn();
+const sheetToJsonMock = vi.fn();
 vi.mock("xlsx", () => ({
   read: (...args: unknown[]) => xlsxReadMock(...args),
-  utils: { sheet_to_csv: (...args: unknown[]) => sheetToCsvMock(...args) },
+  utils: { sheet_to_json: (...args: unknown[]) => sheetToJsonMock(...args) },
 }));
 
 const { parseExcelDre } = await import("@/ingest/parsers/excel-dre.js");
 
-function mockWorkbook(sheets: Record<string, string>) {
+function mockWorkbook(sheets: Record<string, unknown>) {
   return {
     SheetNames: Object.keys(sheets),
     Sheets: Object.fromEntries(
@@ -48,11 +50,29 @@ function dreEntries(month: string): unknown[] {
   ];
 }
 
+// Matriz 4-blocos com 1 linha de lancamento por bloco + recap G-H (descartado).
+// Reproduz o layout de "RELATORIO FINANCEIRO 2026.xlsx" de forma sanitizada.
+function fourBlockMatrix(
+  custos: [string, number][],
+  receitas: [string, number][],
+): unknown[][] {
+  const rows: unknown[][] = [
+    ["CUSTOS", "", "", "", "RECEITAS", "", "", "", "RECEITAS", 0, ""],
+  ];
+  const maxRows = Math.max(custos.length, receitas.length);
+  for (let i = 0; i < maxRows; i++) {
+    const c = custos[i] ?? ["", ""];
+    const r = receitas[i] ?? ["", ""];
+    rows.push([c[0], c[1], "", "", r[0], r[1], "", "", "", "", ""]);
+  }
+  return rows;
+}
+
 describe("parseExcelDre", () => {
   beforeEach(() => {
     parseDreTextMock.mockReset();
     xlsxReadMock.mockReset();
-    sheetToCsvMock.mockReset();
+    sheetToJsonMock.mockReset();
   });
 
   it("extrai entradas de múltiplos sheets (um por mês)", async () => {
@@ -60,9 +80,15 @@ describe("parseExcelDre", () => {
       mockWorkbook({ GENNAIO: "", FEBBRAIO: "" }),
     );
 
-    sheetToCsvMock
-      .mockReturnValueOnce("CUSTOS\nALEGRIA,R$ 173.545,00\nBEM,R$ 800,00\nSOL,R$ 6.330,00")
-      .mockReturnValueOnce("CUSTOS\nALEGRIA,R$ 484.935,00\nBEM,R$ 2.500,00\nSOL,R$ 15.580,00");
+    sheetToJsonMock
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["ALEGRIA", 173545], ["BEM", 800], ["SOL", 6330]],
+        [["PAYPAL", 464000], ["GOOGLE", 25624]],
+      ))
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["ALEGRIA", 484935], ["BEM", 2500], ["SOL", 15580]],
+        [["PAYPAL", 609907]],
+      ));
 
     parseDreTextMock
       .mockResolvedValueOnce({ entries: dreEntries("2026-01"), orphanCount: 0 })
@@ -84,7 +110,10 @@ describe("parseExcelDre", () => {
       mockWorkbook({ GENNAIO: "", "RESUMO RELATORIO 2026": "" }),
     );
 
-    sheetToCsvMock.mockReturnValue("CUSTOS\nALUGUEL,R$ 4.200,00\nMARKETING,R$ 3.000,00\nGOOGLE,R$ 7.908,10");
+    sheetToJsonMock.mockReturnValue(fourBlockMatrix(
+      [["ALUGUEL", 4200], ["MARKETING", 3000], ["GOOGLE", 7908.1]],
+      [["VENDAS", 100000]],
+    ));
 
     parseDreTextMock.mockResolvedValue({
       entries: dreEntries("2026-01"),
@@ -102,9 +131,13 @@ describe("parseExcelDre", () => {
       mockWorkbook({ GENNAIO: "", NOTAS: "" }),
     );
 
-    sheetToCsvMock
-      .mockReturnValueOnce("RECEITAS\nVENDAS,R$ 100.000,00\nPAYPAL,R$ 50.000,00\nGOOGLE,R$ 25.624,00")
-      .mockReturnValueOnce("Observação\nReunião com cliente");
+    sheetToJsonMock
+      .mockReturnValueOnce(fourBlockMatrix(
+        [["VENDAS", 100000], ["PAYPAL", 50000], ["GOOGLE", 25624]],
+        [],
+      ))
+      // Sheet "NOTAS": sem coluna RECEITAS detectada → buildSheetText retorna ""
+      .mockReturnValueOnce([["Observação"], ["Reunião com cliente"]]);
 
     parseDreTextMock.mockResolvedValue({
       entries: dreEntries("2026-01"),
@@ -120,7 +153,10 @@ describe("parseExcelDre", () => {
   it("detecta mês pelo nome do sheet em italiano (MARZO)", async () => {
     xlsxReadMock.mockReturnValue(mockWorkbook({ MARZO: "" }));
 
-    sheetToCsvMock.mockReturnValue("RECEITAS\nVENDAS,R$ 50.000,00\nPAYPAL,R$ 30.000,00\nGOOGLE,R$ 10.000,00");
+    sheetToJsonMock.mockReturnValue(fourBlockMatrix(
+      [["VENDAS", 50000]],
+      [["PAYPAL", 30000], ["GOOGLE", 10000]],
+    ));
 
     parseDreTextMock.mockResolvedValue({
       entries: dreEntries("2026-03"),
@@ -136,7 +172,10 @@ describe("parseExcelDre", () => {
   it("detecta mês pelo nome do sheet em português (JANEIRO)", async () => {
     xlsxReadMock.mockReturnValue(mockWorkbook({ JANEIRO: "" }));
 
-    sheetToCsvMock.mockReturnValue("RECEITAS\nVENDAS,R$ 30.000,00\nPAYPAL,R$ 20.000,00\nGOOGLE,R$ 10.000,00");
+    sheetToJsonMock.mockReturnValue(fourBlockMatrix(
+      [["VENDAS", 30000]],
+      [["PAYPAL", 20000], ["GOOGLE", 10000]],
+    ));
 
     parseDreTextMock.mockResolvedValue({
       entries: dreEntries("2026-01"),
@@ -150,10 +189,32 @@ describe("parseExcelDre", () => {
     expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-01", "t1");
   });
 
+  it("detecta mês pelo nome do sheet em português (AGOSTO)", async () => {
+    xlsxReadMock.mockReturnValue(mockWorkbook({ AGOSTO: "" }));
+
+    sheetToJsonMock.mockReturnValue(fourBlockMatrix(
+      [["VENDAS", 30000]],
+      [["PAYPAL", 20000], ["GOOGLE", 10000]],
+    ));
+
+    parseDreTextMock.mockResolvedValue({
+      entries: dreEntries("2026-08"),
+      orphanCount: 0,
+    });
+
+    const result = await parseExcelDre(Buffer.from("fake"), "2026-08", "t1");
+
+    expect(result.entries[0]!.date).toBe("2026-08-31");
+    expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-08", "t1");
+  });
+
   it("usa referenceMonth quando sheet não tem mês no nome", async () => {
     xlsxReadMock.mockReturnValue(mockWorkbook({ DADOS: "" }));
 
-    sheetToCsvMock.mockReturnValue("RECEITAS\nVENDAS,R$ 30.000,00\nPAYPAL,R$ 20.000,00\nGOOGLE,R$ 10.000,00");
+    sheetToJsonMock.mockReturnValue(fourBlockMatrix(
+      [["VENDAS", 30000]],
+      [["PAYPAL", 20000], ["GOOGLE", 10000]],
+    ));
 
     parseDreTextMock.mockResolvedValue({
       entries: dreEntries("2026-06"),
@@ -169,7 +230,10 @@ describe("parseExcelDre", () => {
   it("retorna vazio quando parseDreText falha", async () => {
     xlsxReadMock.mockReturnValue(mockWorkbook({ GENNAIO: "" }));
 
-    sheetToCsvMock.mockReturnValue("RECEITAS\nVENDAS,R$ 50.000,00\nPAYPAL,R$ 30.000,00\nGOOGLE,R$ 10.000,00");
+    sheetToJsonMock.mockReturnValue(fourBlockMatrix(
+      [["VENDAS", 50000]],
+      [["PAYPAL", 30000], ["GOOGLE", 10000]],
+    ));
 
     parseDreTextMock.mockResolvedValue({ entries: [], orphanCount: 0 });
 
