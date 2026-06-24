@@ -2,6 +2,7 @@ import { getPrisma } from "@/persistence/prisma.js";
 import { Prisma, SubscriptionMode } from "@prisma/client";
 import { enqueueMonthlyAnalysisGraph } from "@/queue/index.js";
 import { parseExcel } from "@/ingest/parsers/excel.js";
+import { parseExcelDre } from "@/ingest/parsers/excel-dre.js";
 import { parseCsv } from "@/ingest/parsers/csv.js";
 import { parseText } from "@/ingest/parsers/text.js";
 import { parsePdfDre, parseDreText } from "@/ingest/parsers/pdf-dre.js";
@@ -396,8 +397,17 @@ export function looksLikeDreText(text: string): boolean {
 
 export async function dispatch(params: Parameters<typeof ingest>[0]): Promise<ParseResult> {
   switch (params.source) {
-    case "excel":
-      return parseExcel(params.buffer!);
+    case "excel": {
+      // Excel pode ser extrato transacional (uma linha por lançamento) OU DRE
+      // consolidado (contas como linhas, meses como colunas/sheets). Tenta o
+      // transacional primeiro (determinístico); se retornar 0 entries, cai no
+      // extrator de DRE via LLM — espelha o fallback do PDF.
+      const transactional = parseExcel(params.buffer!);
+      if (transactional.entries.length > 0) return transactional;
+      // Free tier (skipAnalysis): nunca cai no LLM (custo R$0), igual ao PDF.
+      if (params.skipAnalysis) return transactional;
+      return parseExcelDre(params.buffer!, params.referenceMonth, params.tenantId);
+    }
     case "csv":
       // CSV usa parser de texto dedicado, não o xlsx: este faz type-inference de
       // data em CSV com semântica MM/DD (americana) e perde o sinal de valores
