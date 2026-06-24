@@ -23,6 +23,7 @@ import { actionPlanRoutes } from "@/action-plan/routes.js";
 import { hubRoutes } from "@/hub/routes.js";
 import { exportRoutes } from "@/export/routes.js";
 import { cashflowRoutes } from "@/cashflow/routes.js";
+import { adminRoutes } from "@/admin/routes.js";
 import { whatsappWebhookRoutes } from "@/channels/whatsapp/webhook.js";
 import { whatsappConfigRoutes } from "@/channels/whatsapp/config-routes.js";
 import { whatsappMessagesRoutes } from "@/channels/whatsapp/messages-routes.js";
@@ -142,6 +143,7 @@ await app.register(workspaceRoutes);
 await app.register(billingRoutes);
 await app.register(tenantConfigRoutes);
 await app.register(classificationRoutes); // interna (worker/integração) — fora do gate de site
+await app.register(adminRoutes); // rotas admin internas (requireAdminKey) — fora do gate de subscriber
 
 // Rotas de dados do app web: exclusivas de assinante. Lead (plan student/trial)
 // tem a conta capturada mas não acessa o painel. O WhatsApp usa os services

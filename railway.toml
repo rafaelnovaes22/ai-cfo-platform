@@ -14,6 +14,7 @@ restartPolicyMaxRetries = 3
 # DATABASE_URL  — PostgreSQL URL com ?connection_limit=10&pool_timeout=20&schema=public
 # REDIS_URL     — Redis URL (railway.internal ou externo)
 # JWT_SECRET    — string aleatória forte (openssl rand -hex 32)
+# ADMIN_API_KEY — chave para rotas /admin/* (openssl rand -hex 32)
 # GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION / GOOGLE_APPLICATION_CREDENTIALS_JSON
 # LANGSMITH_API_KEY / LANGSMITH_PROJECT / LANGCHAIN_TRACING_V2 — tracing C6 (Forge v0.22.0+)
 # STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
