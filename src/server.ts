@@ -11,6 +11,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { logger } from "@/observability/logger.js";
 import { problemDetail } from "@/http/problem-detail.js";
+import { buildCorsOrigins } from "@/http/cors-origins.js";
 import rawBody from "fastify-raw-body";
 import { authRoutes } from "@/auth/routes.js";
 import { workspaceRoutes } from "@/workspace/routes.js";
@@ -57,16 +58,9 @@ await app.register(rateLimit, {
 });
 
 // CORS: lê FRONTEND_ORIGIN do .env (vírgula para múltiplas origens).
-// Em Railway sem FRONTEND_ORIGIN configurado, aceita qualquer *.up.railway.app.
-// Em dev, fallback para localhost:5173.
-function buildCorsOrigins(): (string | RegExp)[] {
-  const env = process.env.FRONTEND_ORIGIN;
-  if (env) return env.split(",").map((o) => o.trim()).filter(Boolean);
-  if (process.env.RAILWAY_ENVIRONMENT) {
-    return ["http://localhost:5173", /^https:\/\/.*\.up\.railway\.app$/];
-  }
-  return ["http://localhost:5173"];
-}
+// Em Railway, também aceita hosts *.up.railway.app para permitir frontends
+// de staging/prod com domínios gerados pelo Railway mesmo quando FRONTEND_ORIGIN
+// está configurado apenas com origens canônicas.
 await app.register(cors, {
   origin: buildCorsOrigins(),
   credentials: true,
