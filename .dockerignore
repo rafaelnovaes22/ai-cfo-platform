@@ -1,0 +1,52 @@
+# Dependencies e artefatos de build (recriados no Dockerfile)
+node_modules
+dist
+**/node_modules
+**/dist
+
+# Env e secrets locais (jamais no contexto de build)
+.env
+.env.*
+!.env.example
+.opencode.json
+.claude/settings.local.json
+
+# Git, docs e artefatos não necessários ao build do backend
+.git
+.gitignore
+.github
+docs
+evals
+templates
+reviewer
+imagens_front
+app
+CHANGELOG.md
+README.md
+HELLO.md
+COMMON_ERRORS.md
+QUICKSTART_DEV.md
+MASTER_PROMPT.md
+CLAUDE.md
+
+# Docker local
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Testes
+tests
+**/*.test.ts
+**/*.spec.ts
+vitest.config.ts
+
+# Misc
+.vscode
+.idea
+*.log
+npm-debug.log*
+.DS_Store
+coverage
+.nyc_output
+.venv*
+.venv_linux
