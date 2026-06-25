@@ -64,3 +64,10 @@ docs/learnings/
 # Shadow run reports (gerados localmente por scripts/run-monthly-analysis-graph-shadow.ts)
 evals/monthly-analysis/shadow-runs/*
 !evals/monthly-analysis/shadow-runs/.gitkeep
+
+# Backups locais de .env (NUNCA commitar — contêm segredos)
+.env.bak
+.env.*.bak
+
+# Worktrees de agentes
+.claude/worktrees/

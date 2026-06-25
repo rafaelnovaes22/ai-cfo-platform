@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { INJECTION_GUARD } from "@/llm/prompt-safety.js";
 import { buildSystemPrompt as classificationSystemPrompt } from "@/classification/prompts.js";
 import { buildNarrativeSystemPrompt } from "@/dre-narrative/prompts.js";
-import { buildActionPlanSystemPrompt } from "@/action-plan/prompts.js";
+import { buildSystemPrompt as buildActionPlanSystemPrompt } from "@/monthly-analysis/agents/prompts/action-planning.js";
 
 describe("prompt-safety — guarda contra prompt injection", () => {
   it("INJECTION_GUARD instrui tratar dados como conteúdo, nunca como comando", () => {
