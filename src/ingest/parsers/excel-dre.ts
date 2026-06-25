@@ -1,9 +1,16 @@
 import * as XLSX from "xlsx";
 import { parseDreText, detectDreReferenceMonth } from "@/ingest/parsers/pdf-dre.js";
 import { logger } from "@/observability/logger.js";
+import { mapWithConcurrency } from "@/shared/concurrency.js";
+import { envInt } from "@/shared/env.js";
 import type { ParseResult } from "@/ingest/types.js";
 
 const MAX_XLSX_BYTES = 20 * 1024 * 1024;
+
+// Sheets de DRE são extraídas em paralelo (1 chamada LLM por sheet). 6 cobre 1 onda
+// para arquivos de até ~6 meses; us-central1 (ADR-019) aguenta, e o adapter já faz
+// retry de 429. Ajuste fino via env INGEST_DRE_SHEET_CONCURRENCY.
+const DEFAULT_SHEET_CONCURRENCY = 6;
 
 const MONTH_NAMES_EXT: Record<string, string> = {
   janeiro: "01", fevereiro: "02", marco: "03", mar: "03", abril: "04",
@@ -209,9 +216,9 @@ export async function parseExcelDre(
   const fileNameYear = detectYearFromFileName(options.fileName);
   const currentMonth = options.currentMonth ?? currentMonthSaoPaulo();
 
-  const allEntries: ParseResult["entries"] = [];
-  let totalOrphanCount = 0;
-
+  // Fase 1 (determinística, mantém ordem): seleciona as sheets extraíveis e resolve
+  // a competência de cada uma. Sem LLM — só shape e filtro.
+  const tasks: { sheetName: string; sheetText: string; fullMonth: string }[] = [];
   for (const sheetName of workbook.SheetNames) {
     if (isSummarySheet(sheetName)) continue;
 
@@ -242,8 +249,30 @@ export async function parseExcelDre(
       { tenantId, sheetName, referenceMonth: fullMonth, textPreview: sheetText.slice(0, 100) },
       "parseExcelDre: processando sheet",
     );
+    tasks.push({ sheetName, sheetText, fullMonth });
+  }
 
-    const result = await parseDreText(sheetText, fullMonth, tenantId);
+  // Fase 2 (LLM, paralela): cada sheet é uma chamada LLM independente — rodar em
+  // paralelo com limite de concorrência corta a latência do ingest de N×T para
+  // ~ceil(N/conc)×T. mapWithConcurrency preserva a ordem (results[i] ↔ tasks[i]),
+  // então a agregação abaixo mantém a ordem de sheet. Uma sheet que falha não
+  // derruba as outras (cada extração é isolada num try/catch).
+  const concurrency = envInt("INGEST_DRE_SHEET_CONCURRENCY", DEFAULT_SHEET_CONCURRENCY);
+  const perSheet = await mapWithConcurrency(tasks, concurrency, async (t) => {
+    try {
+      return await parseDreText(t.sheetText, t.fullMonth, tenantId);
+    } catch (err) {
+      logger.error(
+        { err, tenantId, sheetName: t.sheetName, referenceMonth: t.fullMonth },
+        "parseExcelDre: extração da sheet falhou — ignorada (demais sheets seguem)",
+      );
+      return { entries: [], orphanCount: 0 } satisfies ParseResult;
+    }
+  });
+
+  const allEntries: ParseResult["entries"] = [];
+  let totalOrphanCount = 0;
+  for (const result of perSheet) {
     allEntries.push(...result.entries);
     totalOrphanCount += result.orphanCount;
   }

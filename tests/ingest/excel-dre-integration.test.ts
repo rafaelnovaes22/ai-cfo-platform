@@ -155,3 +155,66 @@ describe("parseExcelDre (integração com xlsx real)", () => {
     expect(parseDreTextMock).toHaveBeenCalledWith(expect.any(String), "2026-08", "t1");
   });
 });
+
+describe("parseExcelDre — extração de sheets em paralelo (PR-1)", () => {
+  // Corpo em bloco de propósito: `() => mock.mockReset()` retornaria o mock, e o
+  // vitest registraria esse retorno como cleanup hook, chamando o mock no teardown
+  // com args vazios (month undefined) e quebrando a mockImplementation.
+  beforeEach(() => { parseDreTextMock.mockReset(); });
+
+  // 2 custos + 2 receitas por sheet (≥3 valores p/ passar em hasCurrencyValues).
+  const threeMonths = () => buildWorkbookBuffer({
+    GENNAIO: monthSheet([["ALEGRIA", 100], ["BEM", 110]], [["PAYPAL", 200], ["GOOGLE", 210]]),
+    FEBBRAIO: monthSheet([["ALEGRIA", 300], ["BEM", 310]], [["PAYPAL", 400], ["GOOGLE", 410]]),
+    MARZO: monthSheet([["ALEGRIA", 500], ["BEM", 510]], [["PAYPAL", 600], ["GOOGLE", 610]]),
+  });
+
+  it("uma sheet que falha não derruba as outras (extração isolada)", async () => {
+    parseDreTextMock
+      .mockResolvedValueOnce({ entries: dreEntries("2026-01", 2), orphanCount: 0 })
+      .mockRejectedValueOnce(new Error("LLM timeout na sheet 2"))
+      .mockResolvedValueOnce({ entries: dreEntries("2026-03", 3), orphanCount: 0 });
+
+    const result = await parseExcelDre(threeMonths(), "2026-01", "t1", { currentMonth: "2026-12" });
+
+    // 2 (jan) + 0 (fev falhou) + 3 (mar) — sem throw
+    expect(result.entries.length).toBe(5);
+    expect(result.entries[0]!.date).toBe("2026-01-31");
+    expect(result.entries[2]!.date).toBe("2026-03-31");
+  });
+
+  it("preserva a ordem das sheets mesmo quando uma resolve antes da outra", async () => {
+    // FEBBRAIO resolve rápido, GENNAIO devagar: o resultado ainda deve vir na ordem das sheets.
+    parseDreTextMock.mockImplementation(async (_text: string, month: string) => {
+      if (month === "2026-01") await new Promise((r) => setTimeout(r, 30));
+      return { entries: dreEntries(month, 1), orphanCount: 0 };
+    });
+
+    const result = await parseExcelDre(threeMonths(), "2026-01", "t1", { currentMonth: "2026-12" });
+
+    expect(result.entries.map((e) => e.date)).toEqual(["2026-01-31", "2026-02-28", "2026-03-31"]);
+  });
+
+  it("respeita o limite de concorrência INGEST_DRE_SHEET_CONCURRENCY", async () => {
+    const prev = process.env.INGEST_DRE_SHEET_CONCURRENCY;
+    process.env.INGEST_DRE_SHEET_CONCURRENCY = "2";
+    let active = 0;
+    let maxActive = 0;
+    parseDreTextMock.mockImplementation(async (_text: string, month: string) => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 10));
+      active--;
+      return { entries: dreEntries(month, 1), orphanCount: 0 };
+    });
+
+    try {
+      const result = await parseExcelDre(threeMonths(), "2026-01", "t1", { currentMonth: "2026-12" });
+      expect(result.entries.length).toBe(3);
+      expect(maxActive).toBe(2);
+    } finally {
+      if (prev === undefined) delete process.env.INGEST_DRE_SHEET_CONCURRENCY;
+      else process.env.INGEST_DRE_SHEET_CONCURRENCY = prev;
+    }
+  });
+});

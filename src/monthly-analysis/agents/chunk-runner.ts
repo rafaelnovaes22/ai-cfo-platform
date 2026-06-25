@@ -1,6 +1,7 @@
 import type { LlmResponse } from "@/llm/types.js";
 import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
 import { mapWithConcurrency } from "@/shared/concurrency.js";
+import { envInt } from "@/shared/env.js";
 
 // Resultado padrão de um agente instrumentado: dados + resposta crua do LLM
 // (para telemetria) + latência medida. Espelha o retorno das funções
@@ -22,12 +23,6 @@ const DEFAULT_CHUNK_SIZE = 15;
 // p/ Vertex southamerica-east1); us-central1 (ADR-019) tem throughput maior e o
 // adapter já faz retry de 429/RESOURCE_EXHAUSTED. Ajuste fino via env.
 const DEFAULT_CONCURRENCY = 6;
-
-function envInt(name: string, fallback: number): number {
-  const raw = process.env[name];
-  const n = raw === undefined ? fallback : Number(raw);
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : fallback;
-}
 
 function resolveChunkConfig(config?: ChunkConfig): { chunkSize: number; concurrency: number } {
   return {
