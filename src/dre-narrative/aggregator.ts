@@ -153,6 +153,23 @@ export function aggregateMonthlyRunRateDre(rows: DatedEntryRow[]): DreLines {
   return aggregateDre(monthlyRows);
 }
 
+/**
+ * DRE fechada por competência, em ordem crescente de mês. Com a análise consolidada
+ * (todo o histórico do tenant numa só análise), o sinal mês-a-mês não vem mais de
+ * análises separadas — é derivado aqui, dos próprios lançamentos classificados.
+ */
+export function aggregatePerMonthDre(rows: DatedEntryRow[]): { month: string; dre: DreLines }[] {
+  const byMonth = new Map<string, DatedEntryRow[]>();
+  for (const r of rows) {
+    const bucket = byMonth.get(r.month) ?? [];
+    bucket.push(r);
+    byMonth.set(r.month, bucket);
+  }
+  return [...byMonth.keys()]
+    .sort()
+    .map((month) => ({ month, dre: aggregateDre(byMonth.get(month)!) }));
+}
+
 export function formatDreForPrompt(dre: DreLines, referenceMonth: string): string {
   const brl = (cents: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);

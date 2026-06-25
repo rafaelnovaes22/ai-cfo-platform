@@ -211,17 +211,12 @@ export async function ingest(params: {
   const directionInferredFlags = computeDirectionInferred(entries);
   const allDedupeHashes = computeDedupeHashes(entries);
 
-  // UMA análise por extrato/período (decisão de produto 2026-06-15): todos os
-  // lançamentos do extrato ficam numa única MonthlyAnalysis. Assim a classificação
-  // cobre TODOS os meses juntos (meses pequenos não ficam sem classificação) e o
-  // plano/DRE/narrativa saem CONSOLIDADOS. A navegação por mês de DRE/Lançamentos/
-  // Caixa vem de filtro de competência sobre estes lançamentos (não de análises
-  // separadas).
-  // referenceMonth (chave + rótulo) = ÚLTIMO MÊS FECHADO presente no extrato — só
-  // indica o período que a análise representa, não filtra a janela de dados (que é
-  // consolidada por analysisId). O mês corrente está aberto, então não rotula: um
-  // extrato de mar/abr/mai pedido em junho vira a "análise de maio". Fallback p/ o
-  // mês corrente quando só há lançamentos dele.
+  // UMA análise CANÔNICA por tenant: o plano deve refletir SEMPRE todo o histórico,
+  // então uploads sucessivos consolidam na mesma MonthlyAnalysis (não criam análise por
+  // safra). A classificação cobre todos os meses juntos e DRE/narrativa/plano saem sobre
+  // a base inteira. A navegação por mês vem de filtro de competência sobre os lançamentos.
+  // referenceMonth é só o RÓTULO (último mês fechado de toda a base), computado dentro de
+  // persistMonth a partir do consolidado — não filtra a janela de dados.
   const referenceMonthKey = lastClosedMonth(entries);
   const rows = entries.map((entry, i) => ({
     entry,
@@ -239,7 +234,7 @@ export async function ingest(params: {
     traceId: trace.id,
   });
   const months: IngestMonthResult[] = [
-    { referenceMonth: referenceMonthKey, analysisId: result.analysisId, entryCount: rows.length },
+    { referenceMonth: result.referenceMonth, analysisId: result.analysisId, entryCount: rows.length },
   ];
   persistSpan.end({ output: { analysisId: result.analysisId, entryCount: entries.length } });
 
@@ -275,10 +270,13 @@ export async function ingest(params: {
 }
 
 /**
- * Persiste os lançamentos de UM mês de competência: upsert da MonthlyAnalysis
- * (tenantId, referenceMonth), insert dedupado e disparo da análise LLM quando o mês
- * tem lançamentos suficientes e não é cash-flow-only. Cada mês em sua própria
- * transação de upsert — um mês que falhe não derruba os outros.
+ * Persiste o extrato consolidando numa ÚNICA análise canônica por tenant: o plano
+ * deve refletir SEMPRE todo o histórico, então uploads sucessivos não criam análises
+ * por safra — todos os lançamentos do tenant ficam na mesma MonthlyAnalysis, que é
+ * recomputada. referenceMonth passa a ser só o RÓTULO (último mês fechado de toda a
+ * base). Insert dedupado; análises antigas (legado multi-safra) são fundidas na
+ * canônica. O estado dos itens do plano (aprovação/execução) é preservado pela
+ * reconciliação no finalize, não aqui.
  */
 export async function persistMonth(args: {
   db: ReturnType<typeof getPrisma>;
@@ -289,98 +287,105 @@ export async function persistMonth(args: {
   subscriptionMode: SubscriptionMode;
   skipAnalysis: boolean;
   traceId?: string;
-}): Promise<{ analysisId: string; inserted: number }> {
+}): Promise<{ analysisId: string; inserted: number; referenceMonth: string }> {
   const { db, tenantId, referenceMonth, rows, minEntries, subscriptionMode, skipAnalysis, traceId } = args;
 
-  const analysis = await db.$transaction(async (tx) => {
-    const existing = await tx.monthlyAnalysis.findUnique({
-      where: { tenantId_referenceMonth: { tenantId, referenceMonth } },
+  const { analysisId, inserted, totalEntries, label } = await db.$transaction(async (tx) => {
+    // 1. Resolve a análise canônica do tenant: a mais antiga. Funde análises legadas
+    //    (multi-safra) deletando as demais — seus lançamentos viram órfãos (relação
+    //    SetNull) e são revinculados abaixo.
+    const analyses = await tx.monthlyAnalysis.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
     });
-    if (existing) {
-      await tx.ledgerEntry.deleteMany({ where: { analysisId: existing.id } });
-      await tx.narrativeCard.deleteMany({ where: { analysisId: existing.id } });
-      await tx.actionPlanItem.deleteMany({ where: { analysisId: existing.id } });
-      await tx.monthlyAnalysis.update({
-        where: { id: existing.id },
-        data: {
-          status: "pending",
-          generatedAt: null,
-          deliveredAt: null,
-          approvedAt: null,
-          mode: subscriptionMode,
-          dreJson: Prisma.DbNull,
-          narrativeJson: Prisma.DbNull,
-          actionPlanJson: Prisma.DbNull,
-          clientEditedNarrative: null,
-          clientEditedActionPlan: null,
-          costCents: 0,
-          traceId: null,
-        },
+    let canonicalId = analyses[0]?.id;
+    if (!canonicalId) {
+      const createdAnalysis = await tx.monthlyAnalysis.create({
+        data: { tenantId, referenceMonth, status: "pending", mode: subscriptionMode },
       });
-      return existing;
+      canonicalId = createdAnalysis.id;
+    } else if (analyses.length > 1) {
+      await tx.monthlyAnalysis.deleteMany({ where: { id: { in: analyses.slice(1).map((a) => a.id) } } });
     }
-    return tx.monthlyAnalysis.create({
-      data: { tenantId, referenceMonth, status: "pending", mode: subscriptionMode },
+
+    // 2. Insert dedupado: skipDuplicates + unique(tenantId, dedupeHash) impedem que
+    //    reenviar o mesmo extrato (ou um que sobreponha período) duplique lançamentos.
+    const createdEntries = await tx.ledgerEntry.createMany({
+      skipDuplicates: true,
+      data: rows.map(({ entry: e, dedupeHash, inferred }) => ({
+        tenantId,
+        analysisId: canonicalId,
+        date: new Date(e.date),
+        description: e.description,
+        amountCents: e.amountCents,
+        direction: e.direction,
+        directionInferred: inferred,
+        dedupeHash,
+        ...(e.confirmedCategory != null ? {
+          predictedCategory:        e.confirmedCategory,
+          confirmedCategory:        e.confirmedCategory,
+          correctionSource:         e.correctionSource ?? "dre-import",
+          classificationConfidence: e.classificationConfidence ?? 1.0,
+        } : {}),
+      })),
     });
+
+    // 3. Puxa TODOS os lançamentos do tenant para a análise canônica: órfãos das
+    //    análises fundidas, duplicados que o insert pulou e qualquer entrada solta.
+    //    Garante que o histórico inteiro alimenta DRE/plano numa só análise.
+    await tx.ledgerEntry.updateMany({ where: { tenantId }, data: { analysisId: canonicalId } });
+
+    // 4. Rótulo = último mês fechado de toda a base consolidada (não só deste upload).
+    const monthRows = await tx.$queryRawUnsafe<{ ym: string }[]>(
+      `SELECT DISTINCT to_char(date, 'YYYY-MM') ym FROM "LedgerEntry" WHERE "analysisId" = $1`,
+      canonicalId,
+    );
+    const months = monthRows.map((r) => r.ym);
+    const computedLabel = lastClosedMonth(months.map((m) => ({ date: `${m}-01` } as RawLedger)));
+    const total = await tx.ledgerEntry.count({ where: { analysisId: canonicalId } });
+
+    // Recomputar do zero: zera artefatos e status; os itens do plano NÃO são apagados
+    // (a reconciliação no finalize preserva aprovação/execução). Limpa edições de
+    // narrativa para refletir a base nova.
+    await tx.monthlyAnalysis.update({
+      where: { id: canonicalId },
+      data: {
+        referenceMonth: computedLabel,
+        status: "pending",
+        generatedAt: null,
+        deliveredAt: null,
+        approvedAt: null,
+        mode: subscriptionMode,
+        dreJson: Prisma.DbNull,
+        narrativeJson: Prisma.DbNull,
+        actionPlanJson: Prisma.DbNull,
+        clientEditedNarrative: null,
+        traceId: null,
+      },
+    });
+
+    return { analysisId: canonicalId, inserted: createdEntries.count, totalEntries: total, label: computedLabel };
   });
 
-  // Insert dedupado: skipDuplicates + unique(tenantId, dedupeHash) impedem que
-  // reenviar o mesmo extrato (ou um que sobreponha período) duplique lançamentos.
-  const created = await db.ledgerEntry.createMany({
-    skipDuplicates: true,
-    data: rows.map(({ entry: e, dedupeHash, inferred }) => ({
-      tenantId,
-      analysisId: analysis.id,
-      date: new Date(e.date),
-      description: e.description,
-      amountCents: e.amountCents,
-      direction: e.direction,
-      directionInferred: inferred,
-      dedupeHash,
-      ...(e.confirmedCategory != null ? {
-        predictedCategory:        e.confirmedCategory,
-        confirmedCategory:        e.confirmedCategory,
-        correctionSource:         e.correctionSource ?? "dre-import",
-        classificationConfidence: e.classificationConfidence ?? 1.0,
-      } : {}),
-    })),
-  });
-  const skipped = rows.length - created.count;
+  const skipped = rows.length - inserted;
   if (skipped > 0) {
     logger.info(
-      { tenantId, referenceMonth, analysisId: analysis.id, inserted: created.count, skippedDuplicates: skipped },
+      { tenantId, referenceMonth: label, analysisId, inserted, skippedDuplicates: skipped },
       "Ingest: lançamentos duplicados ignorados (já enviados antes)",
     );
   }
 
-  // Reenvio depois que a análise anterior foi apagada deixa o lançamento órfão (a
-  // relação analysis é SetNull). O createMany acima NÃO o readota — o dedupeHash já
-  // existe, então skipDuplicates o pula — e a análise nova sairia sem esses lançamentos
-  // (DRE zerada). Readota os órfãos DESTE extrato para a análise corrente. Restrito a
-  // analysisId=null: nunca rouba lançamentos de outra análise legítima.
-  const extractHashes = rows.map((r) => r.dedupeHash).filter((h) => h.length > 0);
-  if (extractHashes.length > 0) {
-    const reattached = await db.ledgerEntry.updateMany({
-      where: { tenantId, analysisId: null, dedupeHash: { in: extractHashes } },
-      data: { analysisId: analysis.id },
-    });
-    if (reattached.count > 0) {
-      logger.info(
-        { tenantId, referenceMonth, analysisId: analysis.id, reattached: reattached.count },
-        "Ingest: lançamentos órfãos revinculados à análise corrente",
-      );
-    }
+  // Dispara a análise LLM quando a base consolidada tem lançamentos suficientes e não
+  // é cash-flow-only (student/WhatsApp). Gate pelo TOTAL, não só por este upload: um
+  // upload pequeno somado a um histórico grande ainda merece análise.
+  if (totalEntries >= minEntries && !skipAnalysis) {
+    await db.monthlyAnalysis.update({ where: { id: analysisId }, data: { status: "generating" } });
+    await enqueueMonthlyAnalysisGraph({ analysisId, tenantId, traceId });
+    logger.info({ analysisId, tenantId, referenceMonth: label }, "Ingest: despachando para LangGraph");
   }
 
-  // Dispara a análise LLM do mês quando há lançamentos suficientes e não é
-  // cash-flow-only (student/WhatsApp). Cada mês do extrato gera sua própria análise.
-  if (rows.length >= minEntries && !skipAnalysis) {
-    await db.monthlyAnalysis.update({ where: { id: analysis.id }, data: { status: "generating" } });
-    await enqueueMonthlyAnalysisGraph({ analysisId: analysis.id, tenantId, traceId });
-    logger.info({ analysisId: analysis.id, tenantId, referenceMonth }, "Ingest: despachando para LangGraph");
-  }
-
-  return { analysisId: analysis.id, inserted: created.count };
+  return { analysisId, inserted, referenceMonth: label };
 }
 
 // Texto colado "tem cara de DRE" quando traz várias linhas e vários valores

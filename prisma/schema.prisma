@@ -319,8 +319,16 @@ model ActionPlanItem {
   id         String          @id @default(uuid())
   analysisId String
   analysis   MonthlyAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  // Denormalizado para consultas e reconciliação no nível do tenant (plano estável
+  // incremental): o item persiste entre regenerações da análise canônica.
+  tenantId   String
 
   horizon      PlanHorizon
+  // Alavanca canônica + chave de reconciliação. matchKey = leverKey para alavancas
+  // conhecidas, ou "other:<slug-do-título>" fora da taxonomia (ver action-plan/levers.ts).
+  // (analysisId, matchKey, horizon) identifica o "mesmo" item entre regenerações.
+  leverKey     String @default("other")
+  matchKey     String @default("")
   title        String
   description  String
   effortLevel  String // "low" | "medium" | "high"
@@ -338,9 +346,15 @@ model ActionPlanItem {
   statusReason        String?
   lastStatusUpdatedAt DateTime?
 
+  // Marcado quando uma regeneração não propõe mais esta alavanca e a cliente não a
+  // estava executando: sai da lista ativa, fica no histórico (plano estável incremental).
+  supersededAt DateTime?
+
   createdAt DateTime @default(now())
 
+  @@unique([analysisId, matchKey, horizon])
   @@index([analysisId])
+  @@index([tenantId])
 }
 
 // ===== ONDA 1 — learning / memória per-tenant (ADR-011 Etapa 3) =====

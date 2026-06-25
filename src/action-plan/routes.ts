@@ -70,8 +70,10 @@ export const actionPlanRoutes: FastifyPluginAsync = async (app) => {
         }));
       }
 
+      // supersededAt: null → só itens ativos. Itens que uma regeneração deixou de
+      // propor e que a cliente não estava executando saem da lista (ficam no histórico).
       const items = await db.actionPlanItem.findMany({
-        where: { analysisId: req.params.analysisId },
+        where: { analysisId: req.params.analysisId, supersededAt: null },
         orderBy: [{ horizon: "asc" }, { impactCents: "desc" }],
       });
 

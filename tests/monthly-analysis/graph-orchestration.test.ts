@@ -40,7 +40,7 @@ vi.mock("@/persistence/prisma.js", () => ({
       return fn({
         monthlyAnalysis: { update: vi.fn().mockResolvedValue({}) },
         narrativeCard: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-        actionPlanItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        actionPlanItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }), createMany: vi.fn().mockResolvedValue({ count: 0 }), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
       });
     }),
   }),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LeverKeySchema } from "@/action-plan/levers.js";
 
 // Contratos executáveis para a próxima evolução do SKU monthly-analysis.
 // Esta camada ainda não altera o pipeline atual; ela define os envelopes e
@@ -153,6 +154,10 @@ export type NarrativeCardDrafts = z.infer<typeof NarrativeCardDraftsSchema>;
 
 export const ActionPlanItemDraftSchema = z.object({
   horizon: z.enum(["short", "medium", "long"]),
+  // Alavanca canônica — chave estável de reconciliação entre regenerações (plano
+  // estável incremental). Opcional: modelo que omita o campo cai em "other" na
+  // reconciliação (identidade pelo slug do título), sem derrubar a análise no parse.
+  leverKey: LeverKeySchema.optional(),
   title: z.string().min(3),
   description: z.string().min(10),
   effortLevel: z.enum(["low", "medium", "high"]),

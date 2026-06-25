@@ -179,76 +179,61 @@ describe("ingest/service groupIndicesByMonth (distribuição multi-mês do extra
   });
 });
 
-describe("ingest/service persistMonth (revínculo de órfãos no reenvio)", () => {
-  function makeDb(opts: { existing?: { id: string } | null; createdCount: number; reattachedCount: number }) {
-    const analysis = { id: "analysis-1" };
-    const createMany = vi.fn().mockResolvedValue({ count: opts.createdCount });
-    const updateMany = vi.fn().mockResolvedValue({ count: opts.reattachedCount });
+describe("ingest/service persistMonth (consolidação numa análise canônica por tenant)", () => {
+  function makeDb(opts: { analyses?: { id: string }[]; createdCount?: number; totalCount?: number; months?: string[] }) {
+    const analyses = opts.analyses ?? [];
+    const createdAnalysis = { id: "new-analysis" };
+    const txAnalysisFindMany = vi.fn().mockResolvedValue(analyses);
+    const txAnalysisCreate = vi.fn().mockResolvedValue(createdAnalysis);
+    const txAnalysisDeleteMany = vi.fn().mockResolvedValue({ count: 0 });
+    const txAnalysisUpdate = vi.fn().mockResolvedValue({});
+    const txLedgerCreateMany = vi.fn().mockResolvedValue({ count: opts.createdCount ?? 0 });
+    const txLedgerUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const txLedgerCount = vi.fn().mockResolvedValue(opts.totalCount ?? 0);
+    const txQueryRaw = vi.fn().mockResolvedValue((opts.months ?? ["2025-05"]).map((ym) => ({ ym })));
     const tx = {
-      monthlyAnalysis: {
-        findUnique: vi.fn().mockResolvedValue(opts.existing ?? null),
-        create: vi.fn().mockResolvedValue(analysis),
-        update: vi.fn().mockResolvedValue(analysis),
-      },
-      ledgerEntry: { deleteMany: vi.fn() },
-      narrativeCard: { deleteMany: vi.fn() },
-      actionPlanItem: { deleteMany: vi.fn() },
+      monthlyAnalysis: { findMany: txAnalysisFindMany, create: txAnalysisCreate, deleteMany: txAnalysisDeleteMany, update: txAnalysisUpdate },
+      ledgerEntry: { createMany: txLedgerCreateMany, updateMany: txLedgerUpdateMany, count: txLedgerCount },
+      $queryRawUnsafe: txQueryRaw,
     };
     const db = {
       $transaction: vi.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
-      ledgerEntry: { createMany, updateMany },
-      monthlyAnalysis: { update: vi.fn().mockResolvedValue(analysis) },
+      monthlyAnalysis: { update: vi.fn().mockResolvedValue({}) },
     };
-    return { db: db as unknown as ReturnType<typeof getPrisma>, createMany, updateMany };
+    const canonicalId = analyses[0]?.id ?? createdAnalysis.id;
+    return { db: db as unknown as ReturnType<typeof getPrisma>, txAnalysisCreate, txAnalysisDeleteMany, txLedgerUpdateMany, canonicalId };
   }
 
   function row(dedupeHash: string): { entry: RawLedger; dedupeHash: string; inferred: boolean } {
-    return { entry: entry({ date: "2026-05-01" }), dedupeHash, inferred: false };
+    return { entry: entry({ date: "2025-05-01" }), dedupeHash, inferred: false };
   }
 
-  it("readota lançamentos órfãos (analysisId null) do extrato para a análise corrente", async () => {
-    const { db, updateMany } = makeDb({ createdCount: 0, reattachedCount: 2 });
-    await persistMonth({
-      db,
-      tenantId: "t1",
-      referenceMonth: "2026-05",
-      rows: [row("h1"), row("h2")],
-      minEntries: 100,
-      subscriptionMode: SubscriptionMode.shadow,
-      skipAnalysis: true,
-    });
-    expect(updateMany).toHaveBeenCalledWith({
-      where: { tenantId: "t1", analysisId: null, dedupeHash: { in: ["h1", "h2"] } },
-      data: { analysisId: "analysis-1" },
-    });
+  const base = { tenantId: "t1", referenceMonth: "2025-05", minEntries: 100, subscriptionMode: SubscriptionMode.shadow, skipAnalysis: true } as const;
+
+  it("sem análise existente cria a canônica", async () => {
+    const { db, txAnalysisCreate } = makeDb({ analyses: [] });
+    const r = await persistMonth({ db, rows: [row("h1")], ...base });
+    expect(txAnalysisCreate).toHaveBeenCalledTimes(1);
+    expect(r.analysisId).toBe("new-analysis");
   });
 
-  it("não readota de outras análises: o filtro é estritamente analysisId null", async () => {
-    const { db, updateMany } = makeDb({ createdCount: 2, reattachedCount: 0 });
-    await persistMonth({
-      db,
-      tenantId: "t1",
-      referenceMonth: "2026-05",
-      rows: [row("h1"), row("h2")],
-      minEntries: 100,
-      subscriptionMode: SubscriptionMode.shadow,
-      skipAnalysis: true,
-    });
-    expect(updateMany.mock.calls[0]?.[0].where).toMatchObject({ analysisId: null });
+  it("revincula TODOS os lançamentos do tenant à canônica (sem filtro de órfão/dedupeHash)", async () => {
+    const { db, txLedgerUpdateMany, canonicalId } = makeDb({ analyses: [{ id: "a1" }] });
+    await persistMonth({ db, rows: [row("h1"), row("h2")], ...base });
+    expect(txLedgerUpdateMany).toHaveBeenCalledWith({ where: { tenantId: "t1" }, data: { analysisId: canonicalId } });
   });
 
-  it("não chama updateMany quando não há dedupeHash no extrato", async () => {
-    const { db, updateMany } = makeDb({ createdCount: 1, reattachedCount: 0 });
-    await persistMonth({
-      db,
-      tenantId: "t1",
-      referenceMonth: "2026-05",
-      rows: [row("")],
-      minEntries: 100,
-      subscriptionMode: SubscriptionMode.shadow,
-      skipAnalysis: true,
-    });
-    expect(updateMany).not.toHaveBeenCalled();
+  it("funde análises legadas: mantém a mais antiga e deleta as demais", async () => {
+    const { db, txAnalysisDeleteMany } = makeDb({ analyses: [{ id: "a1" }, { id: "a2" }, { id: "a3" }] });
+    const r = await persistMonth({ db, rows: [row("h1")], ...base });
+    expect(r.analysisId).toBe("a1");
+    expect(txAnalysisDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["a2", "a3"] } } });
+  });
+
+  it("rótulo = último mês fechado de toda a base consolidada", async () => {
+    const { db } = makeDb({ analyses: [{ id: "a1" }], months: ["2025-01", "2025-03", "2025-05"] });
+    const r = await persistMonth({ db, rows: [row("h1")], ...base });
+    expect(r.referenceMonth).toBe("2025-05");
   });
 });
 

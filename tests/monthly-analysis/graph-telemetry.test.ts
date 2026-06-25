@@ -18,6 +18,9 @@ const finalizeTxMock = vi.fn().mockImplementation(async (fn: (tx: unknown) => Pr
     actionPlanItem: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   });
 });

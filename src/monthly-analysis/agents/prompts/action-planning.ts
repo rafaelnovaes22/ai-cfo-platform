@@ -149,6 +149,26 @@ CRITÉRIO DE "FEITO" (OBRIGATÓRIO)
   Bom: "Novo contrato assinado com redução >= R$ 800/mês visível na fatura de junho/2026."
   Ruim: "Reduzir custos" / "Renegociar fornecedor".
 
+ALAVANCA (OBRIGATÓRIO)
+- leverKey classifica a ação numa alavanca canônica. É a IDENTIDADE da ação: o mesmo
+  leverKey no mesmo horizonte representa a MESMA recomendação entre meses, então
+  preserva o que a cliente já marcou. Escolha exatamente UM da lista:
+  * renegotiate_direct_costs — renegociar custos diretos / fornecedores de CMV
+  * adjust_pricing — reajuste ou reposicionamento de preço de venda
+  * reduce_admin_expenses — cortar despesas administrativas não essenciais
+  * reduce_legal_accounting — renegociar serviços jurídicos/contábeis
+  * reduce_payroll — reestruturar folha ou pró-labore
+  * reduce_financial_expenses — reduzir juros, tarifas ou dívida cara
+  * diversify_revenue — diversificar clientes/produtos, reduzir concentração
+  * improve_receivables — acelerar recebíveis ou reduzir inadimplência
+  * manage_inventory — girar estoque, reduzir capital parado
+  * build_cash_reserve — criar reserva, proteger o runway
+  * optimize_process — redesenhar processo de produção/serviço
+  * tax_efficiency — otimização tributária dentro do regime
+  * reinvest_growth — realocar lucro em crescimento
+  * other — só quando NENHUMA acima encaixar
+- Não gere duas ações com o mesmo leverKey no mesmo horizonte.
+
 TÍTULO (OBRIGATÓRIO)
 - title começa com VERBO NO IMPERATIVO em português do Brasil. Em empresa estressada:
   Reduza, Negocie, Suspenda, Cancele, Renegocie, Cobre, Corte. Em empresa saudável:
@@ -161,6 +181,7 @@ FORMATO DE SAÍDA (JSON puro, sem markdown, sem comentários):
   "actions": [
     {
       "horizon": "short",
+      "leverKey": "<uma alavanca canônica da lista ALAVANCA>",
       "title": "<máx 10 palavras, direto>",
       "description": "<2 frases operacionais: frase 1 com verbo ativo + objeto + número; frase 2 com critério de priorização>",
       "effortLevel": "low|medium|high",

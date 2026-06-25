@@ -1,5 +1,6 @@
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
+import { reconcileActionPlan } from "@/action-plan/reconcile.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 import type { DreLines } from "@/dre-narrative/aggregator.js";
 import type { Anomaly, NarrativeEvidence } from "@/monthly-analysis/schemas/agents.js";
@@ -69,21 +70,59 @@ export async function finalizeNode(
       }
 
       if (actionPlan && actionPlan.actions.length > 0) {
-        await tx.actionPlanItem.deleteMany({ where: { analysisId } });
-        await tx.actionPlanItem.createMany({
-          data: actionPlan.actions.map((a) => ({
-            analysisId,
-            horizon: a.horizon,
-            title: a.title,
-            description: a.description,
-            effortLevel: a.effortLevel,
-            riskLevel: a.riskLevel,
-            impactCents: a.impactCents,
-            deadlineDays: a.deadlineDays ?? null,
-            doneWhen: a.doneWhen,
-            status: "pending",
-          })),
+        // Reconciliação incremental: preserva aprovação e status de execução dos itens
+        // que reaparecem entre regenerações, em vez de apagar e recriar tudo (ADR-011).
+        const existing = await tx.actionPlanItem.findMany({
+          where: { analysisId },
+          select: { id: true, matchKey: true, horizon: true, status: true, clientApproved: true, supersededAt: true },
         });
+        const { toCreate, toUpdate, toSupersede } = reconcileActionPlan(existing, actionPlan.actions);
+        const now = new Date();
+
+        if (toCreate.length > 0) {
+          await tx.actionPlanItem.createMany({
+            data: toCreate.map((c) => ({
+              analysisId,
+              tenantId,
+              leverKey: c.leverKey,
+              matchKey: c.matchKey,
+              horizon: c.horizon as typeof actionPlan.actions[number]["horizon"],
+              title: c.title,
+              description: c.description,
+              effortLevel: c.effortLevel,
+              riskLevel: c.riskLevel,
+              impactCents: c.impactCents,
+              deadlineDays: c.deadlineDays,
+              doneWhen: c.doneWhen,
+              status: "pending",
+            })),
+          });
+        }
+        for (const { id, content } of toUpdate) {
+          // Refresh de conteúdo (título/descrição/impacto podem evoluir com novos dados);
+          // status, clientApproved e clientComment NÃO são tocados. supersededAt limpo:
+          // a alavanca voltou a ser recomendada.
+          await tx.actionPlanItem.update({
+            where: { id },
+            data: {
+              leverKey: content.leverKey,
+              title: content.title,
+              description: content.description,
+              effortLevel: content.effortLevel,
+              riskLevel: content.riskLevel,
+              impactCents: content.impactCents,
+              deadlineDays: content.deadlineDays,
+              doneWhen: content.doneWhen,
+              supersededAt: null,
+            },
+          });
+        }
+        if (toSupersede.length > 0) {
+          await tx.actionPlanItem.updateMany({
+            where: { id: { in: toSupersede } },
+            data: { supersededAt: now },
+          });
+        }
       }
 
       // QA gate pode marcar needsReview=true mesmo em autonomous — nesse caso,
