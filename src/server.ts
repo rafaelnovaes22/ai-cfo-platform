@@ -158,7 +158,16 @@ await app.register(whatsappWebhookRoutes);
 await app.register(whatsappConfigRoutes);
 await app.register(whatsappMessagesRoutes);
 
-startWorkers();
+// Separação web/worker (escalabilidade): o mesmo binário roda como serviço web
+// (RUN_WORKERS=false, só atende HTTP) ou como serviço worker (default, consome a
+// fila BullMQ). Sem isso, web e processamento de análise competem pelo mesmo processo
+// e não escalam independente. Default true preserva o comportamento single-service.
+const RUN_WORKERS = process.env.RUN_WORKERS !== "false";
+if (RUN_WORKERS) {
+  startWorkers();
+} else {
+  logger.info("RUN_WORKERS=false — workers BullMQ desabilitados neste processo (modo web-only).");
+}
 
 const shutdown = async (): Promise<void> => {
   logger.info("Encerrando servidor...");
