@@ -1,5 +1,22 @@
 import type { LlmTask, RouteConfig } from "@/llm/types.js";
 
+// thinkingBudget do action-planning (raciocínio estendido do Gemini) é o maior
+// driver de latência variável do plano. Permitir ajuste por env torna o trade-off
+// latência×qualidade tunável sem deploy e reversível, validado pela eval suite.
+// 0 desativa o thinking; ausente/inválido mantém o default da rota.
+function resolveThinkingBudget(config: RouteConfig): number | undefined {
+  if (config.thinkingBudget === undefined) return undefined;
+  const raw = process.env.ACTION_PLANNING_THINKING_BUDGET;
+  if (raw === undefined) return config.thinkingBudget;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : config.thinkingBudget;
+}
+
+function applyEnvOverrides(config: RouteConfig): RouteConfig {
+  const thinkingBudget = resolveThinkingBudget(config);
+  return thinkingBudget === config.thinkingBudget ? config : { ...config, thinkingBudget };
+}
+
 // Roteamento por tarefa — único lugar que define qual provider/modelo usar.
 // Para trocar modelo de uma tarefa: editar aqui, sem tocar nos nós LangGraph/agentes.
 //
@@ -57,6 +74,6 @@ const FALLBACK_ROUTES: Partial<Record<LlmTask, RouteConfig>> = {
 };
 
 export function resolveRoute(task: LlmTask, useFallback = false): RouteConfig {
-  if (useFallback) return FALLBACK_ROUTES[task] ?? TASK_ROUTES[task];
-  return TASK_ROUTES[task];
+  const base = useFallback ? (FALLBACK_ROUTES[task] ?? TASK_ROUTES[task]) : TASK_ROUTES[task];
+  return applyEnvOverrides(base);
 }
