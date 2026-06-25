@@ -22,6 +22,7 @@ import type {
   DreClassificationResult,
 } from "@/monthly-analysis/schemas/agents.js";
 import { DIRECTION_SAFEGUARD_CONFIDENCE } from "@/classification/direction-fix.js";
+import { reusePredictedEnabled } from "@/monthly-analysis/graph/resolved-entries.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
@@ -87,7 +88,27 @@ export async function dreClassifierNode(
       .filter((r) => r.confirmedCategory != null && r.confirmedCategory !== "")
       .map((r) => [r.entryId, r.confirmedCategory as string]),
   );
+  // Categoria predita num run ANTERIOR (não confirmada): numa re-análise consolidada,
+  // reusá-la evita re-enviar o histórico inteiro ao LLM. Precedência: confirmado >
+  // flywheel (correção do cliente) > regra > predição anterior > LLM. Por isso só é
+  // consultada DEPOIS de flywheel/regra falharem (abaixo).
+  const reusePredicted = reusePredictedEnabled();
+  const prevPredictedById = new Map<string, DreClassificationResult>();
+  if (reusePredicted) {
+    for (const r of state.rawEntries ?? []) {
+      if (confirmedIds.has(r.entryId)) continue;
+      if (r.predictedCategory != null && r.predictedCategory !== "") {
+        prevPredictedById.set(r.entryId, {
+          entryId: r.entryId,
+          category: r.predictedCategory,
+          confidence: r.classificationConfidence ?? 1,
+        });
+      }
+    }
+  }
   const ruleById = new Map<string, DreClassificationResult>();
+  // Lançamentos reusados da predição anterior (resolvidos sem LLM, sem write-back).
+  const reusedById = new Map<string, DreClassificationResult>();
   // Lançamentos resolvidos sem LLM (origem/flywheel/regra) viajam como CONTEXTO ao
   // classificador: repõem a âncora do negócio que o pré-classificador tira do batch,
   // sem reabri-los para reclassificação (corrige a regressão em ambíguos como
@@ -120,6 +141,14 @@ export async function dreClassifierNode(
         confidence: rule.confidence,
       });
       contextEntries.push({ description: entry.normalizedDescription, category: rule.category });
+      continue;
+    }
+    // 3. Predição de run anterior (último recurso antes do LLM): reusa categoria já
+    // persistida, sem reabrir o lançamento. Vira contexto para os ambíguos restantes.
+    const prev = prevPredictedById.get(entry.entryId);
+    if (prev) {
+      reusedById.set(entry.entryId, prev);
+      contextEntries.push({ description: entry.normalizedDescription, category: prev.category });
     }
   }
   // Amostra distinta e limitada — é contexto, não o batch inteiro (não inflar prompt).
@@ -134,7 +163,7 @@ export async function dreClassifierNode(
     .slice(0, 50);
 
   const inputs: EntryForClassification[] = (state.normalizedEntries ?? [])
-    .filter((entry) => !confirmedIds.has(entry.entryId) && !ruleById.has(entry.entryId))
+    .filter((entry) => !confirmedIds.has(entry.entryId) && !ruleById.has(entry.entryId) && !reusedById.has(entry.entryId))
     .map((entry) => ({
       entryId: entry.entryId,
       date: entry.date,
@@ -151,15 +180,17 @@ export async function dreClassifierNode(
     .map((entry) => ({ description: entry.normalizedDescription }));
 
   const ruleClassifications = [...ruleById.values()];
-  if (ruleClassifications.length > 0) {
+  const reusedClassifications = [...reusedById.values()];
+  if (ruleClassifications.length > 0 || reusedClassifications.length > 0) {
     logger.info(
       {
         analysisId: state.analysisId,
         ruleClassified: ruleClassifications.length,
+        reusedFromPrevious: reusedClassifications.length,
         llmClassified: inputs.length,
-        total: ruleClassifications.length + inputs.length,
+        total: ruleClassifications.length + reusedClassifications.length + inputs.length,
       },
-      "monthly-analysis.dre-classifier: lançamentos resolvidos por regra determinística (pulam o LLM)",
+      "monthly-analysis.dre-classifier: lançamentos resolvidos sem LLM (regra + predição anterior)",
     );
   }
 
@@ -194,9 +225,10 @@ export async function dreClassifierNode(
         // mensurável por run na auditoria, sem pareamento nem ruído de eval.
         classificationSplit: {
           ruleClassified: ruleClassifications.length,
+          reusedFromPrevious: reusedClassifications.length,
           llmClassified: inputs.length,
           confirmed: confirmedIds.size,
-          total: ruleClassifications.length + inputs.length + confirmedIds.size,
+          total: ruleClassifications.length + reusedClassifications.length + inputs.length + confirmedIds.size,
         },
       },
       runDreClassificationAgentWithTelemetry,
@@ -214,24 +246,25 @@ export async function dreClassifierNode(
       outputPayload: llmClassifications,
     }));
   } else {
+    const resolvedNoLlm = [...ruleClassifications, ...reusedClassifications];
     ({ costs, traces } = buildRuleBasedTrace({
       agent: "dre-classification",
-      inputPayload: ruleClassifications,
-      outputPayload: ruleClassifications,
+      inputPayload: resolvedNoLlm,
+      outputPayload: resolvedNoLlm,
     }));
   }
 
-  // Regra (confiança 1.0) + LLM. Saneia a saída do LLM removendo repetições e
-  // entryIds já resolvidos por regra (o determinístico tem precedência; o remap
-  // por alias pode repetir id quando o modelo devolve mais linhas que o pedido).
-  // Os de regra não passam por clarity caps — são determinísticos, nada a rebaixar.
+  // Regra (confiança 1.0) + predição anterior reusada + LLM. Saneia a saída do LLM
+  // removendo repetições e entryIds já resolvidos sem LLM (determinístico/reuso têm
+  // precedência; o remap por alias pode repetir id quando o modelo devolve mais
+  // linhas que o pedido). Os resolvidos sem LLM não passam por clarity caps.
   const seenLlm = new Set<string>();
   const sanitizedLlm = llmClassifications.filter((c) => {
-    if (seenLlm.has(c.entryId) || ruleById.has(c.entryId)) return false;
+    if (seenLlm.has(c.entryId) || ruleById.has(c.entryId) || reusedById.has(c.entryId)) return false;
     seenLlm.add(c.entryId);
     return true;
   });
-  const finalClassifications = [...sanitizedLlm, ...ruleClassifications];
+  const finalClassifications = [...sanitizedLlm, ...ruleClassifications, ...reusedClassifications];
 
   // PRINCÍPIO: o caixa é fato contábil, não pode ser probabilístico. A direção
   // (entrada/saída) vem do parsing DETERMINÍSTICO do extrato (sinal/coluna Tipo >
@@ -260,11 +293,13 @@ export async function dreClassifierNode(
   // Flywheel de treinamento: persiste predição + confiança para cada lançamento.
   // Usado por SelfHarnessWorker (ADR-011 Etapa 4) para construir dataset rotulado.
   // Falha não-bloqueante: o pipeline continua mesmo se o write-back falhar.
-  if (finalClassifications.length > 0) {
+  // Reusados não entram: o valor persistido é o mesmo, gravar de novo é desperdício.
+  const writeBackTargets = finalClassifications.filter((c) => !reusedById.has(c.entryId));
+  if (writeBackTargets.length > 0) {
     try {
       const db = getPrisma();
       const results = await Promise.allSettled(
-        finalClassifications.map((c) => {
+        writeBackTargets.map((c) => {
           const reviewFix = reviewByDirection.has(c.entryId)
             ? { correctionSource: "needs_review" }
             : {};

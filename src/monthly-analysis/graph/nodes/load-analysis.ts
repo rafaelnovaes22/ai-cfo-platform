@@ -62,7 +62,7 @@ export async function loadAnalysisNode(
   const [entries, historicalRecords, tenantMemory] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { analysisId: state.analysisId, tenantId: state.tenantId },
-      select: { id: true, date: true, description: true, amountCents: true, direction: true, directionInferred: true, confirmedCategory: true },
+      select: { id: true, date: true, description: true, amountCents: true, direction: true, directionInferred: true, confirmedCategory: true, predictedCategory: true, classificationConfidence: true },
       orderBy: { date: "asc" },
     }),
     // Busca análises fechadas anteriores ao mês atual para histórico e sinal MoM
@@ -88,6 +88,8 @@ export async function loadAnalysisNode(
     direction: entry.direction === "credit" ? "in" : "out",
     directionInferred: entry.directionInferred,
     confirmedCategory: entry.confirmedCategory,
+    predictedCategory: entry.predictedCategory,
+    classificationConfidence: entry.classificationConfidence,
   }));
 
   // Filtra registros sem DRE gerado e ordena do mais antigo ao mais recente

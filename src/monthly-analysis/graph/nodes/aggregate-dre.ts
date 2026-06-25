@@ -1,4 +1,5 @@
 import { aggregateDre, aggregateMonthlyRunRateDre, aggregatePerMonthDre } from "@/dre-narrative/aggregator.js";
+import { logger } from "@/observability/logger.js";
 import type { MonthlyAnalysisState } from "@/monthly-analysis/graph/state.js";
 
 const HISTORY_WINDOW = 12;
@@ -27,6 +28,17 @@ export async function aggregateDreNode(
     predictedCategory: classificationsById.get(entry.entryId) ?? null,
     confirmedCategory: confirmedById.get(entry.entryId) ?? null,
   }));
+
+  // Guarda do curto-circuito (PR-2): todo lançamento normalizado deve ter categoria
+  // (predita ou confirmada). Um lançamento resolvido que escapasse das duas cairia em
+  // nao_classificado e distorceria o DRE — sinaliza bug de partição em normalize/skip.
+  const uncategorized = rows.filter((r) => r.predictedCategory == null && r.confirmedCategory == null).length;
+  if (uncategorized > 0) {
+    logger.warn(
+      { analysisId: state.analysisId, uncategorized, total: rows.length },
+      "monthly-analysis.aggregate-dre: lançamentos sem categoria (predita nem confirmada) — caem em nao_classificado",
+    );
+  }
 
   // dre = total do período (exibido); monthlyDre = run-rate mensal por categoria
   // (mês típico) que alimenta narrativa/plano. Ver aggregateMonthlyRunRateDre.

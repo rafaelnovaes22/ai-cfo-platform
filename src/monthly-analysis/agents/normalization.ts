@@ -11,6 +11,7 @@ import {
   buildUserPrompt,
 } from "@/monthly-analysis/agents/prompts/normalization.js";
 import { NOOP_LLM_RESPONSE } from "@/monthly-analysis/graph/instrumentation.js";
+import { normalizeDescription } from "@/ingest/normalize.js";
 import { logger } from "@/observability/logger.js";
 
 // RawLedgerEntry é o contrato de entrada para o normalizador.
@@ -28,9 +29,35 @@ export interface RawLedgerEntry {
   // É fato, não predição: o dre-classifier PULA essas entries (não gasta LLM nem
   // sobrescreve) e o aggregate-dre a usa com precedência sobre a predita.
   confirmedCategory?: string | null;
+  // Categoria predita num run ANTERIOR (persistida em LedgerEntry). Com a análise
+  // consolidada, reusá-la evita reprocessar todo o histórico pelo LLM a cada upload.
+  predictedCategory?: string | null;
+  classificationConfidence?: number | null;
 }
 
 const NormalizedLedgerEntriesSchema = z.array(NormalizedLedgerEntrySchema);
+
+/**
+ * Normalização DETERMINÍSTICA (zero-token) para lançamentos já resolvidos (categoria
+ * confirmada na origem ou predita em run anterior). Eles não precisam do passe LLM,
+ * mas precisam continuar como NormalizedLedgerEntry para o aggregate-dre não perder o
+ * lançamento. Só limpa a descrição; campos imutáveis (amountCents/date/direction) vêm
+ * do extrato. documentType "unknown" e flags vazias — não há inferência sem LLM.
+ */
+export function buildPassthroughNormalized(raw: RawLedgerEntry): NormalizedLedgerEntry {
+  return {
+    entryId: raw.entryId,
+    date: raw.date,
+    description: raw.description,
+    normalizedDescription: normalizeDescription(raw.description),
+    amountCents: raw.amountCents,
+    direction: raw.direction,
+    probableCounterparty: null,
+    documentType: "unknown",
+    features: [],
+    noiseFlags: [],
+  };
+}
 
 /**
  * Roda o agente de normalização sobre um lote de lançamentos brutos.
