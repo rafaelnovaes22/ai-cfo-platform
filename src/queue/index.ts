@@ -46,6 +46,31 @@ export async function enqueueMonthlyAnalysisGraph(job: MonthlyAnalysisGraphJob):
   await getMonthlyAnalysisGraphQueue().add("run-graph", job, JOB_OPTIONS);
 }
 
+// ── Analysis Reaper ───────────────────────────────────────────────────────
+// Rede de segurança: marca como `failed` análises presas em `generating` além do
+// teto (worker órfão sob carga não dispara o handler `failed`). Roda só no processo
+// worker. Ver src/queue/reaper.ts.
+
+export interface AnalysisReaperJob {}
+
+let _analysisReaperQueue: Queue | null = null;
+
+export function getAnalysisReaperQueue(): Queue {
+  if (!_analysisReaperQueue) {
+    _analysisReaperQueue = new Queue("analysis-reaper", { connection: getRedis() });
+  }
+  return _analysisReaperQueue;
+}
+
+export async function scheduleAnalysisReaper(): Promise<void> {
+  await getAnalysisReaperQueue().add("reap", {}, {
+    repeat: { pattern: "*/5 * * * *" }, // a cada 5 min
+    jobId: "analysis-reaper-singleton",
+    removeOnComplete: { count: 10 },
+    removeOnFail: { count: 5 },
+  });
+}
+
 // ── Self-Harness (ADR-011 Etapa 4) ────────────────────────────────────────
 
 export type HarnessJobType = "classification.corrected" | "classification.validated";

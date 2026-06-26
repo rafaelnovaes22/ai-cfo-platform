@@ -3,11 +3,23 @@ import IORedis from "ioredis";
 import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
-import type { MonthlyAnalysisGraphJob, EvalContinuousJob, WhatsappRetentionJob } from "@/queue/index.js";
-import { scheduleWhatsappRetention, scheduleEvalContinuous } from "@/queue/index.js";
+import type { MonthlyAnalysisGraphJob, EvalContinuousJob, WhatsappRetentionJob, AnalysisReaperJob } from "@/queue/index.js";
+import { scheduleWhatsappRetention, scheduleEvalContinuous, scheduleAnalysisReaper } from "@/queue/index.js";
 import { startSelfHarnessWorker } from "@/learning/self-harness-worker.js";
 import { runEvalContinuous } from "@/learning/eval-continuous.js";
 import { purgeExpiredMessages } from "@/channels/whatsapp/message-log.js";
+import { reapStuckAnalyses } from "@/queue/reaper.js";
+
+// Teto de wall-clock do job inteiro do grafo. Cada chamada LLM já tem seu próprio
+// timeout (LLM_TIMEOUT_MS), mas a cadeia serial de nós ou um await não-LLM travado
+// poderia manter o job `active` indefinidamente. Estourado o teto, o job rejeita →
+// handler `failed` → markAnalysisFailedIfExhausted, garantindo estado terminal.
+const DEFAULT_GRAPH_JOB_TIMEOUT_MS = 10 * 60_000;
+
+function resolveGraphJobTimeoutMs(): number {
+  const raw = Number(process.env.GRAPH_JOB_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_GRAPH_JOB_TIMEOUT_MS;
+}
 
 let _redis: IORedis | null = null;
 
@@ -54,14 +66,29 @@ export function startWorkers(): void {
         "LangGraph monthly-analysis: iniciando",
       );
       const graph = buildMonthlyAnalysisGraph();
-      await graph.invoke({
-        analysisId: job.data.analysisId,
-        tenantId: job.data.tenantId,
-        traceId: job.data.traceId,
-        costs: [],
-        traces: [],
-        errors: [],
+      const timeoutMs = resolveGraphJobTimeoutMs();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`graph_job_timeout: análise ${job.data.analysisId} excedeu ${timeoutMs}ms`)),
+          timeoutMs,
+        );
       });
+      try {
+        await Promise.race([
+          graph.invoke({
+            analysisId: job.data.analysisId,
+            tenantId: job.data.tenantId,
+            traceId: job.data.traceId,
+            costs: [],
+            traces: [],
+            errors: [],
+          }),
+          timeout,
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     },
     { connection: getWorkerRedis(), concurrency: Number(process.env.WORKER_CONCURRENCY_GRAPH ?? 2) },
   );
@@ -103,6 +130,19 @@ export function startWorkers(): void {
     logger.error({ jobId: job?.id, err }, "whatsapp-retention: job falhou");
   });
 
+  const analysisReaperWorker = new Worker<AnalysisReaperJob>(
+    "analysis-reaper",
+    async () => {
+      const reaped = await reapStuckAnalyses();
+      if (reaped > 0) logger.info({ reaped }, "analysis-reaper: ciclo concluído");
+    },
+    { connection: getWorkerRedis(), concurrency: 1 },
+  );
+
+  analysisReaperWorker.on("failed", (job, err) => {
+    logger.error({ jobId: job?.id, err }, "analysis-reaper: job falhou");
+  });
+
   // Agenda os jobs repetíveis (idempotentes — jobId singleton).
   void scheduleWhatsappRetention().catch((err) =>
     logger.error({ err }, "whatsapp-retention: falha ao agendar job repetível"),
@@ -110,6 +150,9 @@ export function startWorkers(): void {
   void scheduleEvalContinuous().catch((err) =>
     logger.error({ err }, "eval-continuous: falha ao agendar job repetível"),
   );
+  void scheduleAnalysisReaper().catch((err) =>
+    logger.error({ err }, "analysis-reaper: falha ao agendar job repetível"),
+  );
 
-  logger.info("Workers BullMQ iniciados: [monthly-analysis-graph, self-harness, eval-continuous, whatsapp-retention]");
+  logger.info("Workers BullMQ iniciados: [monthly-analysis-graph, self-harness, eval-continuous, whatsapp-retention, analysis-reaper]");
 }

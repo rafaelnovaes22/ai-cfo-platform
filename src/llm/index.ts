@@ -20,8 +20,9 @@ function resolveTimeoutMs(): number {
 // Garante que uma chamada LLM nunca prenda o pipeline. Aborta via AbortSignal
 // (cancela a HTTP nos SDKs que respeitam o signal) e, como rede de segurança,
 // rejeita a corrida mesmo que o SDK ignore o signal. O erro de timeout cai no
-// fallback (Google→OpenAI) em callLlm; se ambos estourarem, o nó falha e o job
-// BullMQ reverte a análise para `pending` em vez de ficar presa em `generating`.
+// fallback (Google→OpenAI) em callLlm; se ambos estourarem, o nó falha, o job BullMQ
+// esgota as tentativas e markAnalysisFailedIfExhausted marca a análise como `failed`
+// (e o analysis-reaper cobre o caso de worker órfão que nem chega a esse caminho).
 export async function withTimeout<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   ms: number,
