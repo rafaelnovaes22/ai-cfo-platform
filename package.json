@@ -28,6 +28,7 @@
     "audit:collect": "tsx --env-file=.env scripts/audit-collect-runtime.ts",
     "audit:collect:traces": "tsx --env-file=.env scripts/audit-collect-langsmith.ts",
     "reset:qa-tenant": "tsx --env-file=.env scripts/reset-qa-tenant.ts",
+    "forge:doctor": "tsx scripts/forge-doctor.ts",
     "contracts:generate": "tsx scripts/generate-openapi.ts && tsx scripts/split-contracts.ts"
   },
   "dependencies": {
