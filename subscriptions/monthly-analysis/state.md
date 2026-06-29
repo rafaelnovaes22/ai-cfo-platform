@@ -5,12 +5,17 @@ artifact_type: "product"
 client_id: "aicfo"
 project_type: "agentic_saas"
 ai_enabled: true
-mode: "shadow"
+mode: "assisted"
 mode_history:
   - from: "none"
     to: "shadow"
     transitioned_at: "2026-05-25T20:50:00.000Z"
     promotions_log_ref: "subscriptions/monthly-analysis/promotions.md#transition-1"
+  - from: "shadow"
+    to: "assisted"
+    transitioned_at: "2026-06-29T00:00:00.000Z"
+    promotions_log_ref: "subscriptions/monthly-analysis/promotions.md#transition-2"
+    approvers: { po: "Rafael Novaes (3f6ec5d52d4e414b)", promotion_officer: "the CEO (f21817419a3743b2)" }
 started_at: "2026-05-25T20:50:00.000Z"
 shadow_window:
   started_at: "2026-05-25T20:50:00.000Z"
@@ -34,7 +39,8 @@ forge_command_version: "promote@0.3.0"
 # Subscription State — `monthly-analysis`
 
 > Estado de promoção do SKU `monthly-analysis` (produto self-serve Aicfo).
-> **Mode atual**: `none` (pré-SHADOW). Próxima transição alvo: `start_shadow`.
+> **Mode atual**: `assisted` (desde 2026-06-29, Transition 2 — ver promotions.md). Próxima transição possível: `assisted→autonomous` (bloqueada: exige ≥30d em assisted + Gate 6 CI/CD + assinatura security-privacy-guardian).
+> Histórico: §1-§7 abaixo refletem o momento da Transition 1 (none→shadow, 2026-05-25) e estão SUPERADOS; ver §8 (reconciliação) e o promotions.md para o estado vigente.
 
 ---
 
