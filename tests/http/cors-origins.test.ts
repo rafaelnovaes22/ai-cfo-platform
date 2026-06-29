@@ -31,4 +31,18 @@ describe("buildCorsOrigins", () => {
 
     expect(includesRegex(origins, "https://aicfo-app-staging-production.up.railway.app")).toBe(false);
   });
+
+  it("em Railway aceita os domínios Aicfo de prod (frontend e api)", () => {
+    const origins = buildCorsOrigins({ RAILWAY_ENVIRONMENT: "production" });
+
+    expect(includesRegex(origins, "https://aicfo.up.railway.app")).toBe(true);
+    expect(includesRegex(origins, "https://aicfo-api-production.up.railway.app")).toBe(true);
+  });
+
+  it("em Railway REJEITA app de terceiro *.up.railway.app (não-Aicfo)", () => {
+    const origins = buildCorsOrigins({ RAILWAY_ENVIRONMENT: "production" });
+
+    expect(includesRegex(origins, "https://evil-app.up.railway.app")).toBe(false);
+    expect(includesRegex(origins, "https://notaicfo.up.railway.app")).toBe(false);
+  });
 });
