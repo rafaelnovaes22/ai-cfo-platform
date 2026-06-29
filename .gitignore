@@ -71,3 +71,6 @@ evals/monthly-analysis/shadow-runs/*
 
 # Worktrees de agentes
 .claude/worktrees/
+
+# Índice local do reflex (MCP de busca de código) — artefato gerado, ~22MB
+.reflex/
