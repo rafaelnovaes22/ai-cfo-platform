@@ -46,6 +46,27 @@ export async function enqueueMonthlyAnalysisGraph(job: MonthlyAnalysisGraphJob):
   await getMonthlyAnalysisGraphQueue().add("run-graph", job, JOB_OPTIONS);
 }
 
+export interface QueueDepth {
+  waiting: number;
+  active: number;
+  delayed: number;
+  failed: number;
+}
+
+// Profundidade da fila de análise — usada pelo readiness/observabilidade.
+// A própria chamada valida a conexão Redis (lança se indisponível).
+export async function getMonthlyAnalysisQueueDepth(): Promise<QueueDepth> {
+  const counts = await getMonthlyAnalysisGraphQueue().getJobCounts(
+    "waiting", "active", "delayed", "failed",
+  );
+  return {
+    waiting: counts.waiting ?? 0,
+    active: counts.active ?? 0,
+    delayed: counts.delayed ?? 0,
+    failed: counts.failed ?? 0,
+  };
+}
+
 // ── Analysis Reaper ───────────────────────────────────────────────────────
 // Rede de segurança: marca como `failed` análises presas em `generating` além do
 // teto (worker órfão sob carga não dispara o handler `failed`). Roda só no processo

@@ -12,6 +12,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { logger } from "@/observability/logger.js";
 import { problemDetail } from "@/http/problem-detail.js";
 import { buildCorsOrigins } from "@/http/cors-origins.js";
+import { checkReadiness } from "@/http/readiness.js";
 import rawBody from "fastify-raw-body";
 import { authRoutes } from "@/auth/routes.js";
 import { workspaceRoutes } from "@/workspace/routes.js";
@@ -125,12 +126,22 @@ app.setErrorHandler(async (err: unknown, req, reply) => {
   }));
 });
 
+// Liveness: processo vivo. NÃO depende de DB/Redis — é o probe de restart do
+// Railway; acoplar dependências aqui causaria restart storm sob carga.
 app.get("/health", async () => ({
   status: "ok",
   service: "aicfo",
   version: "0.1.0",
   timestamp: new Date().toISOString(),
 }));
+
+// Readiness: dependências (DB + Redis) + backlog da fila. 503 se degradado.
+// Para diagnóstico/observabilidade e roteamento por monitor externo (Gate 1.4).
+app.get("/health/ready", async (_req, reply) => {
+  const report = await checkReadiness();
+  reply.code(report.ready ? 200 : 503);
+  return report;
+});
 
 await app.register(authRoutes);
 await app.register(workspaceRoutes);
