@@ -5,6 +5,7 @@ import { callOpenAI } from "@/llm/adapters/openai.js";
 import { callGroq } from "@/llm/adapters/groq.js";
 import { callLocal } from "@/llm/adapters/local.js";
 import { createTrace } from "@/observability/tracing.js";
+import { redactPii } from "@/observability/redact.js";
 import { logger } from "@/observability/logger.js";
 import type { LlmRequest, LlmResponse } from "@/llm/types.js";
 
@@ -54,9 +55,12 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
     metadata: { provider: route.provider, model: route.model, ...req.metadata },
   });
 
+  // Redação de PII só no caminho do trace (LGPD/C6 — ADR-021). O prompt real
+  // enviado ao modelo (dispatch) permanece íntegro; só o que vai ao LangSmith
+  // é mascarado.
   const generation = trace.generation({
     name: req.task,
-    input: req.userPrompt,
+    input: redactPii(req.userPrompt),
     model: route.model,
     modelParameters: { jsonMode: req.jsonMode ?? false },
   });
@@ -74,19 +78,22 @@ export async function callLlm(req: LlmRequest): Promise<LlmResponse> {
     } catch (fallbackErr) {
       await generation.end({ output: null, level: "ERROR" });
       await trace.update({ metadata: { status: "ERROR" } });
-      await trace.end({ error: String(fallbackErr) });
+      // Erro de provider pode ecoar trechos do prompt — redige antes de tracear.
+      await trace.end({ error: redactPii(String(fallbackErr)) });
       throw fallbackErr;
     }
   }
 
+  const redactedOutput = redactPii(response.content);
+
   await generation.end({
-    output: response.content,
+    output: redactedOutput,
     usage: { input: response.inputTokens, output: response.outputTokens, unit: "TOKENS" },
     metadata: { costCents: response.costCents },
   });
 
   await trace.end({
-    output: response.content,
+    output: redactedOutput,
     model: response.model,
     costCents: response.costCents,
     inputTokens: response.inputTokens,
