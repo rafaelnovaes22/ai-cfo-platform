@@ -40,7 +40,7 @@ export async function finalizeNode(
 ): Promise<Partial<MonthlyAnalysisState>> {
   const db = getPrisma();
 
-  const { analysisId, tenantId, dre, anomalies, narrativeCards, actionPlan, costs } = state;
+  const { analysisId, tenantId, dre, anomalies, narrativeCards, actionPlan, costs, traceId } = state;
 
   const totalCostCents = costs.reduce((sum, c) => sum + c.costCents, 0);
 
@@ -137,6 +137,10 @@ export async function finalizeNode(
           ...(narrativeCards ? { narrativeJson: narrativeCards as unknown as object } : {}),
           ...(actionPlan ? { actionPlanJson: actionPlan as unknown as object } : {}),
           costCents: (analysis.costCents ?? 0) + totalCostCents,
+          // Correlaciona a análise com o trace canônico (LangSmith) para auditoria
+          // pós-fato (C6). O ingest zera traceId ao reprocessar; o finalize regrava
+          // o trace do run que efetivamente gerou este resultado.
+          ...(traceId ? { traceId } : {}),
           status: isAutonomous ? "delivered" : "ready",
           generatedAt: new Date(),
           ...(isAutonomous ? { deliveredAt: new Date() } : {}),

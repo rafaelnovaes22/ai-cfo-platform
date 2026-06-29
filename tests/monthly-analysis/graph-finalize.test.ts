@@ -104,6 +104,26 @@ describe("finalizeNode — respeita needsReview em autonomous (achado F)", () =>
   });
 });
 
+describe("finalizeNode — persiste traceId para auditoria (C6)", () => {
+  it("grava state.traceId na análise quando presente", async () => {
+    findUniqueAnalysisMock.mockResolvedValueOnce({ mode: "shadow", costCents: 0 });
+
+    await finalizeNode(baseState({ traceId: "trace-abc-123" }));
+
+    const updateArg = txAnalysisUpdateMock.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(updateArg.data.traceId).toBe("trace-abc-123");
+  });
+
+  it("não inclui traceId no update quando ausente (não sobrescreve com undefined)", async () => {
+    findUniqueAnalysisMock.mockResolvedValueOnce({ mode: "shadow", costCents: 0 });
+
+    await finalizeNode(baseState({ traceId: undefined }));
+
+    const updateArg = txAnalysisUpdateMock.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(updateArg.data).not.toHaveProperty("traceId");
+  });
+});
+
 describe("finalizeNode — soma totalCostCents do estado", () => {
   it("acumula costs[*].costCents sobre o costCents prévio", async () => {
     findUniqueAnalysisMock.mockResolvedValueOnce({ mode: "shadow", costCents: 100 });
