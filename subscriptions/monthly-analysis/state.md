@@ -25,7 +25,8 @@ linked_process_map: "docs/clients/aicfo/process-monthly-analysis-2026-05-25.md"
 linked_sla_threshold: "docs/onda-0/sla_threshold.md"
 linked_promotions_log: "subscriptions/monthly-analysis/promotions.md"
 created_at: "2026-05-25"
-last_updated: "2026-05-25"
+last_updated: "2026-06-29"
+reconciled_at: "2026-06-29"  # ver §8 — reconciliação de drift, sem promoção
 constitution_version: "0.2.0"
 forge_command_version: "promote@0.3.0"
 ---
@@ -146,7 +147,7 @@ Nenhuma transição executada. `subscriptions/monthly-analysis/promotions.md` se
 
 ---
 
-## 7. Próximos passos concretos
+## 7. Próximos passos concretos (registrados em 2026-05-25 — superados; ver §8)
 
 1. Decidir rota 6a vs 6b para suite E2E do SKU
 2. Executar rota escolhida (criar cases ou manifest agregado)
@@ -155,3 +156,43 @@ Nenhuma transição executada. `subscriptions/monthly-analysis/promotions.md` se
 5. Executar `/acme:promote monthly-analysis start_shadow --approver_po=rafael-novaes --approver_promotion_officer=rafael-novaes-acting-as-promotion-officer --bypass=ACME_FORGE_BYPASS=incident:founder-solo-pre-team`
 6. Confirmar `subscriptions/monthly-analysis/promotions.md` criado com 6 gates `pass` e bypass de gate 5 auditado
 7. Iniciar janela SHADOW de 14 dias com 5-10 tenants reais (recrutamento separado)
+
+---
+
+## 8. Reconciliação de estado — 2026-06-29
+
+> Este documento ficou parado em 2026-05-25 (momento da `Transition 1 none→shadow`) e não acompanhou a evolução real. Esta seção reconcilia o registro com a realidade observada, **sem promover** (a transição `shadow→assisted` permanece pendente dos gates abaixo). Append-only — não reescreve o histórico acima.
+
+### 8.1. Estado real observado (DB)
+
+Ambiente observado (DB `zephyr` — provável **staging**; 4 contas internas):
+- **4 subscriptions ativas**: `2 shadow` + `2 assisted` (mix por-tenant — o `mode` é por subscription, não SKU-global).
+- **24 análises, todas `ready`; zero `delivered`.** Coerente com shadow/assisted: o pipeline gera e segura para revisão; nada é entregue autonomamente (o `finalize` só marca `delivered` em `autonomous`).
+- Piloto de clientes reais externos ainda **não iniciado**.
+
+### 8.2. Evolução desde 2026-05-25 (não registrada no ritual)
+
+- **Janela SHADOW cumprida**: mínimo de 14 dias terminou em 2026-06-08 (hoje +21 dias além do piso).
+- **Flip LangGraph orquestrador único** (#180/#182): a cadeia BullMQ legada foi removida; o `prompt_hash` de produção **mudou** desde o eval de 25/05 → o eval `0fcd35f0` está **obsoleto** para o Gate 4.
+- **QA end-to-end validado em 2026-06-29**: pipeline real (Vertex/Gemini) contra planilha real de cliente — DRE de janeiro bate 100% nos 5 campos (receita/custos/lucro bruto/despesas/lucro líquido).
+
+### 8.3. Correções de consistência
+
+- §1 declara `mode: shadow`, porém §5 ("Nenhuma transição executada") e §7 ("executar start_shadow") descreviam start_shadow como pendente. A `Transition 1 none→shadow` **já está registrada** em `promotions.md`. O `mode` corrente é `shadow` (SKU-level); §5/§7 ficam como histórico superado.
+- `days_in_current_mode` real ≈ 35 (não 0).
+
+### 8.4. Gate 5 — bypass founder-solo EXPIROU
+
+A exceção `founder-solo-pre-team` (§4) expira "na primeira contratação de 2ª pessoa técnica/product". Com **the CEO (CEO)** e **Eduardo (dev)** no projeto, a condição foi atingida. A aprovação cruzada real está disponível e passa a ser **obrigatória** (sem bypass):
+- `approver_po`: **Rafael Novaes** (engenheiro de IA)
+- `approver_promotion_officer`: **the CEO** (CEO) — aprovação concedida para a promoção
+
+### 8.5. Caminho para `shadow → assisted` (pendências reais)
+
+1. 🔴 **Gate 4**: rodar `/acme:eval` fresco (≤7 dias) com o `prompt_hash` atual (pós-flip) — o de 25/05 não vale mais.
+2. 🔴 **Gate 5**: assinaturas Rafael (PO) + CEO (Promotion Officer) — sem bypass.
+3. 🟢 **Gates 1-3** (C2/C3/SLA): revalidar os hashes (`outcome_clause` `3b9278b7825aaa9e`, `c4_thresholds` `3a2e0f6f1f6d9644`, c3 `viable`).
+4. **Escopo de eval para ASSISTED**: §3.2 observa que entrega direta ao cliente exige conectar o runner dos outros 3 sub-agentes (não só `financial-qa-review`). Avaliar antes de promover.
+5. `assisted → autonomous` permanece **fora de alcance**: exige ≥30 dias em `assisted` formal + Gate 6 (CI/CD) + assinatura do `security-privacy-guardian`.
+
+> **Nota de escala**: o número de clientes do piloto (50→500→5000) é ortogonal ao `mode`. `assisted` (cliente revisa antes de fechar) escala com segurança; `autonomous` (entrega direta) não é pré-requisito para crescer a base.
