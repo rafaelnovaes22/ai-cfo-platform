@@ -47,6 +47,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Forge doctor (consistência de governança — sem drift de versão)
+        run: npm run forge:doctor
+
       - name: Typecheck
         run: npx tsc --noEmit
 
