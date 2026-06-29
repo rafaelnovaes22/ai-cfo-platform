@@ -24,7 +24,6 @@
     "eval:run": "tsx evals/run.ts",
     "eval:model-matrix": "tsx evals/model-matrix.ts",
     "eval:llm": "tsx --env-file=.env evals/run-llm.ts",
-    "shadow:graph": "tsx --env-file=.env scripts/run-monthly-analysis-graph-shadow.ts",
     "promote-tenant": "tsx --env-file=.env scripts/promote-tenant.ts",
     "audit:collect": "tsx --env-file=.env scripts/audit-collect-runtime.ts",
     "audit:collect:traces": "tsx --env-file=.env scripts/audit-collect-langsmith.ts",

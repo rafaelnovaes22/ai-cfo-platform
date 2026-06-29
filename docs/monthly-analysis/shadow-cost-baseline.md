@@ -1,15 +1,22 @@
 ---
 title: Monthly Analysis — baseline SHADOW de custo e qualidade
-status: draft_shadow_baseline
+status: superseded
 created_at: 2026-05-20
-last_updated: 2026-05-20
+last_updated: 2026-06-29
 owners: ["Rafael Novaes"]
 linked_adr: ../adr/008-langgraph-mvp.md
-linked_runner: ../../scripts/run-monthly-analysis-graph-shadow.ts
 constitution_principles: [C3, C4, C6]
 ---
 
 # Monthly Analysis — baseline SHADOW de custo e qualidade
+
+> **Status: superseded em 2026-06-29.** Este documento foi escrito (2026-05-20) para a
+> fase em que o pipeline agentic LangGraph rodava em SHADOW *em paralelo* ao BullMQ legacy,
+> medindo custo/qualidade via o runner `shadow:graph` antes de promover. Com o flip do
+> orquestrador único (#180/#182) o pipeline legacy foi removido, o grafo agentic virou
+> produção e o runner foi aposentado (ver `shadow-runs-README.md`). Toda a comparação
+> "legacy × agentic" abaixo deixou de se aplicar. Mantido como histórico; custo/qualidade
+> reais hoje vêm de eval suites (`npm run eval:llm`) e traces LangSmith (C6).
 
 ## 1. Escopo
 
