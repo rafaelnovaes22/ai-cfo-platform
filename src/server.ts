@@ -13,6 +13,7 @@ import { logger } from "@/observability/logger.js";
 import { problemDetail } from "@/http/problem-detail.js";
 import { buildCorsOrigins } from "@/http/cors-origins.js";
 import { checkReadiness } from "@/http/readiness.js";
+import { buildRateLimitOptions } from "@/http/rate-limit.js";
 import rawBody from "fastify-raw-body";
 import { authRoutes } from "@/auth/routes.js";
 import { workspaceRoutes } from "@/workspace/routes.js";
@@ -52,16 +53,9 @@ app.setSerializerCompiler(serializerCompiler);
 
 // Rate limiting global: protege contra abuso e ataques de força bruta.
 // Rotas de auth têm limite próprio mais restrito (ver auth/routes.ts).
-await app.register(rateLimit, {
-  max: Number(process.env.RATE_LIMIT_MAX ?? 100),
-  timeWindow: "1 minute",
-  keyGenerator: (req) => req.ip,
-  skipOnError: true,
-  errorResponseBuilder: (_req, context) => ({
-    statusCode: 429,
-    message: `Limite de requisições atingido. Tente novamente em ${Math.ceil(context.ttl / 1000)}s.`,
-  }),
-});
+// Store Redis-backed em ambiente Railway (compartilha o contador entre réplicas);
+// in-memory em dev. Ver src/http/rate-limit.ts.
+await app.register(rateLimit, buildRateLimitOptions());
 
 // CORS: lê FRONTEND_ORIGIN do .env (vírgula para múltiplas origens).
 // Em Railway, também aceita hosts *.up.railway.app para permitir frontends
