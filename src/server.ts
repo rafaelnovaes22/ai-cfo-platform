@@ -33,6 +33,11 @@ import { requireAuth, requireSubscriber } from "@/auth/middleware.js";
 import { startWorkers } from "@/queue/workers.js";
 import { disconnectPrisma } from "@/persistence/prisma.js";
 import { flushTraces } from "@/observability/tracing.js";
+import { assertEnvOrExit } from "@/config.js";
+
+// Fail-fast de configuração ANTES de subir qualquer coisa: aborta a boot se uma
+// env obrigatória estiver ausente/malformada, em vez de falhar no primeiro uso.
+assertEnvOrExit();
 
 const port = Number(process.env.PORT ?? 3000);
 
