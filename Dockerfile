@@ -36,5 +36,8 @@ COPY prisma ./prisma
 
 # Railway injeta PORT em runtime. Fallback 3000 para `docker run` local.
 EXPOSE 3000
-# migrate deploy (idempotente) antes de subir o servidor.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+# Apenas sobe o servidor. As migrations NÃO rodam aqui: com múltiplas réplicas, cada
+# uma rodaria `migrate deploy` no boot, disputando o lock do Prisma. Migrations agora
+# rodam 1× por deploy via `preDeployCommand` no railway.toml.
+# (Local/`docker run` sem preDeploy: rodar `npm run db:migrate` ou `prisma migrate deploy` à parte.)
+CMD ["node", "dist/server.js"]

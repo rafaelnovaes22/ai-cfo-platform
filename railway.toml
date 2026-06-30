@@ -4,11 +4,25 @@
 builder = "DOCKERFILE"
 
 [deploy]
-# CMD do Dockerfile já executa `prisma migrate deploy && node dist/server.js`.
+# Migrations rodam 1× por deploy aqui (antes de trocar o tráfego), NÃO no CMD de
+# cada réplica — com múltiplas réplicas, N `migrate deploy` concorrentes disputam o
+# lock do Prisma (foi o que degradou a tentativa de escalar). O CMD do Dockerfile
+# agora só sobe o servidor (node dist/server.js).
+preDeployCommand = "npx prisma migrate deploy"
+# Liveness (NÃO readiness): /health não depende de DB/Redis — senão restart storm
+# sob carga. Diagnóstico de dependências fica em /health/ready.
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
+
+# Escala horizontal: UM serviço único (web+worker no mesmo processo, RUN_WORKERS=true)
+# escalando por réplicas — separar em 2 serviços (web-only + worker-only) degradou a
+# capacidade e não foi adotado. Com N réplicas: o BullMQ distribui os jobs da fila
+# entre todas; os jobs repetíveis usam jobId singleton (sem duplicação); o rate limit
+# usa store Redis compartilhado (src/http/rate-limit.ts) p/ o contador valer entre
+# réplicas. Ajustar o nº de réplicas no dashboard Railway conforme a carga.
+# numReplicas = 2   # descomente para versionar o nº de réplicas
 
 # Variáveis obrigatórias em prod (configurar no dashboard Railway):
 # DATABASE_URL  — PostgreSQL URL com ?connection_limit=10&pool_timeout=20&schema=public
