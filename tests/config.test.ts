@@ -48,17 +48,20 @@ describe("validateEnv", () => {
     expect(r.errors.some((e) => e.includes("META_APP_SECRET"))).toBe(true);
   });
 
-  it("prod: exige REDIS_URL, ADMIN_API_KEY e Stripe", () => {
+  it("prod sem subsistemas (Redis/Admin/Stripe): SOBE com warnings, não aborta", () => {
+    // Regressão: marcar subsistemas como fatais derrubou o staging (sem Stripe).
+    // Eles avisam mas não impedem a boot — têm fail-fast próprio no uso/fallback.
     const r = validateEnv({
       DATABASE_URL: "postgresql://u:p@host:5432/db",
       JWT_SECRET: "x".repeat(16),
       GOOGLE_CLOUD_PROJECT: "aicfo-497016",
       RAILWAY_ENVIRONMENT: "production",
     });
-    expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => e.includes("REDIS_URL"))).toBe(true);
-    expect(r.errors.some((e) => e.includes("ADMIN_API_KEY"))).toBe(true);
-    expect(r.errors.some((e) => e.includes("STRIPE_SECRET_KEY"))).toBe(true);
+    expect(r.ok).toBe(true);
+    expect(r.errors).toHaveLength(0);
+    expect(r.warnings.some((w) => w.includes("STRIPE_SECRET_KEY"))).toBe(true);
+    expect(r.warnings.some((w) => w.includes("REDIS_URL"))).toBe(true);
+    expect(r.warnings.some((w) => w.includes("ADMIN_API_KEY"))).toBe(true);
   });
 
   it("prod completo passa", () => {

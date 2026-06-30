@@ -46,43 +46,35 @@ export function validateEnv(env: NodeJS.ProcessEnv = process.env): EnvValidation
 
   const has = (k: string): boolean => typeof env[k] === "string" && env[k]!.trim() !== "";
   const requireAlways = (k: string): void => { if (!has(k)) errors.push(`${k} é obrigatória (ausente)`); };
-  const requireInProd = (k: string): void => {
-    if (has(k)) return;
-    (prod ? errors : warnings).push(`${k} ausente${prod ? " (obrigatória em produção)" : " (ok em dev)"}`);
-  };
+  // Subsistemas: avisam mas NÃO abortam a boot. Têm fail-fast próprio no uso
+  // (ex: billing em stripe.ts) ou fallback. Marcá-los como fatais derrubaria
+  // ambientes legítimos sem aquele subsistema (ex: staging sem Stripe).
+  const recommend = (k: string, why: string): void => { if (!has(k)) warnings.push(`${k} ausente — ${why}`); };
 
-  // 2. Incontestáveis (qualquer ambiente)
+  // 2. Incontestáveis: sem isto o app não opera de jeito nenhum. ABORTA a boot.
   requireAlways("DATABASE_URL");
   requireAlways("JWT_SECRET");
 
-  // 3. Obrigatórias em produção (em dev têm fallback/são opcionais)
-  requireInProd("REDIS_URL");      // sem isto cai em localhost — errado em prod
-  requireInProd("ADMIN_API_KEY");  // protege /admin/*
-
-  // 4. LLM: pelo menos um provider configurado (senão nenhuma análise roda).
+  // 3. LLM: pelo menos um provider (senão NENHUMA análise roda). ABORTA.
   //    Vertex (GOOGLE_CLOUD_PROJECT) OU AI Studio (GOOGLE_API_KEY) OU OpenAI.
   if (!has("GOOGLE_CLOUD_PROJECT") && !has("GOOGLE_API_KEY") && !has("OPENAI_API_KEY")) {
     errors.push("nenhum provider LLM configurado — defina GOOGLE_CLOUD_PROJECT (Vertex), GOOGLE_API_KEY (AI Studio) ou OPENAI_API_KEY");
   }
-  if (prod && !has("GOOGLE_CLOUD_PROJECT")) {
-    warnings.push("GOOGLE_CLOUD_PROJECT ausente em produção — primário cairá em AI Studio/fallback (LGPD: produção deve usar Vertex, ADR-009/019)");
-  }
 
-  // 5. Stripe: se billing está parcialmente configurado, exigir consistência.
-  const stripeKeys = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_LITE", "STRIPE_PRICE_PRO", "STRIPE_PRICE_BUSINESS"];
-  const anyStripe = stripeKeys.some(has);
-  if (prod || anyStripe) {
-    for (const k of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]) {
-      if (!has(k)) (prod ? errors : warnings).push(`${k} ausente (billing ${prod ? "obrigatório em produção" : "parcialmente configurado"})`);
-    }
-  }
-
-  // 6. WhatsApp: se o canal está ativo (token presente), exigir o app secret (fail-closed).
+  // 4. WhatsApp fail-closed (condicional): só ABORTA se o canal foi ativado
+  //    (token presente) mas sem o app secret — config intencional e perigosa.
   if (has("META_ACCESS_TOKEN") && !has("META_APP_SECRET")) {
     errors.push("META_APP_SECRET ausente com META_ACCESS_TOKEN presente — webhook WhatsApp rejeitaria tudo (401)");
   }
 
-  // 7. Telemetria recomendada (C6) — warning, não bloqueia.
+  // 5. Subsistemas e recomendações (WARNING — não abortam; visíveis nos logs/auditoria).
+  recommend("REDIS_URL", "fila/rate-limit degradam; em produção não pode cair em localhost");
+  recommend("ADMIN_API_KEY", "rotas /admin/* ficam sem proteção de chave");
+  recommend("STRIPE_SECRET_KEY", "billing indisponível (stripe.ts falha no uso)");
+  recommend("STRIPE_WEBHOOK_SECRET", "webhook Stripe não pode ser verificado");
+  if (prod && !has("GOOGLE_CLOUD_PROJECT")) {
+    warnings.push("GOOGLE_CLOUD_PROJECT ausente em produção — primário cai em AI Studio/fallback (LGPD: produção deve usar Vertex, ADR-009/019)");
+  }
   if (!has("LANGSMITH_API_KEY") && !has("LANGCHAIN_API_KEY")) {
     warnings.push("LANGSMITH_API_KEY ausente — tracing C6 desabilitado (sem outcome auditável)");
   }
