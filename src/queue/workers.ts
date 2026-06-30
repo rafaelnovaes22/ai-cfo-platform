@@ -4,7 +4,7 @@ import { buildMonthlyAnalysisGraph } from "@/monthly-analysis/graph/index.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { logger } from "@/observability/logger.js";
 import type { MonthlyAnalysisGraphJob, EvalContinuousJob, WhatsappRetentionJob, AnalysisReaperJob } from "@/queue/index.js";
-import { scheduleWhatsappRetention, scheduleEvalContinuous, scheduleAnalysisReaper } from "@/queue/index.js";
+import { scheduleWhatsappRetention, scheduleEvalContinuous, scheduleAnalysisReaper, logQueueBacklog } from "@/queue/index.js";
 import { startSelfHarnessWorker } from "@/learning/self-harness-worker.js";
 import { runEvalContinuous } from "@/learning/eval-continuous.js";
 import { purgeExpiredMessages } from "@/channels/whatsapp/message-log.js";
@@ -135,6 +135,8 @@ export function startWorkers(): void {
     async () => {
       const reaped = await reapStuckAnalyses();
       if (reaped > 0) logger.info({ reaped }, "analysis-reaper: ciclo concluído");
+      // Observabilidade de fila (Gate 1.5): aproveita o ciclo de 5min para logar o backlog.
+      await logQueueBacklog();
     },
     { connection: getWorkerRedis(), concurrency: 1 },
   );

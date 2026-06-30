@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { logger } from "@/observability/logger.js";
 
 let _redis: IORedis | null = null;
 
@@ -86,6 +87,30 @@ export async function getMonthlyAnalysisQueueDepth(): Promise<QueueDepth> {
     delayed: counts.delayed ?? 0,
     failed: counts.failed ?? 0,
   };
+}
+
+// Observabilidade de fila (Gate 1.5): loga o backlog periodicamente (no ciclo do
+// reaper, a cada 5min). Emite WARN quando os pendentes (waiting+delayed) cruzam a
+// fração de alerta do teto de backpressure — antecipa a saturação ANTES de começar
+// a recusar uploads com 503. Sem isto, um backlog crescente fica invisível até o
+// cliente reclamar. Tolerante a falha (Redis indisponível não derruba o reaper).
+const BACKLOG_ALERT_FRACTION = 0.8;
+
+export async function logQueueBacklog(): Promise<void> {
+  try {
+    const depth = await getMonthlyAnalysisQueueDepth();
+    const pending = depth.waiting + depth.delayed;
+    const max = resolveMaxAnalysisQueueDepth();
+    const ratioPct = max > 0 ? Math.round((pending / max) * 100) : 0;
+    const payload = { ...depth, pending, max, ratioPct };
+    if (pending >= max * BACKLOG_ALERT_FRACTION) {
+      logger.warn(payload, "queue-backlog: fila de análise acima do limiar de alerta (perto da saturação)");
+    } else {
+      logger.info(payload, "queue-backlog");
+    }
+  } catch (err) {
+    logger.warn({ err }, "queue-backlog: falha ao coletar métricas de fila");
+  }
 }
 
 // ── Analysis Reaper ───────────────────────────────────────────────────────
