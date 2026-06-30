@@ -7,6 +7,27 @@ import { ingest } from "@/ingest/service.js";
 import { ClipboardBody, ManualBody, IngestResponse } from "@/ingest/schemas.js";
 import { getPrisma } from "@/persistence/prisma.js";
 import { isSubscriber } from "@/auth/subscription-access.js";
+import { analysisQueueAtCapacity } from "@/queue/index.js";
+import type { FastifyReply } from "fastify";
+
+// Backpressure (Gate 1.2): recusa ingestão que GERA análise quando a fila de
+// análise está saturada, antes de parsear a planilha em memória. Free tier
+// (skipAnalysis=true, não enfileira) passa direto. Retorna true se já respondeu 503.
+async function rejectIfQueueSaturated(reply: FastifyReply, skipAnalysis: boolean): Promise<boolean> {
+  if (skipAnalysis) return false;
+  if (await analysisQueueAtCapacity()) {
+    reply.status(503).header("Retry-After", "60").send(
+      problemDetail({
+        type: "https://api.aicfo.com.br/errors/service-unavailable",
+        title: "Sistema sob alta demanda",
+        status: 503,
+        detail: "A fila de análise está cheia no momento. Tente novamente em alguns instantes.",
+      }),
+    );
+    return true;
+  }
+  return false;
+}
 
 // Mutação: humano precisa ser admin/editor (viewer não importa lançamentos);
 // api token precisa de ingest:write.
@@ -34,9 +55,14 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
   app.post("/ingest/upload", {
     // Response schema declarado para o OpenAPI tipar a resposta (antes saía como
     // 'never' no types.ts gerado, quebrando o acesso a .outcome/.entryCount no front).
-    schema: { response: { 200: IngestResponse, 400: ProblemDetailSchema } },
+    schema: { response: { 200: IngestResponse, 400: ProblemDetailSchema, 503: ProblemDetailSchema } },
     preHandler: [requireAuth, ingestWrite],
     handler: async (req, reply) => {
+      // Backpressure antes de consumir/parsear o arquivo (evita carregar planilha
+      // em memória sob saturação). Free tier passa direto.
+      const skipAnalysis = await resolveSkipAnalysis(req.auth!.tenantId);
+      if (await rejectIfQueueSaturated(reply, skipAnalysis)) return;
+
       const data = await req.file();
       if (!data) {
         return reply.status(400).send(
@@ -75,7 +101,6 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
       }
       const buffer = await data.toBuffer();
 
-      const skipAnalysis = await resolveSkipAnalysis(req.auth!.tenantId);
       const result = await ingest({ tenantId: req.auth!.tenantId, referenceMonth, source, buffer, fileName: data.filename, skipAnalysis });
       return reply.send(result);
     },
@@ -83,15 +108,17 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
 
   // Texto colado (clipboard)
   f.post("/ingest/clipboard", {
-    schema: { body: ClipboardBody, response: { 200: IngestResponse } },
+    schema: { body: ClipboardBody, response: { 200: IngestResponse, 503: ProblemDetailSchema } },
     preHandler: [requireAuth, ingestWrite],
     handler: async (req, reply) => {
+      const skipAnalysis = await resolveSkipAnalysis(req.auth!.tenantId);
+      if (await rejectIfQueueSaturated(reply, skipAnalysis)) return;
       const result = await ingest({
         tenantId: req.auth!.tenantId,
         referenceMonth: req.body.referenceMonth,
         source: "text",
         text: req.body.text,
-        skipAnalysis: await resolveSkipAnalysis(req.auth!.tenantId),
+        skipAnalysis,
       });
       return reply.send(result);
     },
@@ -99,15 +126,17 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
 
   // Formulário manual (JSON)
   f.post("/ingest/manual", {
-    schema: { body: ManualBody, response: { 200: IngestResponse } },
+    schema: { body: ManualBody, response: { 200: IngestResponse, 503: ProblemDetailSchema } },
     preHandler: [requireAuth, ingestWrite],
     handler: async (req, reply) => {
+      const skipAnalysis = await resolveSkipAnalysis(req.auth!.tenantId);
+      if (await rejectIfQueueSaturated(reply, skipAnalysis)) return;
       const result = await ingest({
         tenantId: req.auth!.tenantId,
         referenceMonth: req.body.referenceMonth,
         source: "manual",
         entries: req.body.entries,
-        skipAnalysis: await resolveSkipAnalysis(req.auth!.tenantId),
+        skipAnalysis,
       });
       return reply.send(result);
     },

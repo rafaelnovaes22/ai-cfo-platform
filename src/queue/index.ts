@@ -46,6 +46,27 @@ export async function enqueueMonthlyAnalysisGraph(job: MonthlyAnalysisGraphJob):
   await getMonthlyAnalysisGraphQueue().add("run-graph", job, JOB_OPTIONS);
 }
 
+// Backpressure (Gate 1.2): teto de jobs pendentes na fila de análise. Sob um burst
+// de onboarding (50→5000), sem isto cada upload parseia uma planilha em memória e
+// enfileira um job LLM caro — o backlog cresce sem limite até saturar Redis/memória.
+// Acima do teto, a ingestão de análise é recusada com 503 (degradação graciosa);
+// o free tier (cashflow-only, não enfileira) não é afetado.
+const DEFAULT_MAX_ANALYSIS_QUEUE_DEPTH = 1000;
+
+export function resolveMaxAnalysisQueueDepth(): number {
+  const raw = Number(process.env.MAX_ANALYSIS_QUEUE_DEPTH);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_ANALYSIS_QUEUE_DEPTH;
+}
+
+// true se os jobs pendentes (waiting + delayed) atingem/excedem o teto.
+export async function analysisQueueAtCapacity(
+  max: number = resolveMaxAnalysisQueueDepth(),
+): Promise<boolean> {
+  const q = getMonthlyAnalysisGraphQueue();
+  const [waiting, delayed] = await Promise.all([q.getWaitingCount(), q.getDelayedCount()]);
+  return waiting + delayed >= max;
+}
+
 export interface QueueDepth {
   waiting: number;
   active: number;
