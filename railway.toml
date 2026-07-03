@@ -21,8 +21,12 @@ restartPolicyMaxRetries = 3
 # capacidade e não foi adotado. Com N réplicas: o BullMQ distribui os jobs da fila
 # entre todas; os jobs repetíveis usam jobId singleton (sem duplicação); o rate limit
 # usa store Redis compartilhado (src/http/rate-limit.ts) p/ o contador valer entre
-# réplicas. Ajustar o nº de réplicas no dashboard Railway conforme a carga.
-# numReplicas = 2   # descomente para versionar o nº de réplicas
+# réplicas.
+# 2 réplicas (Gate 1.3): o load test de 500 (docs/perf/2026-07-03) mostrou o web tier
+# de instância única saturando no fim de ~79min de carga sustentada — 2% dos uploads
+# receberam 502 do edge com o processo saudável (parse xlsx CPU-bound de ~24s bloqueia
+# o event loop). A 2ª réplica dilui o parse e dobra o throughput de workers.
+numReplicas = 2
 
 # Variáveis obrigatórias em prod (configurar no dashboard Railway):
 # DATABASE_URL  — PostgreSQL URL com ?connection_limit=10&pool_timeout=20&schema=public
