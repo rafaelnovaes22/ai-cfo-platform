@@ -14,7 +14,13 @@
 //   tsx scripts/loadtest-run.mjs --count=500 --inflight=25 \
 //     [--base=https://aicfo-staging-production.up.railway.app] \
 //     [--file="C:/Users/Rafael/Downloads/RELATORIO FINANCEIRO 2026.xlsx"] \
-//     [--password=LoadTest@2026] [--retries=4]
+//     [--password=LoadTest@2026] [--retries=4] [--mode=burst]
+//
+// --mode=burst (Gate 2.5, escala 5000): NÃO faz polling por análise (N pollers a
+// cada 3s não escala e o teto de 10min de polling gera falso-negativo com backlog
+// grande). Em vez disso: dispara todos os uploads (o backpressure 503 + retry
+// auto-regula o ritmo na taxa de drenagem) e depois acompanha waiting+active via
+// /health/ready até a fila drenar. Terminal states são conferidos via SQL à parte.
 import fs from "node:fs";
 
 const arg = (n, d) => { const h = process.argv.find((a) => a.startsWith(`--${n}=`)); return h ? h.slice(n.length + 3) : d; };
@@ -22,6 +28,7 @@ const arg = (n, d) => { const h = process.argv.find((a) => a.startsWith(`--${n}=
 const COUNT = Number(arg("count", arg("concurrency", "5")));
 const INFLIGHT = Number(arg("inflight", "25"));   // máximo de uploads simultâneos em voo
 const RETRIES = Number(arg("retries", "4"));      // retry em 429/503 com backoff
+const MODE = arg("mode", "e2e"); // e2e (upload+poll por cliente) | burst (só upload + drenagem)
 const BASE = arg("base", "https://aicfo-staging-production.up.railway.app");
 const FILE = arg("file", "C:/Users/Rafael/Downloads/RELATORIO FINANCEIRO 2026.xlsx");
 const PASSWORD = arg("password", "LoadTest@2026");
@@ -100,8 +107,69 @@ async function oneUser(i, buf) {
   } catch (e) { m.error = e.message.slice(0, 80); return m; }
 }
 
+// burst: só login+upload (sem polling individual). Retorna métricas de upload.
+async function oneUpload(i, buf) {
+  const idx = i + 1;
+  const m = { i: idx, ok: false, uploadMs: 0, status: "", error: "" };
+  try {
+    const token = await login(`loadtest+${idx}@acme.test`);
+    const fd = new FormData();
+    fd.append("file", new Blob([buf]), "lt.xlsx");
+    const t0 = Date.now();
+    const up = await fetchRetry(`${BASE}/ingest/upload?referenceMonth=2026-06`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    m.uploadMs = Date.now() - t0;
+    m.ok = up.ok;
+    m.status = String(up.status);
+    if (!up.ok) m.error = `upload_${up.status}`;
+    return m;
+  } catch (e) { m.error = e.message.slice(0, 80); return m; }
+}
+
+// burst: acompanha a fila via /health/ready até drenar (waiting+active+delayed = 0
+// em 3 leituras seguidas). Loga a curva de backlog a cada 30s.
+async function watchDrain() {
+  let calmReads = 0;
+  let peak = 0;
+  for (;;) {
+    try {
+      const r = await fetch(`${BASE}/health/ready`);
+      const body = await r.json();
+      const q = body.queue ?? {};
+      const pending = (q.waiting ?? 0) + (q.active ?? 0) + (q.delayed ?? 0);
+      peak = Math.max(peak, pending);
+      console.log(`[drain] waiting=${q.waiting} active=${q.active} delayed=${q.delayed} failed=${q.failed}`);
+      calmReads = pending === 0 ? calmReads + 1 : 0;
+      if (calmReads >= 3) return { peak, failed: q.failed ?? 0 };
+    } catch { /* leitura falhou; tenta de novo */ }
+    await sleep(30_000);
+  }
+}
+
+async function mainBurst(buf) {
+  console.log(`== Load test BURST: ${COUNT} uploads, até ${INFLIGHT} em voo, em ${BASE} ==`);
+  const started = Date.now();
+  const results = await pool(COUNT, INFLIGHT, (i) => oneUpload(i, buf));
+  const uploadWall = Date.now() - started;
+
+  const ok = results.filter((r) => r.ok);
+  const fail = results.filter((r) => !r.ok);
+  const uploads = results.map((r) => r.uploadMs).filter(Boolean);
+  console.log(`\nuploads: ${ok.length}/${COUNT} ok em ${secs(uploadWall)} (${(ok.length / (uploadWall / 60000)).toFixed(1)}/min)`);
+  console.log(`upload — p50 ${secs(pct(uploads, 50))}  p95 ${secs(pct(uploads, 95))}  max ${secs(Math.max(0, ...uploads))}`);
+  console.log(`capacidade — 429: ${counters.rateLimited429}  |  503 (backpressure): ${counters.backpressure503}`);
+  if (fail.length) console.log(`falhas de upload (até 20):`, fail.slice(0, 20).map((f) => `#${f.i}:${f.error}`).join(", "));
+
+  console.log(`\naguardando drenagem da fila...`);
+  const { peak, failed } = await watchDrain();
+  const wall = Date.now() - started;
+  console.log(`\nwall-clock total (upload+drenagem): ${secs(wall)}`);
+  console.log(`throughput fim-a-fim: ${(ok.length / (wall / 60000)).toFixed(1)} análises/min  |  pico de backlog: ${peak}  |  failed na fila ao fim: ${failed}`);
+  console.log(`Conferir terminal states / custo por outcome via SQL (ver docs/perf).`);
+}
+
 async function main() {
   const buf = fs.readFileSync(FILE);
+  if (MODE === "burst") return mainBurst(buf);
   console.log(`== Load test: ${COUNT} clientes, até ${INFLIGHT} em voo, em ${BASE} ==`);
   const started = Date.now();
   const results = await pool(COUNT, INFLIGHT, (i) => oneUser(i, buf));
