@@ -1,0 +1,40 @@
+# Backend usa Dockerfile na raiz (multi-stage). Secrets são injetadas em runtime
+# via ENV do Railway — nunca como ARG/ENV de build (evita warnings SecretsUsedInArgOrEnv).
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+# Migrations rodam 1× por deploy aqui (antes de trocar o tráfego), NÃO no CMD de
+# cada réplica — com múltiplas réplicas, N `migrate deploy` concorrentes disputam o
+# lock do Prisma (foi o que degradou a tentativa de escalar). O CMD do Dockerfile
+# agora só sobe o servidor (node dist/server.js).
+preDeployCommand = "npx prisma migrate deploy"
+# Liveness (NÃO readiness): /health não depende de DB/Redis — senão restart storm
+# sob carga. Diagnóstico de dependências fica em /health/ready.
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Escala horizontal: UM serviço único (web+worker no mesmo processo, RUN_WORKERS=true)
+# escalando por réplicas — separar em 2 serviços (web-only + worker-only) degradou a
+# capacidade e não foi adotado. Com N réplicas: o BullMQ distribui os jobs da fila
+# entre todas; os jobs repetíveis usam jobId singleton (sem duplicação); o rate limit
+# usa store Redis compartilhado (src/http/rate-limit.ts) p/ o contador valer entre
+# réplicas.
+# 2 réplicas (Gate 1.3): o load test de 500 (docs/perf/2026-07-03) mostrou o web tier
+# de instância única saturando no fim de ~79min de carga sustentada — 2% dos uploads
+# receberam 502 do edge com o processo saudável (parse xlsx CPU-bound de ~24s bloqueia
+# o event loop). A 2ª réplica dilui o parse e dobra o throughput de workers.
+numReplicas = 2
+
+# Variáveis obrigatórias em prod (configurar no dashboard Railway):
+# DATABASE_URL  — PostgreSQL URL com ?connection_limit=10&pool_timeout=20&schema=public
+# REDIS_URL     — Redis URL (railway.internal ou externo)
+# JWT_SECRET    — string aleatória forte (openssl rand -hex 32)
+# ADMIN_API_KEY — chave para rotas /admin/* (openssl rand -hex 32)
+# GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION / GOOGLE_APPLICATION_CREDENTIALS_JSON
+# LANGSMITH_API_KEY / LANGSMITH_PROJECT / LANGCHAIN_TRACING_V2 — tracing C6 (Foundry v0.22.0+)
+# STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
+# FRONTEND_ORIGIN — URL do frontend em prod (ex: https://app.example.com)
+# PUBLIC_API_URL  — URL pública do backend (ex: https://api.example.com)

@@ -1,0 +1,21 @@
+{
+  "name": "test_agent",
+  "description": [
+    "Compartilhado entre módulos — gera testes TDD-first a partir da spec (modo TDD-RED) ou reforça testes contra backend já implementado (modo REINFORCE).",
+    "Em TDD-RED: os testes precedem o código e falham até a implementação existir.",
+    "Stack lida de aios/config.yaml → stack.tests (sem hardcode).",
+    "Output: docs/specs/_tests_kpis.md."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "foundry",
+    "version": "0.1.0",
+    "tier": "shared",
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "TestAgent"
+  }
+}

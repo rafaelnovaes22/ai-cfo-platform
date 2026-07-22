@@ -1,0 +1,183 @@
+"""
+Review Agent — revisa código gerado contra spec + checklist Constitution.
+
+Gerado a partir de templates/aios/agents/review_agent/entry.py.template (Foundry v0.6.0+).
+
+C5/C6/C7/C8 — ver cabeçalho do spec_agent.
+
+Este agente é COMPARTILHADO entre módulos. Ele aplica um checklist baseado nos
+8 princípios da Constitution Foundry — independente da stack escolhida.
+"""
+
+import os
+from pathlib import Path
+
+import yaml
+from cerebrum import BaseAgent
+
+try:
+    from langfuse import Langfuse
+    _LF_AVAILABLE = bool(os.environ.get("LANGFUSE_PUBLIC_KEY"))
+    if _LF_AVAILABLE:
+        langfuse = Langfuse(
+            public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
+            secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
+            host=os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+        )
+    else:
+        langfuse = None
+except Exception:
+    _LF_AVAILABLE = False
+    langfuse = None
+
+
+class _MockTrace:
+    id = "local-dev-no-trace"
+    def generation(self, **_): return self
+    def end(self, **_): pass
+    def update(self, **_): pass
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_PATH = PROJECT_ROOT / "aios" / "config.yaml"
+
+
+def _load_project_config() -> dict:
+    if CONFIG_PATH.exists():
+        with CONFIG_PATH.open("r", encoding="utf-8") as fh:
+            return yaml.safe_load(fh) or {}
+    return {}
+
+
+_CONFIG = _load_project_config()
+_PROJECT_NAME = _CONFIG.get("project", {}).get("name", "aicfo")
+_TENANT_FIELD = _CONFIG.get("project", {}).get("tenant_field", "tenantId")
+
+
+SYSTEM_PROMPT = f"""Você é o Review Agent do projeto {_PROJECT_NAME}.
+
+Responsabilidade única: revisar o código gerado contra a spec e contra os 8 princípios
+da Constitution Foundry. Apontar BLOCKERs, WARNINGs e SUGGESTIONs com precisão.
+
+LEIA APENAS:
+- docs/specs/{{module}}.md (spec aprovada)
+- docs/specs/_backend_{{module}}.md
+- docs/specs/_frontend_{{module}}.md
+- docs/specs/_tests_{{module}}.md
+- aios/config.yaml (apenas project.* e stack.*)
+
+NÃO LEIA:
+- Specs/código de outros módulos
+- Dados de produção
+
+Checklist obrigatório (cada item gera BLOCKER se falhar):
+
+[Spec compliance]
+- Todas as entidades da spec estão implementadas
+- Todas as regras de negócio têm cobertura no código
+- Edge cases críticos da spec foram tratados (não ignorados com TODO sem dono)
+- Critério de pronto da spec é satisfeito
+
+[Constitution]
+- C8: multi-tenancy via {_TENANT_FIELD} presente em todas as queries que carregam dados de tenant
+- C8: nenhum hardcode de tenant, escola, unidade, cliente específico
+- C8: nenhum `if tenantId === '...'` ou `switch tenantName`
+- C7: SYSTEM_PROMPTs/agentes geram código que funciona sem o kernel AIOS específico
+- C6: chamadas LLM (se houver) têm trace observável; eventos críticos são logados
+- C5: respeita isolamento de contexto declarado por tier (sem leitura cruzada de outros módulos)
+
+[Engenharia]
+- Validação de input presente em rotas públicas
+- Respostas de erro padronizadas no padrão do projeto
+- Sem lógica de negócio no frontend (deixar no backend)
+- Sem chamadas diretas ao banco no controller/route handler (deve ir via service)
+
+Formato de output (literal — usado por scripts de status):
+
+## BLOCKERS (impede merge)
+- [BLOCKER] Descrição específica + arquivo:linha (ou seção da spec)
+
+## WARNINGS (deve corrigir antes de produção)
+- [WARNING] Descrição específica
+
+## SUGGESTIONS (melhoria opcional)
+- [SUGGESTION] Descrição
+
+## APROVADO PARA MERGE: Sim / Não
+
+A última linha é parseada pelo orchestrator — deve ser exatamente "APROVADO PARA MERGE: Sim"
+ou "APROVADO PARA MERGE: Não".
+"""
+
+
+class ReviewAgent(BaseAgent):
+    agent_name = "review_agent"  # COMPARTILHADO — sem prefixo de módulo
+
+    def __init__(self, agent_name: str | None = None):
+        super().__init__(agent_name or self.agent_name)
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    def _load_context(self, module_name: str) -> dict:
+        paths = {
+            "spec": PROJECT_ROOT / "docs" / "specs" / f"{module_name}.md",
+            "backend": PROJECT_ROOT / "docs" / "specs" / f"_backend_{module_name}.md",
+            "frontend": PROJECT_ROOT / "docs" / "specs" / f"_frontend_{module_name}.md",
+            "tests": PROJECT_ROOT / "docs" / "specs" / f"_tests_{module_name}.md",
+        }
+        return {k: p.read_text(encoding="utf-8") if p.exists() else None for k, p in paths.items()}
+
+    def run(self, task_input: dict) -> dict:
+        module_name = task_input.get("module")
+        if not module_name:
+            return {"error": "campo 'module' é obrigatório"}
+
+        ctx = self._load_context(module_name)
+        if not ctx["spec"]:
+            return {"error": f"spec não encontrada para {module_name}"}
+
+        trace = langfuse.trace(
+            name=f"{self.agent_name}-{module_name}",
+            metadata={
+                "agent": self.agent_name,
+                "project": _PROJECT_NAME,
+                "module": module_name,
+                "tier": task_input.get("tier"),
+                "aios_version": "0.2.2",
+            },
+        ) if _LF_AVAILABLE else _MockTrace()
+
+        content_parts = [f"Revise o módulo: **{module_name}**\n"]
+        for label, content in ctx.items():
+            if content:
+                content_parts.append(f"### {label.upper()}\n{content}")
+
+        self.messages.append({"role": "user", "content": "\n\n".join(content_parts)})
+
+        generation = trace.generation(
+            name="send_request",
+            model="claude-sonnet-4-6",
+            input=self.messages,
+        )
+
+        response = self.send_request(
+            agent_name=self.agent_name,
+            messages=self.messages,
+            base_url=f"http://localhost:{_CONFIG.get('server', {}).get('port', 8000)}",
+            model=_CONFIG.get("llm", {}).get("model", "claude-sonnet-4-6"),
+        )
+
+        generation.end(output=response)
+        trace.update(status_message="completed")
+
+        output_path = PROJECT_ROOT / "docs" / "specs" / f"_review_{module_name}.md"
+        output_path.write_text(response, encoding="utf-8")
+
+        approved = "APROVADO PARA MERGE: Sim" in response
+
+        return {
+            "module": module_name,
+            "output_path": str(output_path),
+            "trace_id": trace.id,
+            "approved": approved,
+            "status": "approved" if approved else "needs_fixes",
+        }

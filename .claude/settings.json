@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm install*)",
+      "Bash(npm run dev*)",
+      "Bash(npm run build*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run format*)",
+      "Bash(npm run test*)",
+      "Bash(npm run test:watch*)",
+      "Bash(npm run test:coverage*)",
+      "Bash(npm run db:generate*)",
+      "Bash(npm run db:migrate*)",
+      "Bash(npm run db:push*)",
+      "Bash(npm run db:studio*)",
+      "Bash(npm run seed:*)",
+      "Bash(npm run demo:*)",
+      "Bash(npx prisma*)",
+      "Bash(npx tsc*)",
+      "Bash(npx tsx*)",
+      "Bash(npx vitest*)",
+      "Bash(docker compose*)",
+      "Bash(docker ps*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(curl http://localhost:*)",
+      "Bash(redis-cli -p 6380*)",
+      "WebSearch",
+      "WebFetch",
+      "Bash(git remote *)",
+      "Bash(git config *)",
+      "Bash(awk -F/ '{print $1}')",
+      "Bash(git push *)",
+      "Read(//c/c/Users/Rafael/Projetos/clickup-automation/**)",
+      "Bash(npm run *)",
+      "Read(//c/Users/Rafael/AppData/Local/Temp/claude/c--Users-Rafael-Projetos-Aicfo/d0eaeb45-1006-44ca-8cc8-929829ef2f9d/tasks/**)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation status --short)",
+      "Bash(git check-ignore *)",
+      "Read(//c/Users/Rafael/AppData/Local/Temp/claude/c--Users-Rafael-Projetos-Aicfo/c2d20a00-a974-4d71-9715-723ce0842406/tasks/**)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation add config/aios-module-functionalities.json scripts/update-aicfo-descriptions.mjs package.json)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation commit -m ' *)",
+      "Bash(git -C /c/Users/Rafael/Projetos/clickup-automation push origin master)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" log --oneline -15)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" status --short)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" show ef3ab63 --stat)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" diff .claude/settings.json)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" checkout -- .claude/settings.json)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" add prisma/migrations/)",
+      "Bash(git -C c:/Users/Rafael/Projetos/Aicfo commit -m ' *)",
+      "Skill(novais-digital:unit-economics)",
+      "Skill(novais-digital:unit-economics:*)",
+      "Bash(git -C \"c:/Users/Rafael/Projetos/Aicfo\" add src/llm/router.ts src/llm/cost.ts docs/onda-0/unit_economics.md scripts/smoke-google.ts)",
+      "Bash(git restore *)",
+      "Bash(tsx --env-file=.env evals/run-llm.ts --module=dre-narrative --no-write)",
+      "Bash(git fetch *)",
+      "Bash(npm i *)",
+      "Bash(node -e \"const p = require\\('fastify-type-provider-zod'\\); console.log\\(Object.keys\\(p\\).sort\\(\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(npm uninstall *)",
+      "Bash(git stash *)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(rm -fr*)",
+      "Bash(rm --recursive --force*)",
+      "Bash(npm publish*)",
+      "Bash(prisma migrate reset --force*)",
+      "Bash(npx prisma migrate reset --force*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(docker system prune*)",
+      "Bash(docker volume rm*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/session-start/foundry-context.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/persona-detect.sh",
+            "timeout": 2000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/outcome-clause-guard.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/adr-approval-gate.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/secret-scan.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/pre-tool-use/any-type-guard.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/tracing-check.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/unit-economics-recalc.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/manifest-sync.sh",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/post-tool-use/friendly-errors.sh",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/stop/5-gates-summary.sh",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/stop/eval-suite-fresh.sh",
+            "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": "bash hooks/stop/learning-snapshot.sh",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  },
+  "_comment": "Novais Digital Foundry layer (versioned). Per-developer overrides go in settings.local.json (gitignored).",
+  "_foundry_version": "0.21.0",
+  "_constitution_version": "0.3.0",
+  "_foundry_features": {
+    "skills_path": ".claude/skills/{L0,L1,L2}/",
+    "agents_path": ".claude/agents/",
+    "commands_path": ".claude/commands/novais-digital/",
+    "hooks_path": "hooks/",
+    "bypass_env_var": "NOVAIS_FOUNDRY_BYPASS",
+    "bypass_log_path": "docs/foundry/bypass-log/",
+    "bypass_note": "Set NOVAIS_FOUNDRY_BYPASS=<reason> in settings.local.json or env. All bypasses are logged."
+  }
+}

@@ -1,0 +1,392 @@
+"""
+Test Agent — gera testes TDD (RED-first) para um módulo do projeto consumidor.
+
+Gerado a partir de templates/aios/agents/test_agent/entry.py.template (Foundry v0.9.0+).
+Stack de testes lida de aios/config.yaml → stack.tests_{unit,integration,e2e} (sem hardcode).
+
+Modos de operação:
+  - mode="red"      → lê APENAS a spec; gera testes que devem falhar inicialmente;
+                      grava arquivos físicos em tests/{module}/{unit,integration,e2e}/
+                      e um plano em docs/specs/_tests_{module}.md
+  - mode="verify"   → lê _backend_{module}.md e _frontend_{module}.md; revisa cobertura
+                      vs. matriz de requisitos; aponta gaps; grava _test_results_{module}.md
+
+Em pipeline TDD padrão (orchestrator):
+  spec → schema → test(red) → build(back+front) → test(verify) → review
+
+C5/C6/C7/C8 — ver cabeçalho do spec_agent.
+"""
+
+import os
+from pathlib import Path
+
+import yaml
+from cerebrum import BaseAgent
+
+try:
+    from langfuse import Langfuse
+    _LF_AVAILABLE = bool(os.environ.get("LANGFUSE_PUBLIC_KEY"))
+    if _LF_AVAILABLE:
+        langfuse = Langfuse(
+            public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
+            secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
+            host=os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+        )
+    else:
+        langfuse = None
+except Exception:
+    _LF_AVAILABLE = False
+    langfuse = None
+
+
+class _MockTrace:
+    id = "local-dev-no-trace"
+    def generation(self, **_): return self
+    def end(self, **_): pass
+    def update(self, **_): pass
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_PATH = PROJECT_ROOT / "aios" / "config.yaml"
+
+
+def _load_project_config() -> dict:
+    if CONFIG_PATH.exists():
+        with CONFIG_PATH.open("r", encoding="utf-8") as fh:
+            return yaml.safe_load(fh) or {}
+    return {}
+
+
+_CONFIG = _load_project_config()
+_PROJECT_NAME = _CONFIG.get("project", {}).get("name", "{PROJECT_NAME}")
+_STACK = _CONFIG.get("stack", {}) or {}
+_STACK_TESTS_UNIT = _STACK.get("tests_unit") or _STACK.get("tests") or "(stack.tests_unit não declarado)"
+_STACK_TESTS_INTEG = _STACK.get("tests_integration") or _STACK.get("tests") or "(stack.tests_integration não declarado)"
+_STACK_TESTS_E2E = _STACK.get("tests_e2e") or "(stack.tests_e2e não declarado — opcional para módulos sem UI)"
+
+# Coverage targets por tier (lido do config; default cravado na Constitution C4)
+_DEFAULT_COVERAGE = {
+    "A": {"line": 70, "branch": 60, "critical_path": 100},
+    "B": {"line": 85, "branch": 75, "critical_path": 100},
+    "C": {"line": 95, "branch": 90, "critical_path": 100},
+}
+_COVERAGE_TARGETS = _CONFIG.get("coverage_targets", _DEFAULT_COVERAGE)
+
+
+def _coverage_block_for(tier: str) -> str:
+    t = _COVERAGE_TARGETS.get(tier, _DEFAULT_COVERAGE.get(tier, _DEFAULT_COVERAGE["B"]))
+    return (
+        f"  line: ≥ {t['line']}%\n"
+        f"  branch: ≥ {t['branch']}%\n"
+        f"  critical_path (financeiro, cancelamento, integrações Tier C): {t['critical_path']}%"
+    )
+
+
+SYSTEM_PROMPT_RED = f"""Você é o Test Agent (modo RED — TDD) do projeto {_PROJECT_NAME}.
+
+Responsabilidade única: a partir da spec (única fonte), gerar a **suíte de testes que define o
+comportamento esperado do módulo ANTES do código ser implementado**. Os testes DEVEM falhar
+inicialmente — esse é o ponto. O backend/frontend será gerado depois e precisará torná-los verdes.
+
+Stack declarada em aios/config.yaml:
+  stack.tests_unit:        {_STACK_TESTS_UNIT}
+  stack.tests_integration: {_STACK_TESTS_INTEG}
+  stack.tests_e2e:         {_STACK_TESTS_E2E}
+
+LEIA APENAS:
+- docs/specs/{{module}}.md  (spec aprovada — única fonte da verdade)
+- aios/config.yaml          (apenas project.*, stack.*, coverage_targets.*)
+
+NÃO LEIA (isolamento de contexto C5, e gate TDD — não pode haver vazamento do código já escrito):
+- docs/specs/_backend_*.md
+- docs/specs/_frontend_*.md
+- Código de outros módulos
+- Dados de produção
+
+Você DEVE produzir 3 camadas de teste:
+
+1. **UNIT** (`tests/{{module}}/unit/`) — lógica pura, services, validadores, regras de negócio.
+   Sem rede, sem DB real. Mocks só para tempo, UUID e serviços externos não controláveis.
+
+2. **INTEGRATION** (`tests/{{module}}/integration/`) — API HTTP/RPC + DB **real** (ephemeral via
+   service container do CI). NUNCA mocka regra de negócio nem o DB. Cada endpoint da spec
+   ganha ao menos um caso positivo + negativo + edge.
+
+3. **E2E** (`tests/{{module}}/e2e/`) — fluxo do usuário ponta a ponta (Playwright/Cypress/etc.
+   conforme stack.tests_e2e). Obrigatório quando o módulo tem UI. Cobre happy path + 1-2
+   edges visíveis ao usuário (erro de permissão, validação no form, timeout amigável).
+
+Para módulos Tier C (financeiro, cancelamento, integrações regulatórias, dados sensíveis):
+- Cada edge case da spec gera ≥ 1 teste unit + ≥ 1 teste integration
+- Valores limítrofes obrigatórios: zero, negativo (onde proibido), máximo da spec, mínimo, casas
+  decimais limítrofes, datas no DST/virada de mês/ano bissexto, fusos horários
+- Toda regra de cálculo (multa, juros, rateio, estorno) ganha teste de unidade isolado +
+  teste de integração end-to-end
+- Integrações regulatórias: 1 teste happy path + 1 retry + 1 falha terminal + 1 idempotência
+
+Cobertura mínima exigida (do aios/config.yaml — tier {{tier}}):
+{{coverage_block}}
+
+Prioridade ao escrever (em ordem):
+1. Mapear cada requisito da spec → teste correspondente (matriz obrigatória no plano)
+2. Edge cases Tier C
+3. Regras de negócio críticas (≥ 1 positivo + ≥ 1 negativo cada)
+4. Happy path completo
+5. Casos de erro esperados (validação, permissão, not found, rate limit, idempotência)
+
+Não gere mocks para regras de negócio quando a stack permitir teste de integração real.
+Gere mocks apenas para serviços externos não controláveis (gateways, APIs de terceiros, clock).
+
+OUTPUT — você DEVE retornar um documento markdown com a estrutura literal abaixo. O orquestrador
+faz parse de cada bloco ```file``` e grava o conteúdo no caminho indicado. Caminhos relativos
+ao root do projeto consumidor:
+
+# Plano de testes RED — {{module}}
+
+## Matriz de cobertura (requisito da spec → teste)
+| Requisito (seção/linha da spec) | Camada | Arquivo de teste | Caso |
+|---|---|---|---|
+| ... | unit/integration/e2e | tests/{{module}}/... | nome do `it`/`test` |
+
+## Coverage targets (tier {{tier}})
+{{coverage_block}}
+
+## Arquivos gerados
+
+```file:tests/{{module}}/unit/{{nome}}.{{ext}}
+<código de teste completo>
+```
+
+```file:tests/{{module}}/integration/{{nome}}.{{ext}}
+<código de teste completo>
+```
+
+```file:tests/{{module}}/e2e/{{nome}}.{{ext}}
+<código de teste completo, ou omitir se sem UI>
+```
+
+## Observações
+- Riscos conhecidos, dependências (DB ephemeral, container, etc.)
+- Casos NÃO cobertos com justificativa explícita
+
+C7: este prompt funciona standalone em Claude Code sem o kernel AIOS.
+C8: tenantId vem do contexto de teste (env/fixture), nunca hardcoded em assertions.
+C4: testes RED são a especificação executável — failure inicial é OBRIGATÓRIO.
+"""
+
+
+SYSTEM_PROMPT_VERIFY = f"""Você é o Test Agent (modo VERIFY) do projeto {_PROJECT_NAME}.
+
+Responsabilidade: após o backend+frontend serem gerados, revisar se a suíte RED existente
+cobre o que foi implementado e se ainda há gaps. NÃO escreva código de produção. Apenas
+sugira testes adicionais quando o código revelar caminhos não previstos na spec original.
+
+LEIA:
+- docs/specs/{{module}}.md
+- docs/specs/_tests_{{module}}.md  (plano RED)
+- docs/specs/_backend_{{module}}.md
+- docs/specs/_frontend_{{module}}.md  (se existir)
+- tests/{{module}}/ se a runtime expôs (opcional)
+
+NÃO LEIA:
+- Código/specs de outros módulos
+- Dados de produção
+
+Produza:
+
+# Verificação de cobertura — {{module}}
+
+## Requisitos da spec — status
+| Requisito | Coberto por teste? | Arquivo/Caso | Observação |
+|---|---|---|---|
+
+## Caminhos novos no código sem teste
+- Lista de funções/branches do _backend/_frontend sem teste RED correspondente
+- Para cada: sugestão de novo arquivo de teste (caminho + nome do caso)
+
+## Coverage projetada (estimativa)
+- line: X% (target tier {{tier}}: ≥ Y%)
+- branch: X% (target: ≥ Y%)
+
+## VEREDICTO
+- "TESTES SUFICIENTES" → cobertura ok, pode ir para review_agent
+- "ADICIONAR TESTES" → listar arquivos novos em ```file:``` blocks
+
+A última linha é parseada pelo orquestrador: exatamente "VEREDICTO: TESTES SUFICIENTES"
+ou "VEREDICTO: ADICIONAR TESTES".
+"""
+
+
+def _parse_file_blocks(response: str) -> list[tuple[str, str]]:
+    """Extrai blocos ```file:path\n...\n``` do markdown.
+
+    Retorna lista de (path_relativo, conteudo).
+    """
+    blocks = []
+    lines = response.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("```file:"):
+            path = line[len("```file:"):].strip()
+            buf = []
+            i += 1
+            while i < len(lines) and not lines[i].startswith("```"):
+                buf.append(lines[i])
+                i += 1
+            if path:
+                blocks.append((path, "\n".join(buf)))
+        i += 1
+    return blocks
+
+
+def _write_test_files(blocks: list[tuple[str, str]], module: str) -> list[str]:
+    """Persiste arquivos físicos de teste no projeto consumidor.
+
+    Segurança: só permite escrita dentro de tests/{module}/.
+    """
+    safe_prefix = f"tests/{module}/"
+    written = []
+    for rel_path, content in blocks:
+        norm = rel_path.replace("\\", "/").lstrip("./")
+        if not norm.startswith(safe_prefix):
+            continue  # ignorar paths fora do scope — defesa contra prompt injection
+        target = PROJECT_ROOT / norm
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # Não sobrescreve se já existe e foi editado manualmente (fluxo TDD respeita humano)
+        if target.exists() and target.stat().st_size > 0:
+            new_path = target.with_suffix(target.suffix + ".proposed")
+            new_path.write_text(content, encoding="utf-8")
+            written.append(str(new_path))
+        else:
+            target.write_text(content, encoding="utf-8")
+            written.append(str(target))
+    return written
+
+
+class TestAgent(BaseAgent):
+    agent_name = "test_agent"  # COMPARTILHADO — sem prefixo de módulo
+
+    def __init__(self, agent_name: str | None = None):
+        super().__init__(agent_name or self.agent_name)
+        self.messages = []  # system prompt é resolvido por modo em run()
+
+    def _load_spec(self, module_name: str) -> str | None:
+        spec_path = PROJECT_ROOT / "docs" / "specs" / f"{module_name}.md"
+        return spec_path.read_text(encoding="utf-8") if spec_path.exists() else None
+
+    def _load_verify_context(self, module_name: str) -> dict:
+        specs_dir = PROJECT_ROOT / "docs" / "specs"
+        paths = {
+            "spec": specs_dir / f"{module_name}.md",
+            "tests_plan": specs_dir / f"_tests_{module_name}.md",
+            "backend": specs_dir / f"_backend_{module_name}.md",
+            "frontend": specs_dir / f"_frontend_{module_name}.md",
+        }
+        return {k: p.read_text(encoding="utf-8") if p.exists() else None for k, p in paths.items()}
+
+    def run(self, task_input: dict) -> dict:
+        module_name = task_input.get("module")
+        if not module_name:
+            return {"error": "campo 'module' é obrigatório"}
+
+        mode = task_input.get("mode", "red")
+        tier = task_input.get("tier", "B")
+        if mode not in ("red", "verify"):
+            return {"error": f"mode inválido: {mode} — use 'red' ou 'verify'"}
+
+        spec = self._load_spec(module_name)
+        if not spec:
+            return {"error": f"spec não encontrada para {module_name}"}
+
+        coverage_block = _coverage_block_for(tier)
+
+        if mode == "red":
+            system_prompt = SYSTEM_PROMPT_RED.replace(
+                "{coverage_block}", coverage_block
+            ).replace("{tier}", tier).replace("{module}", module_name)
+            user_content = (
+                f"Gere a suíte de testes RED-first para o módulo: **{module_name}** (tier {tier})\n\n"
+                f"Spec (única fonte):\n{spec}\n\n"
+                f"Stacks de teste declaradas: unit={_STACK_TESTS_UNIT} | "
+                f"integration={_STACK_TESTS_INTEG} | e2e={_STACK_TESTS_E2E}.\n"
+                "Lembre: os testes DEVEM falhar antes da implementação. "
+                "Cada requisito da spec deve aparecer na matriz de cobertura."
+            )
+        else:  # verify
+            ctx = self._load_verify_context(module_name)
+            system_prompt = SYSTEM_PROMPT_VERIFY.replace(
+                "{tier}", tier
+            ).replace("{module}", module_name)
+            user_content = (
+                f"Verifique cobertura do módulo: **{module_name}** (tier {tier})\n\n"
+                f"### SPEC\n{spec}\n\n"
+                f"### PLANO DE TESTES RED\n{ctx['tests_plan'] or '(ausente — RED phase não executada)'}\n\n"
+                f"### BACKEND\n{ctx['backend'] or '(ausente)'}\n\n"
+                f"### FRONTEND\n{ctx['frontend'] or '(sem UI)'}\n"
+            )
+
+        self.messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+
+        trace = langfuse.trace(
+            name=f"{self.agent_name}-{module_name}-{mode}",
+            metadata={
+                "agent": self.agent_name,
+                "mode": mode,
+                "project": _PROJECT_NAME,
+                "module": module_name,
+                "tier": tier,
+                "stack_tests_unit": _STACK_TESTS_UNIT,
+                "stack_tests_integration": _STACK_TESTS_INTEG,
+                "stack_tests_e2e": _STACK_TESTS_E2E,
+                "coverage_targets": _COVERAGE_TARGETS.get(tier),
+                "aios_version": "0.3.0",
+                "tdd_phase": mode,
+            },
+        ) if _LF_AVAILABLE else _MockTrace()
+
+        generation = trace.generation(
+            name="send_request",
+            model=_CONFIG.get("llm", {}).get("model", "claude-sonnet-4-6"),
+            input=self.messages,
+        )
+
+        response = self.send_request(
+            agent_name=self.agent_name,
+            messages=self.messages,
+            base_url=f"http://localhost:{_CONFIG.get('server', {}).get('port', 8000)}",
+            model=_CONFIG.get("llm", {}).get("model", "claude-sonnet-4-6"),
+        )
+
+        generation.end(output=response)
+        trace.update(status_message="completed")
+
+        # Persiste plano markdown sempre
+        plan_name = f"_tests_{module_name}.md" if mode == "red" else f"_test_results_{module_name}.md"
+        plan_path = PROJECT_ROOT / "docs" / "specs" / plan_name
+        plan_path.write_text(response, encoding="utf-8")
+
+        # No modo RED, materializa os arquivos físicos de teste
+        files_written = []
+        if mode == "red":
+            blocks = _parse_file_blocks(response)
+            files_written = _write_test_files(blocks, module_name)
+
+        result = {
+            "module": module_name,
+            "mode": mode,
+            "tier": tier,
+            "plan_path": str(plan_path),
+            "files_written": files_written,
+            "trace_id": trace.id,
+            "status": "tests_red_generated" if mode == "red" else "verify_completed",
+        }
+        if mode == "verify":
+            result["verdict"] = (
+                "sufficient" if "VEREDICTO: TESTES SUFICIENTES" in response
+                else ("needs_more_tests" if "VEREDICTO: ADICIONAR TESTES" in response else "unparseable")
+            )
+        return result

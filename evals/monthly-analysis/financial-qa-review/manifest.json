@@ -1,0 +1,36 @@
+{
+  "sku": "monthly-analysis",
+  "agent": "financial-qa-review",
+  "lifecycle": "SHADOW_eval_seed",
+  "outcomes": [
+    "detect_metric_mismatch",
+    "detect_schema_gap",
+    "detect_evidence_gap",
+    "detect_contradiction",
+    "detect_review_need",
+    "approve_clean_state"
+  ],
+  "eval_methods": {
+    "default": [
+      "assertion_shape",
+      "llm_as_judge"
+    ]
+  },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape é o método 100% implementado para os outcomes deste sub-agente. llm_as_judge fica como signal quando runner for estendido. Sem este campo, dispatch heurístico escolhe llm_as_judge e SKIPa tudo.",
+  "judge_dimensions": [
+    "factualidade",
+    "severidade_correta",
+    "retryTarget_correto",
+    "seguranca_financeira"
+  ],
+  "judge_threshold_per_dim": 4,
+  "total_cases": 10,
+  "min_cases_required": 10,
+  "adversarial_cases": 10,
+  "source_distribution": {
+    "adversarial": 10
+  },
+  "pass_rate_threshold": 0.95,
+  "last_updated": "2026-05-20"
+}

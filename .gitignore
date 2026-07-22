@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+.aios/logs/
+logs/
+
+# AIOS runtime state
+.aios/memory/
+.aios/storage/
+
+# Claude Code overrides do dev (não versionar)
+.claude/settings.local.json
+
+# opencode config local do dev (não versionar)
+.opencode.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+
+# Cache
+.cache/
+.turbo/
+.eslintcache
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Foundry artefatos transitórios
+docs/foundry/bypass-log/*.log
+docs/foundry/session-gate-reports/*.md
+!docs/foundry/session-gate-reports/.gitkeep
+
+# Foundry runtime (gerado por hooks — não versionar)
+.foundry-mode
+.claude/scheduled_tasks.lock
+docs/foundry/persona-detection.log
+docs/foundry/sync-history.md
+
+# Learning snapshots — templates auto-gerados por hooks/stop/learning-snapshot.sh
+# (revisão humana/Hermes antes de promover para agent-memory.md; sem valor versionado)
+docs/learnings/
+
+# Shadow run reports (gerados localmente por scripts/run-monthly-analysis-graph-shadow.ts)
+evals/monthly-analysis/shadow-runs/*
+!evals/monthly-analysis/shadow-runs/.gitkeep
+
+# Backups locais de .env (NUNCA commitar — contêm segredos)
+.env.bak
+.env.*.bak
+
+# Worktrees de agentes
+.claude/worktrees/
+
+# Índice local do reflex (MCP de busca de código) — artefato gerado, ~22MB
+.reflex/

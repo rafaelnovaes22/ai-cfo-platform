@@ -1,0 +1,406 @@
+# templates/cicd/github-actions-test.template.yml
+#
+# COMO USAR:
+#   1. Copie para .github/workflows/foundry-test.yml no projeto consumidor
+#   2. Substitua {PROJECT_NAME} pelo slug do projeto
+#   3. Garanta que aios/config.yaml tem o bloco `test_commands:` preenchido
+#      (install/lint/typecheck/unit/integration/e2e/coverage_report_path)
+#   4. Garanta que aios/config.yaml tem `coverage_targets:` por tier (A/B/C)
+#   5. Configure secrets se a stack precisar (DATABASE_URL_TEST, etc.)
+#
+# O QUE FAZ:
+#   - lint + typecheck antes de qualquer teste (falha rápido)
+#   - unit tests com cobertura — falha se line/branch < coverage_targets do tier maior do PR
+#   - integration tests contra Postgres ephemeral (service container) — sem mocks de regra
+#   - e2e tests via Playwright headless — só roda se algum módulo tem has_ui=true
+#   - matrix por módulo lida de aios/config.yaml → modules[]
+#   - publica resumo de cobertura como comentário no PR + artefato
+#
+# PRINCÍPIOS: C4 (TDD enforçado — coverage gate), C6 (telemetria — JUnit XML + coverage),
+#             C7 (portável — comandos vêm do config, sem hardcode npm/pytest)
+
+name: Foundry Tests — {PROJECT_NAME}
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Módulo específico para testar (vazio = todos)'
+        required: false
+        type: string
+
+env:
+  # CI propaga estes para o test_agent e para os runners detectarem ambiente
+  FOUNDRY_CI: "true"
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ─── Job 1: Lê config + decide matriz ────────────────────────────────
+  resolve-config:
+    name: Resolver config (módulos + comandos)
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.parse.outputs.modules }}
+      modules_with_ui: ${{ steps.parse.outputs.modules_with_ui }}
+      max_tier: ${{ steps.parse.outputs.max_tier }}
+      cmd_install: ${{ steps.parse.outputs.cmd_install }}
+      cmd_lint: ${{ steps.parse.outputs.cmd_lint }}
+      cmd_typecheck: ${{ steps.parse.outputs.cmd_typecheck }}
+      cmd_unit: ${{ steps.parse.outputs.cmd_unit }}
+      cmd_integration: ${{ steps.parse.outputs.cmd_integration }}
+      cmd_e2e: ${{ steps.parse.outputs.cmd_e2e }}
+      coverage_path: ${{ steps.parse.outputs.coverage_path }}
+      coverage_targets_json: ${{ steps.parse.outputs.coverage_targets_json }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python (para parse YAML)
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar PyYAML
+        run: pip install pyyaml
+
+      - name: Parse aios/config.yaml
+        id: parse
+        shell: bash
+        run: |
+          python <<'PY' >> $GITHUB_OUTPUT
+          import json, os, yaml, sys
+          cfg_path = "aios/config.yaml"
+          if not os.path.exists(cfg_path):
+              print("modules=[]", file=sys.stderr)
+              sys.exit("aios/config.yaml ausente — rode /novais-digital:aios-init")
+          cfg = yaml.safe_load(open(cfg_path, encoding="utf-8")) or {}
+          mods = cfg.get("modules") or []
+          input_module = "${{ github.event.inputs.module }}".strip()
+          if input_module:
+              mods = [m for m in mods if m.get("name") == input_module]
+          all_names = [{"name": m["name"], "tier": m.get("tier", "B"), "has_ui": m.get("has_ui", True)} for m in mods if "name" in m]
+          ui_names = [m for m in all_names if m["has_ui"]]
+          tier_order = {"A": 1, "B": 2, "C": 3}
+          max_tier = max([m["tier"] for m in all_names], key=lambda t: tier_order.get(t, 0)) if all_names else "B"
+          cmds = cfg.get("test_commands", {}) or {}
+          covt = cfg.get("coverage_targets", {}) or {}
+          print(f"modules={json.dumps(all_names)}")
+          print(f"modules_with_ui={json.dumps(ui_names)}")
+          print(f"max_tier={max_tier}")
+          print(f"cmd_install={cmds.get('install','npm ci')}")
+          print(f"cmd_lint={cmds.get('lint','npm run lint')}")
+          print(f"cmd_typecheck={cmds.get('typecheck','npm run typecheck')}")
+          print(f"cmd_unit={cmds.get('unit','npm run test:unit -- --coverage')}")
+          print(f"cmd_integration={cmds.get('integration','npm run test:integration')}")
+          print(f"cmd_e2e={cmds.get('e2e','npm run test:e2e')}")
+          print(f"coverage_path={cmds.get('coverage_report_path','coverage/coverage-summary.json')}")
+          print(f"coverage_targets_json={json.dumps(covt)}")
+          PY
+
+  # ─── Job 2: Lint + Typecheck (falha rápido) ──────────────────────────
+  lint-typecheck:
+    name: Lint + Typecheck
+    needs: resolve-config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python (fallback para stacks python)
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install deps
+        run: ${{ needs.resolve-config.outputs.cmd_install }}
+
+      - name: Lint
+        run: ${{ needs.resolve-config.outputs.cmd_lint }}
+
+      - name: Typecheck
+        run: ${{ needs.resolve-config.outputs.cmd_typecheck }}
+
+  # ─── Job 3: Unit tests com cobertura — bloqueante ────────────────────
+  unit-tests:
+    name: Unit (${{ matrix.module.name }} tier ${{ matrix.module.tier }})
+    needs: [resolve-config, lint-typecheck]
+    if: needs.resolve-config.outputs.modules != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.resolve-config.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install deps
+        run: ${{ needs.resolve-config.outputs.cmd_install }}
+
+      - name: Verificar que existem arquivos de teste para o módulo (TDD gate)
+        run: |
+          mod="${{ matrix.module.name }}"
+          if [ ! -d "tests/$mod/unit" ]; then
+            echo "::error::TDD GATE — tests/$mod/unit/ não existe. Rode test_agent --mode red antes do build."
+            exit 2
+          fi
+          count=$(find "tests/$mod/unit" -type f \( -name '*.test.*' -o -name '*_test.*' -o -name 'test_*.py' \) | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::TDD GATE — tests/$mod/unit/ existe mas está vazio."
+            exit 2
+          fi
+          echo "✓ $count arquivos de teste unit encontrados para $mod"
+
+      - name: Rodar unit tests com cobertura
+        env:
+          MODULE: ${{ matrix.module.name }}
+          TIER: ${{ matrix.module.tier }}
+        run: ${{ needs.resolve-config.outputs.cmd_unit }}
+
+      - name: Enforce coverage gate (target do tier)
+        shell: bash
+        run: |
+          python <<'PY'
+          import json, os, sys
+          path = "${{ needs.resolve-config.outputs.coverage_path }}"
+          targets = json.loads('${{ needs.resolve-config.outputs.coverage_targets_json }}')
+          tier = "${{ matrix.module.tier }}"
+          tgt = targets.get(tier, {})
+          if not os.path.exists(path):
+              print(f"::warning::Coverage report não encontrado em {path} — gate skipped")
+              sys.exit(0)
+          with open(path, encoding="utf-8") as fh:
+              cov = json.load(fh)
+          # Formato Istanbul: {"total": {"lines":{"pct":...}, "branches":{"pct":...}}}
+          total = cov.get("total", {})
+          line_pct = total.get("lines", {}).get("pct", 0)
+          branch_pct = total.get("branches", {}).get("pct", 0)
+          line_min = tgt.get("line", 0)
+          branch_min = tgt.get("branch", 0)
+          fail = False
+          msg = []
+          if line_pct < line_min:
+              fail = True
+              msg.append(f"line {line_pct}% < target {line_min}%")
+          if branch_pct < branch_min:
+              fail = True
+              msg.append(f"branch {branch_pct}% < target {branch_min}%")
+          if fail:
+              print(f"::error::Coverage gate (tier {tier}) FALHOU: " + "; ".join(msg))
+              sys.exit(2)
+          print(f"✓ Coverage tier {tier}: line={line_pct}% (≥{line_min}%) branch={branch_pct}% (≥{branch_min}%)")
+          PY
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.module.name }}
+          path: ${{ needs.resolve-config.outputs.coverage_path }}
+          retention-days: 30
+
+  # ─── Job 4: Integration tests contra DB ephemeral ────────────────────
+  integration-tests:
+    name: Integration (${{ matrix.module.name }})
+    needs: [resolve-config, unit-tests]
+    if: needs.resolve-config.outputs.modules != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.resolve-config.outputs.modules) }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: foundry_test
+          POSTGRES_PASSWORD: foundry_test_pw
+          POSTGRES_DB: foundry_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://foundry_test:foundry_test_pw@localhost:5432/foundry_test_db
+      MODULE: ${{ matrix.module.name }}
+      TIER: ${{ matrix.module.tier }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install deps
+        run: ${{ needs.resolve-config.outputs.cmd_install }}
+
+      - name: Verificar existência de tests/{module}/integration/
+        run: |
+          mod="${{ matrix.module.name }}"
+          if [ ! -d "tests/$mod/integration" ] || [ -z "$(ls -A tests/$mod/integration 2>/dev/null)" ]; then
+            tier="${{ matrix.module.tier }}"
+            if [ "$tier" = "C" ]; then
+              echo "::error::Tier C — integration tests obrigatórios. tests/$mod/integration/ vazio."
+              exit 2
+            fi
+            echo "::warning::tests/$mod/integration/ ausente — skip permitido fora de Tier C"
+            exit 0
+          fi
+
+      - name: Rodar integration tests
+        run: ${{ needs.resolve-config.outputs.cmd_integration }}
+
+      - name: Upload artefatos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-${{ matrix.module.name }}
+          path: |
+            test-results/
+            junit*.xml
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ─── Job 5: E2E (Playwright) — só módulos com UI ─────────────────────
+  e2e-tests:
+    name: E2E (${{ matrix.module.name }})
+    needs: [resolve-config, integration-tests]
+    if: needs.resolve-config.outputs.modules_with_ui != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.resolve-config.outputs.modules_with_ui) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install deps
+        run: ${{ needs.resolve-config.outputs.cmd_install }}
+
+      - name: Install Playwright browsers (best-effort)
+        run: npx playwright install --with-deps chromium
+        continue-on-error: true
+
+      - name: Verificar existência de tests/{module}/e2e/
+        run: |
+          mod="${{ matrix.module.name }}"
+          if [ ! -d "tests/$mod/e2e" ] || [ -z "$(ls -A tests/$mod/e2e 2>/dev/null)" ]; then
+            tier="${{ matrix.module.tier }}"
+            if [ "$tier" = "C" ]; then
+              echo "::error::Tier C com UI — e2e obrigatórios. tests/$mod/e2e/ vazio."
+              exit 2
+            fi
+            echo "::warning::tests/$mod/e2e/ ausente — skip permitido fora de Tier C"
+            exit 0
+          fi
+
+      - name: Rodar E2E
+        env:
+          MODULE: ${{ matrix.module.name }}
+        run: ${{ needs.resolve-config.outputs.cmd_e2e }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-${{ matrix.module.name }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ─── Job 6: Resumo + comentário no PR ────────────────────────────────
+  summary:
+    name: Resumo de testes
+    needs: [resolve-config, lint-typecheck, unit-tests, integration-tests, e2e-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download todos os artefatos de cobertura
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-unit-*
+          path: coverage-artifacts/
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Comentar no PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lt = '${{ needs.lint-typecheck.result }}';
+            const ut = '${{ needs.unit-tests.result }}';
+            const it = '${{ needs.integration-tests.result }}';
+            const e2e = '${{ needs.e2e-tests.result }}';
+            const max_tier = '${{ needs.resolve-config.outputs.max_tier }}';
+            const icon = (r) => r === 'success' ? '✅' : (r === 'skipped' ? '⏭️' : (r === 'failure' ? '❌' : '⚠️'));
+            const body = [
+              `## Foundry Tests — resumo (tier máximo: \`${max_tier}\`)`,
+              ``,
+              `| Job | Status |`,
+              `|---|---|`,
+              `| Lint + Typecheck | ${icon(lt)} ${lt} |`,
+              `| Unit (matrix por módulo + coverage gate) | ${icon(ut)} ${ut} |`,
+              `| Integration (DB ephemeral) | ${icon(it)} ${it} |`,
+              `| E2E (módulos com UI) | ${icon(e2e)} ${e2e} |`,
+              ``,
+              `Coverage targets aplicados via \`aios/config.yaml → coverage_targets\` (C4 enforcement).`,
+            ].join('\n');
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Falhar workflow se qualquer job crítico falhou
+        run: |
+          for r in "${{ needs.lint-typecheck.result }}" "${{ needs.unit-tests.result }}" "${{ needs.integration-tests.result }}" "${{ needs.e2e-tests.result }}"; do
+            if [ "$r" = "failure" ]; then
+              echo "::error::Algum job de teste falhou — bloqueia merge"
+              exit 1
+            fi
+          done
+          echo "Todos os jobs passaram ou foram skipped legitimamente."

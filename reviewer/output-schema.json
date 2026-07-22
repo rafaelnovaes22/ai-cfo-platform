@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novais-digital.com.br/foundry/reviewer-output-v1.json",
+  "title": "Novais Digital Foundry Reviewer — Monthly Audit Output Schema",
+  "description": "JSON schema do output do reviewer DeepAgent. Versão 0.2.0.",
+  "type": "object",
+  "required": [
+    "audit_date",
+    "audit_period",
+    "reviewer",
+    "constitution_version",
+    "manifest_version",
+    "project",
+    "checks",
+    "drift_detected",
+    "outcomes_sampled",
+    "issues_opened",
+    "overall_status",
+    "audit_metadata"
+  ],
+  "properties": {
+    "audit_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data ISO da execução (YYYY-MM-DD)"
+    },
+    "audit_period": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}$",
+      "description": "Período auditado (YYYY-MM)"
+    },
+    "reviewer": {
+      "type": "string",
+      "description": "Identificador do reviewer (ex: deepagent-gpt-5.5)"
+    },
+    "constitution_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "project": {
+      "type": "string",
+      "description": "Nome do projeto auditado"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "artifacts_audited": {"type": "integer", "minimum": 0},
+        "skus_in_production": {"type": "integer", "minimum": 0},
+        "outcomes_period_days": {"type": "integer", "minimum": 1, "default": 30}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "description": "Resultados por princípio C1-C8 (e extensões)",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^C[0-9]+$",
+            "description": "ID do princípio (C1, C2, ..., C9, C10, ...)"
+          },
+          "name": {"type": "string"},
+          "status": {
+            "enum": ["PASS", "WARN", "FAIL"]
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Texto descrevendo evidência citada (paths, valores, queries)"
+          },
+          "metrics": {
+            "type": "object",
+            "description": "Métricas numéricas relevantes para o check",
+            "additionalProperties": {"type": ["number", "string", "boolean"]}
+          },
+          "issues": {
+            "type": "array",
+            "items": {"type": "string", "description": "ID de issue aberta (ex: AUD-2026-04-001)"}
+          }
+        }
+      }
+    },
+    "coherence_checks": {
+      "type": "object",
+      "description": "Validação cross-artifact",
+      "properties": {
+        "spec_to_code": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sku_or_product": {"type": "string"},
+              "spec_version": {"type": "string"},
+              "code_matches": {"type": "boolean"},
+              "drift_notes": {"type": "string"}
+            }
+          }
+        },
+        "spec_to_eval": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sku_or_product": {"type": "string"},
+              "spec_categories": {"type": "array", "items": {"type": "string"}},
+              "eval_categories": {"type": "array", "items": {"type": "string"}},
+              "coverage_gap": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "adr_to_implementation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "adr_id": {"type": "string"},
+              "decision": {"type": "string"},
+              "reflected_in_code": {"type": "boolean"},
+              "drift_notes": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "outcomes_sampled": {
+      "type": "object",
+      "required": ["count", "agreement_rate"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "by_category": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "sampled": {"type": "integer"},
+              "agreement_rate": {"type": "number", "minimum": 0, "maximum": 1},
+              "above_threshold": {"type": "boolean"}
+            }
+          }
+        },
+        "agreement_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Taxa de concordância média entre agente prod e reviewer"
+        },
+        "significant_disagreements": {
+          "type": "array",
+          "description": "Outcomes onde agente e reviewer discordaram significativamente",
+          "items": {
+            "type": "object",
+            "properties": {
+              "outcome_id": {"type": "string"},
+              "agent_decision": {"type": "string"},
+              "reviewer_decision": {"type": "string"},
+              "human_gabarito": {"type": ["string", "null"]},
+              "notes": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "drift_detected": {
+      "type": "object",
+      "required": ["quality", "cost", "volume"],
+      "properties": {
+        "quality": {
+          "type": "object",
+          "properties": {
+            "detected": {"type": "boolean"},
+            "delta_pp": {"type": "number", "description": "Variação em pontos percentuais vs mês anterior"},
+            "by_sku": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "current": {"type": "number"},
+                  "previous": {"type": "number"},
+                  "delta_pp": {"type": "number"}
+                }
+              }
+            }
+          }
+        },
+        "cost": {
+          "type": "object",
+          "properties": {
+            "detected": {"type": "boolean"},
+            "ratio": {"type": "number", "description": "Razão custo médio mês N / N-1"},
+            "by_sku": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "current_brl": {"type": "number"},
+                  "previous_brl": {"type": "number"},
+                  "ratio": {"type": "number"}
+                }
+              }
+            }
+          }
+        },
+        "volume": {
+          "type": "object",
+          "properties": {
+            "detected": {"type": "boolean"},
+            "ratio": {"type": "number"},
+            "by_sku": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "current": {"type": "integer"},
+                  "previous": {"type": "integer"},
+                  "ratio": {"type": "number"}
+                }
+              }
+            }
+          }
+        },
+        "latency": {
+          "type": "object",
+          "properties": {
+            "detected": {"type": "boolean"},
+            "p95_ratio": {"type": "number"}
+          }
+        }
+      }
+    },
+    "issues_opened": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "principle", "severity", "title"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^AUD-[0-9]{4}-[0-9]{2}-[0-9]{3}$",
+            "description": "Format: AUD-YYYY-MM-NNN"
+          },
+          "principle": {
+            "type": "string",
+            "pattern": "^C[0-9]+$"
+          },
+          "severity": {
+            "enum": ["P0", "P1", "P2", "P3"]
+          },
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "evidence_path": {"type": "string", "description": "Path do artefato onde issue foi detectado"},
+          "evidence_line": {"type": "integer", "description": "Linha relevante (se aplicável)"},
+          "owner_suggested": {"type": "string"},
+          "suggested_action": {"type": "string"}
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "description": "Recomendações priorizadas (incluindo achados gerais fora dos princípios)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "priority": {"enum": ["P0", "P1", "P2", "P3"]},
+          "title": {"type": "string"},
+          "rationale": {"type": "string"},
+          "expected_impact": {"type": "string"},
+          "scope": {"enum": ["principle", "general"]}
+        }
+      }
+    },
+    "comparison_with_previous": {
+      "type": "object",
+      "properties": {
+        "previous_audit_date": {"type": "string", "format": "date"},
+        "issues_open_delta": {"type": "integer"},
+        "issues_resolved_in_period": {"type": "integer"},
+        "new_fails": {"type": "array", "items": {"type": "string"}},
+        "resolved_fails": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "overall_status": {
+      "enum": ["pass", "warn", "fail"],
+      "description": "Status agregado: fail se qualquer C1-C4 FAIL; warn se WARN ou C5-C8 FAIL; pass se tudo PASS"
+    },
+    "audit_metadata": {
+      "type": "object",
+      "required": ["execution_time_seconds", "model_snapshot"],
+      "properties": {
+        "execution_time_seconds": {"type": "integer"},
+        "audit_cost_usd": {"type": "number"},
+        "model_snapshot": {"type": "string", "description": "ex: gpt-5.5-2026-04"},
+        "prompt_version": {"type": "string"},
+        "validation_rules_version": {"type": "string"},
+        "limitations_encountered": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Limitações que afetaram a auditoria (ex: 'sem acesso Langfuse', 'apenas 50% dos outcomes amostrados por timeout')"
+        }
+      }
+    },
+    "next_audit": {
+      "type": "object",
+      "properties": {
+        "scheduled_date": {"type": "string", "format": "date"},
+        "scope_changes": {"type": "string"}
+      }
+    }
+  },
+  "additionalProperties": false
+}

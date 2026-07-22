@@ -1,0 +1,515 @@
+{
+  "$schema": "https://novais-digital.com.br/foundry/validation-rules-v1.json",
+  "validation_rules_version": "0.3.0",
+  "constitution_version": "0.3.0",
+
+  "_doc": "Validation rules estruturadas em três camadas: 'common' (sempre aplica), 'agentic_saas' / 'platform' / 'automation' (aplicam conforme project.type em docs/foundry/project.json do consumidor) e 'hybrid' (combina platform + checks por módulo conforme module.ai_enabled). Cada check tem campo 'applies_when' que o reviewer avalia contra project.json. Quando project.json ausente, defaults legados: project_type=agentic_saas + ai_enabled=true (compat v0.2.0).",
+
+  "project_config_loader": {
+    "primary_path": "docs/foundry/project.json",
+    "fallback_defaults": {
+      "project_type": "agentic_saas",
+      "ai_enabled": true,
+      "_reason": "Backwards compatibility v0.2.0 - projetos pré-v0.3.0 não declaravam project_type."
+    },
+    "resolve_module_ai_enabled": "Se project.type=hybrid e module.ai_enabled declarado, vale o do módulo; senão, herda do project."
+  },
+
+  "rules": {
+
+    "common": {
+      "_doc": "Regras invariáveis que valem para todos os project_types. Reviewer SEMPRE aplica esta seção.",
+
+      "C1_diagnose_before_build": {
+        "principle": "C1",
+        "name": "Diagnose-before-build",
+        "checks": [
+          {
+            "id": "C1.common.1",
+            "description": "Toda spec em produção (qualquer artifact_type) tem linked_diagnostic referenciado",
+            "validation": "regex_in_frontmatter",
+            "field": "linked_diagnostic",
+            "exemption_field": "is_example",
+            "exemption_value": true,
+            "applies_when": "always"
+          },
+          {
+            "id": "C1.common.2",
+            "description": "Diagnostic referenciado existe e tem seções mínimas",
+            "validation": "file_exists_and_has_sections",
+            "required_sections": ["problema declarado", "baseline humano", "outcome proposto", "métrica de sucesso"],
+            "applies_when": "always"
+          }
+        ]
+      },
+
+      "C2_outcome_first": {
+        "principle": "C2",
+        "name": "Outcome-first",
+        "checks": [
+          {
+            "id": "C2.common.1",
+            "description": "Spec tem seção §1 'Cláusula de outcome' com 3+3 exemplos e janela temporal",
+            "validation": "section_has_subsections",
+            "section": "Cláusula de outcome",
+            "required_subsections": [
+              "Definição em uma frase",
+              "Três exemplos POSITIVOS",
+              "Três exemplos NEGATIVOS",
+              "Janela temporal de estabilidade",
+              "Evento técnico que dispara DELIVERED ou COMPLETED"
+            ],
+            "applies_when": "always"
+          }
+        ]
+      },
+
+      "C5_three_tier_context": {
+        "principle": "C5",
+        "name": "Three-tier context",
+        "checks": [
+          {
+            "id": "C5.common.1",
+            "description": "Toda skill/módulo declara tier no frontmatter (tier_scope para módulos de plataforma)",
+            "validation": "frontmatter_field_exists",
+            "field_glob": "{tier,layer,tier_scope}",
+            "valid_values": ["1", "2", "3", "L0", "L1", "L2"],
+            "scope_glob": [".claude/skills/**/*.md", "docs/specs/**/*.md"],
+            "applies_when": "always"
+          },
+          {
+            "id": "C5.common.2",
+            "description": "Tier 1 não importa contexto Tier 2/3; Tier 2 não importa Tier 3",
+            "validation": "import_hierarchy_check",
+            "rules": {
+              "tier_1": {"forbidden_imports_from": ["tier_2", "tier_3"]},
+              "tier_2": {"forbidden_imports_from": ["tier_3"]}
+            },
+            "applies_when": "always"
+          }
+        ]
+      },
+
+      "C7_portability": {
+        "principle": "C7",
+        "name": "Portability over lock-in",
+        "checks": [
+          {
+            "id": "C7.common.1",
+            "description": "Specs/skills/módulos (markdown) não embutem nome de modelo/provedor literal",
+            "validation": "regex_search",
+            "scope_glob": ["templates/**/*.md", "docs/**/*.md", "examples/**/*.md"],
+            "forbidden_patterns": [
+              "anthropic\\.messages\\.create",
+              "openai\\.chat\\.completions",
+              "model:\\s*['\"](claude|gpt|gemini)"
+            ],
+            "applies_when": "always"
+          }
+        ]
+      },
+
+      "C8_anti_customization": {
+        "principle": "C8",
+        "name": "Configuration over heroic customization",
+        "checks": [
+          {
+            "id": "C8.common.1",
+            "description": "Sem if/switch por tenant em qualquer código de produção",
+            "validation": "regex_search",
+            "scope_glob": ["src/**/*.{ts,js,py}"],
+            "forbidden_patterns": [
+              "if\\s*\\(\\s*tenantId\\s*===",
+              "if\\s*\\(\\s*tenant\\.id\\s*===",
+              "switch\\s*\\(\\s*tenantName",
+              "if\\s*\\(\\s*tenant\\.name\\s*=="
+            ],
+            "applies_when": "always"
+          },
+          {
+            "id": "C8.common.2",
+            "description": "Sem pasta clients/{nome} ou tenants/{nome} em código de produção",
+            "validation": "path_check",
+            "forbidden_paths": [
+              "src/**/clients/*",
+              "src/**/tenants/*"
+            ],
+            "applies_when": "always"
+          },
+          {
+            "id": "C8.common.3",
+            "description": "Onboarding hardcode tolerável apenas <= 14 dias",
+            "validation": "file_age_check",
+            "scope_pattern": "src/**/onboarding-*.ts",
+            "max_age_days": 14,
+            "applies_when": "always"
+          }
+        ]
+      }
+    },
+
+    "agentic_saas": {
+      "_doc": "Aplicam-se quando project.type='agentic_saas' OU quando project.type='hybrid' E module.ai_enabled=true. NÃO se aplicam a platform/automation com ai_enabled=false.",
+      "applies_when": "project.type == 'agentic_saas' OR (project.type == 'hybrid' AND module.ai_enabled == true) OR (project.type == 'platform' AND module.ai_enabled == true)",
+
+      "C3_cost_per_outcome": {
+        "principle": "C3",
+        "name": "Cost-per-outcome <= ratio_max (default 25%)",
+        "model": "cost_per_outcome",
+        "checks": [
+          {
+            "id": "C3.ai.1",
+            "description": "Spec/módulo IA tem unit-economics.md correspondente",
+            "validation": "file_exists",
+            "linked_field": "linked_unit_economics"
+          },
+          {
+            "id": "C3.ai.2",
+            "description": "Razão custo/preço documentada <= cost_to_price_ratio_max",
+            "validation": "numeric_comparison",
+            "field": "cost_to_price_ratio",
+            "operator": "<=",
+            "value_from": "project.economics.cost_to_price_ratio_max",
+            "value_default": 0.25
+          },
+          {
+            "id": "C3.ai.3",
+            "description": "Razão real medida via tracing últimos 30 dias <= ratio_max",
+            "validation": "telemetry_query",
+            "provider_from": "project.telemetry.llm_trace_provider",
+            "operator": "<=",
+            "value_from": "project.economics.cost_to_price_ratio_max"
+          },
+          {
+            "id": "C3.ai.4",
+            "description": "Drift de custo mês N vs N-1 < 15%",
+            "validation": "drift_check",
+            "metric": "avg_cost_per_outcome",
+            "threshold_ratio": 1.15
+          }
+        ],
+        "shadow_exemption": true
+      },
+
+      "C4_shadow_assisted_autonomous": {
+        "principle": "C4",
+        "name": "SHADOW antes de cobrar (modos agentic)",
+        "lifecycle": ["SHADOW", "ASSISTED", "AUTONOMOUS"],
+        "checks": [
+          {
+            "id": "C4.ai.1",
+            "description": "Toda promoção entre modos tem gates registrados em append-only log",
+            "validation": "audit_log_check",
+            "log_path_pattern": "subscriptions/{id}/promotions.md",
+            "required_fields": ["from_mode", "to_mode", "gate_results", "approver_po", "approver_promotion_officer", "approved_at"]
+          },
+          {
+            "id": "C4.ai.2",
+            "description": "SHADOW por >= 14 dias antes de promover a ASSISTED",
+            "validation": "duration_check",
+            "min_days_in_mode": {"shadow": 14}
+          },
+          {
+            "id": "C4.ai.3",
+            "description": "Eval suite passing antes de toda promoção",
+            "validation": "eval_threshold_met",
+            "before_promotion": true
+          }
+        ]
+      },
+
+      "C6_llm_telemetry": {
+        "principle": "C6",
+        "name": "Telemetry-by-default (LLM tracing)",
+        "checks": [
+          {
+            "id": "C6.ai.1",
+            "description": "Outcomes no DB <-> traces no LLM trace provider com desvio <= 1%",
+            "validation": "count_comparison",
+            "source_a": {"type": "db", "query": "SELECT COUNT(*) FROM outcomes WHERE created_at > NOW() - INTERVAL '30 days'"},
+            "source_b": {"type": "llm_trace_provider_from_project_json"},
+            "max_deviation_pct": 1.0
+          },
+          {
+            "id": "C6.ai.2",
+            "description": "Lint regex em código de produção exige instrumentação em chamadas LLM",
+            "validation": "regex_lint",
+            "scope_glob": ["src/{agents,core/pipeline,skus,products,modules}/**/*.{ts,js,py}"],
+            "must_have_near_llm_call": [
+              "langfuse.observe",
+              "langfuse.trace",
+              "trace.span",
+              "helicone",
+              "phoenix"
+            ],
+            "max_distance_lines": 10
+          }
+        ]
+      },
+
+      "C7_llm_portability": {
+        "principle": "C7",
+        "name": "Portability (LLM SDKs)",
+        "checks": [
+          {
+            "id": "C7.ai.1",
+            "description": "Imports de SDK LLM apenas em camada de abstração",
+            "validation": "import_path_restriction",
+            "forbidden_imports": [
+              "@anthropic-ai/sdk",
+              "openai",
+              "@google-ai/generativelanguage"
+            ],
+            "allowed_paths": [
+              "src/llm/**",
+              "src/infra/anthropic.ts",
+              "src/infra/openai.ts",
+              "src/infra/llm-*.ts",
+              "scripts/**"
+            ]
+          }
+        ]
+      }
+    },
+
+    "platform": {
+      "_doc": "Aplicam-se quando project.type='platform' OU quando project.type='hybrid' (módulos com ai_enabled=false). Substitui checks LLM-centric (C3/C6/C7) por equivalentes de plataforma.",
+      "applies_when": "project.type == 'platform' OR (project.type == 'hybrid' AND module.ai_enabled == false) OR project.type == 'automation'",
+
+      "C3_platform_margin": {
+        "principle": "C3",
+        "name": "Platform margin <= ratio_max",
+        "model": "platform_margin",
+        "checks": [
+          {
+            "id": "C3.platform.1",
+            "description": "Cada módulo CANONICAL tem delivery-economics.md correspondente",
+            "validation": "file_exists",
+            "linked_field": "linked_delivery_economics",
+            "applies_to_lifecycle_states": ["CANONICAL"]
+          },
+          {
+            "id": "C3.platform.2",
+            "description": "(infra + suporte + manutenção) / receita <= cost_to_price_ratio_max",
+            "validation": "numeric_comparison",
+            "field": "platform_cost_to_revenue_ratio",
+            "operator": "<=",
+            "value_from": "project.economics.cost_to_price_ratio_max",
+            "value_default": 0.25,
+            "inputs": [
+              "project.economics.platform_margin_inputs.infra_monthly_brl",
+              "project.economics.platform_margin_inputs.support_monthly_brl",
+              "project.economics.platform_margin_inputs.maintenance_monthly_brl",
+              "project.economics.platform_margin_inputs.revenue_monthly_brl"
+            ]
+          },
+          {
+            "id": "C3.platform.3",
+            "description": "delivery-economics.md atualizado nos últimos 90 dias",
+            "validation": "file_age_check",
+            "scope_pattern": "docs/clients/*/delivery-economics-*.md",
+            "max_age_days": 90
+          }
+        ]
+      },
+
+      "C4_draft_staging_pilot_canonical": {
+        "principle": "C4",
+        "name": "Pilot-before-canonical (estados platform)",
+        "lifecycle": ["DRAFT", "STAGING", "PILOT", "CANONICAL", "DEPRECATED"],
+        "checks": [
+          {
+            "id": "C4.platform.1",
+            "description": "Toda promoção entre estados tem registro auditável em pilot-state.md",
+            "validation": "file_exists_with_fields",
+            "path_pattern": "docs/specs/{module}.pilot-state.md",
+            "required_fields": ["from_state", "to_state", "evidence_links", "approver", "approved_at"]
+          },
+          {
+            "id": "C4.platform.2",
+            "description": "Janela mínima em PILOT antes de CANONICAL: 14 dias para módulos críticos, 3 dias para simples",
+            "validation": "duration_check_by_criticality",
+            "min_days_by_criticality": {"critical": 14, "standard": 7, "simple": 3}
+          },
+          {
+            "id": "C4.platform.3",
+            "description": "Aceite humano formal registrado antes de CANONICAL",
+            "validation": "file_exists",
+            "path_pattern": "docs/specs/{module}.acceptance-report.md",
+            "required_fields": ["acceptance_criteria_results", "approver_role", "approver_signature_hash", "approved_at"]
+          },
+          {
+            "id": "C4.platform.4",
+            "description": "Testes funcionais E2E passando antes de PILOT e CANONICAL",
+            "validation": "test_run_check",
+            "report_path_pattern": "tests/e2e/reports/{module}-latest.json",
+            "max_age_days": 7
+          }
+        ]
+      },
+
+      "C6_audit_log": {
+        "principle": "C6",
+        "name": "Auditability (audit log)",
+        "checks": [
+          {
+            "id": "C6.platform.1",
+            "description": "Mutações críticas registram audit log entry",
+            "validation": "regex_lint",
+            "scope_glob": ["src/{modules,services,controllers}/**/*.{ts,js,py}"],
+            "must_have_near_mutation": [
+              "auditLog.write",
+              "auditLog.record",
+              "AuditEvent",
+              "audit_log.insert"
+            ],
+            "mutation_patterns": [
+              "\\.create\\(",
+              "\\.update\\(",
+              "\\.delete\\(",
+              "INSERT INTO",
+              "UPDATE\\s+\\w+\\s+SET",
+              "DELETE FROM"
+            ],
+            "max_distance_lines": 15
+          },
+          {
+            "id": "C6.platform.2",
+            "description": "Mutações no DB <-> entradas no audit log com desvio <= 1%",
+            "validation": "count_comparison",
+            "source_a": {"type": "db", "query": "SELECT COUNT(*) FROM business_mutations_30d"},
+            "source_b": {"type": "audit_log_provider_from_project_json"},
+            "max_deviation_pct": 1.0
+          },
+          {
+            "id": "C6.platform.3",
+            "description": "Logs estruturados ativos via structured_logging_provider",
+            "validation": "config_check",
+            "field_required": "project.telemetry.structured_logging_provider",
+            "must_not_be_null": true
+          },
+          {
+            "id": "C6.platform.4",
+            "description": "Error tracking provider configurado",
+            "validation": "config_check",
+            "field_required": "project.telemetry.error_tracking_provider",
+            "must_not_be_null": true
+          }
+        ]
+      },
+
+      "C7_integrations_portability": {
+        "principle": "C7",
+        "name": "Portability (integrações, infra, pagamentos)",
+        "checks": [
+          {
+            "id": "C7.platform.1",
+            "description": "Imports de SDK de integração só em camada de abstração",
+            "validation": "import_path_restriction",
+            "forbidden_imports": [
+              "stripe",
+              "twilio",
+              "whatsapp-web.js",
+              "@sendgrid/mail",
+              "mercadopago",
+              "pagseguro"
+            ],
+            "allowed_paths": [
+              "src/integrations/**",
+              "src/infra/**",
+              "scripts/**"
+            ]
+          },
+          {
+            "id": "C7.platform.2",
+            "description": "Infra (DB/queue/storage) acessada via abstração",
+            "validation": "import_path_restriction",
+            "forbidden_imports": [
+              "pg",
+              "mysql2",
+              "mongodb",
+              "ioredis",
+              "@aws-sdk/client-s3"
+            ],
+            "allowed_paths": [
+              "src/infra/**",
+              "scripts/**"
+            ]
+          }
+        ]
+      }
+    },
+
+    "automation": {
+      "_doc": "Aplicam-se quando project.type='automation'. Subset de platform — outcome=execução verificável; sem usuários humanos finais. Reaproveita C3/C4/C6/C7 da seção platform com algumas variações.",
+      "applies_when": "project.type == 'automation'",
+      "inherits_from": "platform",
+
+      "C2_automation_outcome": {
+        "principle": "C2",
+        "name": "Outcome de automação = execução verificável",
+        "checks": [
+          {
+            "id": "C2.automation.1",
+            "description": "Spec declara evento de COMPLETED com payload/log auditável",
+            "validation": "field_exists",
+            "field": "completed_event",
+            "required_subfields": ["event_name", "payload_schema", "log_location"]
+          }
+        ]
+      }
+    },
+
+    "hybrid": {
+      "_doc": "Aplicam-se quando project.type='hybrid'. Reviewer aplica platform como base + agentic_saas para módulos com ai_enabled=true.",
+      "applies_when": "project.type == 'hybrid'",
+      "composition_rule": "common + platform + (agentic_saas para cada módulo com ai_enabled=true)"
+    }
+  },
+
+  "drift_thresholds": {
+    "_doc": "Drift universal — aplica em todos os tipos.",
+    "quality": {
+      "metric_when_ai": "accuracy_pct_by_artifact",
+      "metric_when_no_ai": "acceptance_pass_rate_by_module",
+      "max_negative_delta_pp": 5.0,
+      "comparison": "month_over_month"
+    },
+    "cost": {
+      "metric_when_ai": "avg_cost_per_outcome",
+      "metric_when_no_ai": "platform_cost_to_revenue_ratio",
+      "max_ratio": 1.15,
+      "comparison": "month_over_month"
+    },
+    "volume": {
+      "metric_when_ai": "outcomes_count",
+      "metric_when_no_ai": "audited_actions_count",
+      "min_ratio": 0.7,
+      "max_ratio": 1.3,
+      "comparison": "month_over_month"
+    },
+    "latency": {
+      "metric": "p95_latency_ms",
+      "max_ratio": 1.25,
+      "comparison": "month_over_month"
+    }
+  },
+
+  "sampling": {
+    "outcome_sample_pct_min": 0.05,
+    "outcome_sample_pct_max": 0.10,
+    "min_samples_per_category": 3,
+    "period_days": 30,
+    "platform_sampling": {
+      "_doc": "Para platform/automation, amostragem é sobre 'audited_actions' (entradas no audit log) em vez de outcomes.",
+      "min_samples_per_critical_module": 5
+    }
+  },
+
+  "issue_severity_mapping": {
+    "P0": "Constitution FAIL crítico em C1-C4 que ameaça operação ou compliance",
+    "P1": "Constitution FAIL em C5-C8 OU drift acima de limites",
+    "P2": "Constitution WARN OU achados de coerência entre artefatos",
+    "P3": "Sugestões de melhoria fora dos princípios"
+  }
+}

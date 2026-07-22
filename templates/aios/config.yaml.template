@@ -1,0 +1,94 @@
+# AIOS Server — configuração canônica do projeto consumidor
+# Gerado a partir de templates/aios/config.yaml.template (Foundry v0.9.0+)
+#
+# Substituições necessárias após cp:
+#   {PROJECT_NAME}            → nome do repo consumidor (ex: minha-empresa-skus)
+#   {STACK_BACKEND}           → ex: "Next.js 15 App Router" | "FastAPI" | "Rails 7"
+#   {STACK_FRONTEND}          → ex: "React 19 + Tailwind" | "Vue 3" | "—" (api-only)
+#   {STACK_DB}                → ex: "PostgreSQL 16 via Prisma" | "MySQL via SQLAlchemy"
+#   {STACK_TESTS_UNIT}        → ex: "Vitest" | "Jest" | "pytest"
+#   {STACK_TESTS_INTEGRATION} → ex: "Vitest + Testcontainers" | "pytest + DB ephemeral"
+#   {STACK_TESTS_E2E}         → ex: "Playwright" | "Cypress" | "—" (api-only)
+#   {TENANT_FIELD}            → nome do campo multi-tenant (default: tenantId)
+
+llm:
+  provider: anthropic
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-sonnet-4-6
+
+server:
+  host: 0.0.0.0
+  port: 8000
+
+memory:
+  backend: local
+  path: ./.aios/memory
+
+storage:
+  backend: local
+  path: ./.aios/storage
+
+log:
+  level: INFO
+  path: ./.aios/logs/kernel.log
+
+# === Foundry-7+ — declarações que os agentes leem para evitar hardcode ===
+
+project:
+  name: "{PROJECT_NAME}"
+  tenant_field: "{TENANT_FIELD}"  # nome do campo multi-tenant (default: tenantId)
+
+stack:
+  backend: "{STACK_BACKEND}"
+  frontend: "{STACK_FRONTEND}"
+  database: "{STACK_DB}"
+  # Stack de testes — separada por camada (Foundry v0.9.0+, TDD-first)
+  tests_unit: "{STACK_TESTS_UNIT}"
+  tests_integration: "{STACK_TESTS_INTEGRATION}"
+  tests_e2e: "{STACK_TESTS_E2E}"
+  # Backwards-compat (Foundry ≤ 0.8.x): se tests_* não declarados, agentes caem para "tests"
+  tests: "{STACK_TESTS_UNIT}"
+
+# === Foundry v0.9.0+ — targets de cobertura por tier (lidos pelo test_agent e CI) ===
+# Os agentes test_agent (modo verify) e review_agent enforcem estes thresholds.
+# CI/CD (github-actions-test.template.yml) falha o build se a cobertura ficar abaixo.
+coverage_targets:
+  A:
+    line: 70
+    branch: 60
+    critical_path: 100   # cobertura de paths de regra de negócio crítica (financeiro/cancelamento/etc)
+  B:
+    line: 85
+    branch: 75
+    critical_path: 100
+  C:
+    line: 95
+    branch: 90
+    critical_path: 100
+
+# === Comandos de teste (lidos pelo CI/CD para rodar a stack do projeto consumidor) ===
+# Permite ao workflow github-actions-test.template.yml chamar a runtime correta
+# sem hardcodar npm/pnpm/pytest. Substitua pelos comandos do seu projeto.
+test_commands:
+  install: "npm ci"                                 # ex: "npm ci" | "pnpm i --frozen-lockfile" | "pip install -r requirements.txt"
+  lint: "npm run lint"                              # ex: "npm run lint" | "ruff check ."
+  typecheck: "npm run typecheck"                    # ex: "tsc --noEmit" | "mypy ."
+  unit: "npm run test:unit -- --coverage"           # ex: "vitest run --coverage" | "pytest tests/*/unit --cov"
+  integration: "npm run test:integration"           # roda contra DB ephemeral (service container)
+  e2e: "npm run test:e2e"                           # ex: "playwright test" | "" se módulo sem UI
+  coverage_report_path: "coverage/coverage-summary.json"  # path do JSON de cobertura (formato Istanbul/coverage.py)
+
+# Lista de módulos que o orchestrator processa em ordem.
+# /novais-digital:aios-init adiciona entradas aqui automaticamente.
+# Cada item: { name: <kebab>, tier: A|B|C, has_ui: bool (default true) }
+modules: []
+  # exemplo:
+  # - name: cadastros
+  #   tier: B
+  #   has_ui: true
+  # - name: financeiro
+  #   tier: C
+  #   has_ui: true
+  # - name: webhooks
+  #   tier: B
+  #   has_ui: false  # backend-only → e2e dispensado pelo review_agent

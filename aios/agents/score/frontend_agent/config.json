@@ -1,0 +1,20 @@
+{
+  "name": "score_frontend_agent",
+  "description": [
+    "Implementa UI + telas (list/detail/forms) do módulo conforme spec aprovada.",
+    "Stack lida de aios/config.yaml → stack.frontend (sem hardcode de framework).",
+    "Output: docs/specs/_frontend_score.md (revisado humanamente antes de mover para src/)."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "foundry",
+    "version": "0.1.0",
+    "tier": "B",
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "FrontendAgent"
+  }
+}

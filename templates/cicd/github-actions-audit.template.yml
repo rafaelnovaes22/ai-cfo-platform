@@ -1,0 +1,165 @@
+# templates/cicd/github-actions-audit.template.yml
+#
+# COMO USAR:
+#   1. Copie para .github/workflows/foundry-audit.yml no projeto consumidor
+#   2. Substitua {PROJECT_NAME} pelo slug do projeto
+#   3. Configure secrets:
+#      - DEEPAGENTS_API_KEY (modelo do reviewer DeepAgent)
+#      - LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY (traces de auditoria — C6)
+#      - GH_TOKEN (criar issues com resultado)
+#
+# O QUE FAZ:
+#   - Roda auditoria mensal na 1ª segunda-feira do mês às 06:00 UTC
+#   - Invoca o reviewer DeepAgent (foundry-auditor) para auditar C1-C8
+#   - Salva relatório em docs/foundry/audits/{YYYY-MM}.md
+#   - Cria GitHub Issue se SLA breach detectado (recomendação de rollback)
+#   - Permite trigger manual para auditoria imediata
+#
+# PRINCÍPIOS: C1 (audit trail), C4 (SLA enforcement), C6 (telemetria)
+
+name: Foundry Audit Mensal — {PROJECT_NAME}
+
+on:
+  # 1ª segunda-feira do mês às 06:00 UTC
+  schedule:
+    - cron: '0 6 1-7 * 1'
+
+  # Trigger manual para auditoria imediata
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Mês de auditoria (YYYY-MM, default: mês atual)'
+        required: false
+        type: string
+      sample_rate:
+        description: 'Taxa de amostragem (0.05-0.10, default: 0.05)'
+        required: false
+        default: '0.05'
+        type: string
+
+jobs:
+  foundry-audit:
+    name: Auditoria Mensal Foundry
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Acesso a todo o histórico para auditoria de drift
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN || github.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar DeepAgents CLI + dependências
+        run: |
+          pip install deepagents>=0.0.34 langfuse anthropic pyyaml
+
+      - name: Definir mês de auditoria
+        id: set-month
+        run: |
+          if [ -n "${{ github.event.inputs.month }}" ]; then
+            echo "audit_month=${{ github.event.inputs.month }}" >> $GITHUB_OUTPUT
+          else
+            echo "audit_month=$(date +%Y-%m)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validar foundry-doctor antes da auditoria
+        run: |
+          bash scripts/foundry-doctor.sh || {
+            echo "::warning::foundry-doctor encontrou divergências — auditoria continuará mas pode ter resultados incompletos"
+          }
+
+      - name: Rodar auditoria DeepAgent (foundry-auditor)
+        env:
+          DEEPAGENTS_API_KEY: ${{ secrets.DEEPAGENTS_API_KEY }}
+          DEEPAGENTS_MODEL: ${{ secrets.DEEPAGENTS_MODEL || 'gpt-4o' }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          AUDIT_MONTH: ${{ steps.set-month.outputs.audit_month }}
+          SAMPLE_RATE: ${{ github.event.inputs.sample_rate || '0.05' }}
+        run: |
+          # Invocar foundry-auditor via deepagents CLI
+          # O skill orquestrador está em reviewer/deepagents/skills/reviewer/foundry-auditor/SKILL.md
+          # Saída esperada: docs/foundry/audits/$AUDIT_MONTH.md
+
+          if command -v deepagents &> /dev/null; then
+            deepagents run \
+              --skill reviewer/deepagents/skills/reviewer/foundry-auditor/SKILL.md \
+              --input "{\"audit_month\": \"$AUDIT_MONTH\", \"sample_rate\": $SAMPLE_RATE, \"repo_path\": \".\"}" \
+              --output-dir docs/foundry/audits/
+          else
+            echo "::warning::deepagents CLI não disponível — gerar relatório de auditoria manual"
+            echo "Crie docs/foundry/audits/$AUDIT_MONTH.md seguindo o schema em reviewer/output-schema.json"
+            mkdir -p docs/foundry/audits/
+            cat > "docs/foundry/audits/$AUDIT_MONTH.md" << EOF
+          ---
+          month: $AUDIT_MONTH
+          status: skipped
+          reason: deepagents CLI não instalado
+          action_required: Instalar deepagents>=0.0.34 ou rodar auditoria manual
+          ---
+          # Auditoria $AUDIT_MONTH — SKIPPED (CLI ausente)
+          EOF
+          fi
+
+      - name: Verificar resultado da auditoria
+        id: check-audit
+        run: |
+          AUDIT_MONTH="${{ steps.set-month.outputs.audit_month }}"
+          REPORT="docs/foundry/audits/$AUDIT_MONTH.md"
+
+          if [ ! -f "$REPORT" ]; then
+            echo "::error::Relatório de auditoria não gerado: $REPORT"
+            echo "sla_breach=unknown" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Verificar se há SLA breach ou recomendação de rollback
+          breach=$(grep -c "sla_breach: true\|recommendation: rollback\|status: fail" "$REPORT" || true)
+          echo "sla_breach=$breach" >> $GITHUB_OUTPUT
+
+          # Exibir resumo
+          head -50 "$REPORT"
+
+      - name: Commit relatório de auditoria
+        run: |
+          git config user.name "foundry-audit[bot]"
+          git config user.email "foundry-audit@noreply.github.com"
+          AUDIT_MONTH="${{ steps.set-month.outputs.audit_month }}"
+
+          git add "docs/foundry/audits/$AUDIT_MONTH.md"
+          git diff --cached --quiet || \
+            git commit -m "audit($AUDIT_MONTH): relatório mensal Foundry — CI automático"
+          git push || echo "::warning::Push falhou — revise permissões do GH_TOKEN"
+
+      - name: Criar Issue se SLA breach detectado
+        if: steps.check-audit.outputs.sla_breach != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const month = '${{ steps.set-month.outputs.audit_month }}';
+            const breach = '${{ steps.check-audit.outputs.sla_breach }}';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Foundry Audit ${month} — SLA breach detectado`,
+              body: `## Auditoria Mensal Foundry — ${month}\n\n**${breach} violação(ões) de SLA detectada(s)**\n\nVer: \`docs/foundry/audits/${month}.md\`\n\n### Ações necessárias\n\n- [ ] Revisar relatório em \`docs/foundry/audits/${month}.md\`\n- [ ] Avaliar necessidade de rollback com \`/novais-digital:promote rollback\`\n- [ ] Atualizar thresholds C4 se necessário via \`/novais-digital:sla-threshold\`\n\n> Gerado automaticamente por foundry-audit CI — {PROJECT_NAME}`,
+              labels: ['foundry-audit', 'sla-breach', 'priority:high']
+            });
+
+      - name: Upload relatório de auditoria
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-audit-${{ steps.set-month.outputs.audit_month }}
+          path: docs/foundry/audits/
+          retention-days: 365

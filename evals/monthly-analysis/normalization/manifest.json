@@ -1,0 +1,39 @@
+{
+  "sku": "monthly-analysis",
+  "agent": "normalization",
+  "lifecycle": "SHADOW_eval_seed",
+  "outcomes": [
+    "clean_normalize",
+    "flag_noise",
+    "identify_document_type",
+    "preserve_amount_date",
+    "preserve_semantics"
+  ],
+  "eval_methods": {
+    "clean_normalize": [
+      "assertion_shape",
+      "llm_as_judge"
+    ],
+    "flag_noise": [
+      "assertion_shape"
+    ],
+    "identify_document_type": [
+      "llm_as_judge"
+    ],
+    "preserve_amount_date": [
+      "assertion_shape"
+    ]
+  },
+  "total_cases": 10,
+  "min_cases_required": 10,
+  "source_distribution": {
+    "real": 3,
+    "synthetic": 2,
+    "edge": 3,
+    "adversarial": 2
+  },
+  "gate_method": "assertion_shape",
+  "_gate_method_comment": "assertion_shape cobre clean_normalize, flag_noise, preserve_amount_date (Zod + assertImmutableFinancialFields). identify_document_type e preserve_semantics rodam apenas via llm_as_judge (signal, não bloqueante para ASSISTED).",
+  "pass_rate_threshold": 0.9,
+  "last_updated": "2026-05-26"
+}

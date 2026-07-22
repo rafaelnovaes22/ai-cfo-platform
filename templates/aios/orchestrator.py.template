@@ -1,0 +1,325 @@
+"""
+AIOS Orchestrator — pipeline multiagente TDD-first para o projeto {PROJECT_NAME}.
+
+Gerado a partir de templates/aios/orchestrator.py.template (Foundry v0.9.0+).
+Lê a lista de módulos de aios/config.yaml — sem hardcode (C8).
+
+Pipeline padrão (TDD-first, Foundry v0.9.0+):
+  spec → schema → test(red) → build(back+front em paralelo) → test(verify) → review
+
+Uso:
+  python aios/orchestrator.py spec --module {modulo}
+  python aios/orchestrator.py schema
+  python aios/orchestrator.py test --module {modulo} --mode red
+  python aios/orchestrator.py build --module {modulo}
+  python aios/orchestrator.py test --module {modulo} --mode verify
+  python aios/orchestrator.py review --module {modulo}
+  python aios/orchestrator.py pipeline --module {modulo}
+  python aios/orchestrator.py status
+
+C4 (TDD enforcement): testes RED são gerados ANTES do build. O orquestrador imprime
+                      o caminho dos arquivos físicos em tests/{module}/ para o operador
+                      rodar `npm test` (ou equivalente) e CONFIRMAR que falham antes
+                      de prosseguir para o build.
+C7 (Portability):     este script falha graciosamente se o kernel AIOS não estiver online.
+C6 (Telemetry):       trace_id retornado por cada agente é propagado e logado aqui.
+"""
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+
+import httpx
+import yaml  # PyYAML — adicionar a requirements.txt do projeto consumidor
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_PATH = PROJECT_ROOT / "aios" / "config.yaml"
+
+
+def _load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        print(f"[ERRO] aios/config.yaml não encontrado em {CONFIG_PATH}")
+        print("       Rode /novais-digital:aios-init primeiro ou copie templates/aios/config.yaml.template")
+        sys.exit(2)
+    with CONFIG_PATH.open("r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh) or {}
+
+
+CONFIG = _load_config()
+AIOS_BASE = f"http://{CONFIG.get('server', {}).get('host', 'localhost')}:{CONFIG.get('server', {}).get('port', 8000)}"
+PROJECT_NAME = CONFIG.get("project", {}).get("name", "{PROJECT_NAME}")
+MODULES_ORDER: list[dict] = CONFIG.get("modules", []) or []
+
+
+def _module_names() -> list[str]:
+    return [m["name"] for m in MODULES_ORDER if "name" in m]
+
+
+def _module_tier(module: str) -> str:
+    for m in MODULES_ORDER:
+        if m.get("name") == module:
+            return m.get("tier", "B")
+    return "B"
+
+
+async def call_agent(agent_name: str, task: dict) -> dict:
+    """Chama um agente AIOS via HTTP."""
+    async with httpx.AsyncClient(timeout=300) as client:
+        response = await client.post(
+            f"{AIOS_BASE}/agent/execute",
+            json={"agent_name": agent_name, "task": task},
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+def _resolve_agent(agent_role: str, module: str | None) -> str:
+    """
+    Agentes especializados por módulo: spec, backend, frontend → "{module}-{role}-agent".
+    Agentes compartilhados: schema, test, review → "{role}_agent" no caminho aios/agents/.
+    """
+    specialized = {"spec", "backend", "frontend"}
+    if agent_role in specialized:
+        if not module:
+            raise ValueError(f"agente {agent_role} requer --module")
+        return f"{module}_{agent_role}_agent"
+    return f"{agent_role}_agent"
+
+
+async def run_spec(module: str):
+    print(f"\n[SPEC] Gerando spec: {module}")
+    result = await call_agent(_resolve_agent("spec", module), {"module": module})
+    print(f"[SPEC] {result.get('status')} → {result.get('spec_path')} (trace_id={result.get('trace_id')})")
+    return result
+
+
+async def run_schema():
+    print("\n[SCHEMA] Gerando proposta de schema (stack lida de aios/config.yaml)...")
+    result = await call_agent(_resolve_agent("schema", None), {"project": PROJECT_NAME})
+    print(f"[SCHEMA] {result.get('status')} → {result.get('output_path')}")
+    note = result.get("note")
+    if note:
+        print(f"[SCHEMA] aviso: {note}")
+    return result
+
+
+async def run_test(module: str, mode: str = "red"):
+    tier = _module_tier(module)
+    label = "TEST-RED" if mode == "red" else "TEST-VERIFY"
+    print(f"\n[{label}] {module} (tier {tier})")
+    result = await call_agent(
+        _resolve_agent("test", None),
+        {"module": module, "mode": mode, "tier": tier},
+    )
+    print(f"[{label}] {result.get('status')} → plano: {result.get('plan_path')}")
+    files = result.get("files_written") or []
+    if files:
+        print(f"[{label}] arquivos gerados ({len(files)}):")
+        for f in files[:10]:
+            print(f"        - {f}")
+        if len(files) > 10:
+            print(f"        ... +{len(files)-10} arquivos")
+    if mode == "verify":
+        print(f"[{label}] veredicto: {result.get('verdict')}")
+    return result
+
+
+async def run_build(module: str):
+    print(f"\n[BUILD] Backend + Frontend em paralelo: {module}")
+    backend_task = call_agent(_resolve_agent("backend", module), {"module": module})
+    frontend_task = call_agent(_resolve_agent("frontend", module), {"module": module})
+    backend, frontend = await asyncio.gather(backend_task, frontend_task)
+    print(f"[BUILD] Backend: {backend.get('status')} → {backend.get('output_path')}")
+    print(f"[BUILD] Frontend: {frontend.get('status')} → {frontend.get('output_path')}")
+    return {"backend": backend, "frontend": frontend}
+
+
+async def run_review(module: str):
+    print(f"\n[REVIEW] Revisando: {module}")
+    result = await call_agent(_resolve_agent("review", None), {"module": module})
+    approved = result.get("approved", False)
+    status = "APROVADO" if approved else "PRECISA DE AJUSTES"
+    print(f"[REVIEW] {status} → {result.get('output_path')}")
+    return result
+
+
+async def run_pipeline(module: str):
+    """Pipeline TDD-first: spec → schema → test(red) → build → test(verify) → review.
+
+    Gates humanos C4 obrigatórios em pontos críticos:
+      - Após SPEC (revisar antes de gerar testes)
+      - Após TEST-RED (rodar `npm test` e CONFIRMAR que falham antes do build)
+      - Após BUILD (rodar `npm test` e CONFIRMAR que os RED viraram GREEN)
+    """
+    print(f"\n{'='*60}")
+    print(f"PIPELINE TDD [{PROJECT_NAME}]: {module} (tier {_module_tier(module)})")
+    print(f"{'='*60}")
+
+    # 1. Spec
+    spec = await run_spec(module)
+    if spec.get("error"):
+        print(f"[PIPELINE] Spec falhou: {spec['error']}")
+        return
+
+    print(f"\n[PIPELINE] Spec gerada em docs/specs/{module}.md")
+    print("[PIPELINE] GATE C4 — revise a spec antes de gerar testes RED.")
+    if input("[PIPELINE] Continuar para TEST-RED? (s/n): ").strip().lower() != "s":
+        print("[PIPELINE] Pipeline interrompido no gate de Spec.")
+        return
+
+    # 2. Test RED (antes do build — TDD)
+    red = await run_test(module, mode="red")
+    if red.get("error"):
+        print(f"[PIPELINE] TEST-RED falhou: {red['error']}")
+        return
+
+    print("\n[PIPELINE] GATE C4 — RED phase concluída.")
+    print("[PIPELINE]   Rode os testes localmente AGORA e confirme que TODOS falham:")
+    print(f"[PIPELINE]     <runner> tests/{module}/")
+    print("[PIPELINE]   Se algum teste passar sem implementação, a spec está incompleta")
+    print("[PIPELINE]   ou o teste não está exercitando o que deveria.")
+    if input("[PIPELINE] Testes RED confirmadamente vermelhos? Continuar para BUILD? (s/n): ").strip().lower() != "s":
+        print("[PIPELINE] Pipeline interrompido no gate TDD-RED.")
+        return
+
+    # 3. Build (paralelo)
+    await run_build(module)
+
+    print("\n[PIPELINE] GATE C4 — BUILD concluído.")
+    print("[PIPELINE]   Rode os testes novamente e confirme que viraram GREEN:")
+    print(f"[PIPELINE]     <runner> tests/{module}/ --coverage")
+    if input("[PIPELINE] Testes GREEN? Continuar para VERIFY+REVIEW? (s/n): ").strip().lower() != "s":
+        print("[PIPELINE] Pipeline interrompido no gate TDD-GREEN.")
+        return
+
+    # 4. Test Verify (revisa cobertura vs. requisitos)
+    verify = await run_test(module, mode="verify")
+    if verify.get("verdict") == "needs_more_tests":
+        print(f"[PIPELINE] VERIFY pediu testes adicionais — veja {verify.get('plan_path')}")
+        print("[PIPELINE]   Adicione os testes sugeridos antes do REVIEW.")
+        if input("[PIPELINE] Continuar para REVIEW mesmo assim? (s/n): ").strip().lower() != "s":
+            print("[PIPELINE] Pipeline interrompido — adicione testes e re-rode VERIFY.")
+            return
+
+    # 5. Review (checklist Constitution + TDD gates)
+    review = await run_review(module)
+
+    if not review.get("approved"):
+        print(f"\n[PIPELINE] Review encontrou blockers — veja docs/specs/_review_{module}.md")
+    else:
+        print(f"\n[PIPELINE] {module} aprovado — pronto para abrir PR.")
+        print(f"[PIPELINE]   Confirme localmente: testes verdes + coverage ≥ target tier {_module_tier(module)}")
+
+
+def show_status():
+    """Status filesystem-based (não exige kernel rodando)."""
+    specs_dir = PROJECT_ROOT / "docs" / "specs"
+    tests_dir = PROJECT_ROOT / "tests"
+    print(f"\n{'='*60}")
+    print(f"STATUS DOS MÓDULOS [{PROJECT_NAME}]")
+    print(f"{'='*60}")
+
+    if not MODULES_ORDER:
+        print("(nenhum módulo declarado em aios/config.yaml → modules:)")
+        print("Rode /novais-digital:aios-init --module <nome> para adicionar.")
+        return
+
+    for mod in MODULES_ORDER:
+        name = mod["name"]
+        tier = mod.get("tier", "?")
+        spec_ok = (specs_dir / f"{name}.md").exists()
+        tests_plan_ok = (specs_dir / f"_tests_{name}.md").exists()
+        tests_files = list((tests_dir / name).rglob("*")) if (tests_dir / name).exists() else []
+        tests_files_count = sum(1 for p in tests_files if p.is_file())
+        backend_ok = (specs_dir / f"_backend_{name}.md").exists()
+        frontend_ok = (specs_dir / f"_frontend_{name}.md").exists()
+        verify_ok = (specs_dir / f"_test_results_{name}.md").exists()
+        review_path = specs_dir / f"_review_{name}.md"
+        approved = False
+        if review_path.exists():
+            approved = "APROVADO PARA MERGE: Sim" in review_path.read_text(encoding="utf-8")
+
+        def m(b: bool) -> str:
+            return "[ok]" if b else "[--]"
+
+        r = "[ok]" if approved else ("[!!]" if review_path.exists() else "[--]")
+        tests_marker = f"[{tests_files_count}f]" if tests_files_count else "[--]"
+        print(
+            f"{name:<25} tier:{tier} spec:{m(spec_ok)} red:{m(tests_plan_ok)} "
+            f"files:{tests_marker} backend:{m(backend_ok)} frontend:{m(frontend_ok)} "
+            f"verify:{m(verify_ok)} review:{r}"
+        )
+
+
+def health_check() -> bool:
+    """Verifica se o kernel está online (porta declarada em aios/config.yaml)."""
+    try:
+        r = httpx.get(f"{AIOS_BASE}/health", timeout=3)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def main():
+    parser = argparse.ArgumentParser(description=f"AIOS Orchestrator TDD-first — {PROJECT_NAME}")
+    sub = parser.add_subparsers(dest="command")
+
+    sp = sub.add_parser("spec", help="Gera spec de um módulo")
+    sp.add_argument("--module", required=True)
+
+    sub.add_parser("schema", help="Gera proposta de schema (stack do aios/config.yaml)")
+
+    bp = sub.add_parser("build", help="Backend + Frontend em paralelo")
+    bp.add_argument("--module", required=True)
+
+    tp = sub.add_parser("test", help="Gera/verifica testes de um módulo (TDD)")
+    tp.add_argument("--module", required=True)
+    tp.add_argument("--mode", choices=["red", "verify"], default="red",
+                    help="red = antes do build (TDD-first); verify = após build")
+
+    rp = sub.add_parser("review", help="Revisa um módulo")
+    rp.add_argument("--module", required=True)
+
+    pp = sub.add_parser("pipeline", help="Pipeline TDD completo de um módulo")
+    pp.add_argument("--module", required=True)
+
+    sub.add_parser("status", help="Status filesystem-based de todos os módulos")
+    sub.add_parser("health", help="Verifica se o kernel AIOS está online")
+
+    args = parser.parse_args()
+
+    requires_kernel = args.command in {"spec", "schema", "build", "test", "review", "pipeline"}
+    if requires_kernel and not health_check():
+        print(f"[ERRO] Kernel AIOS offline em {AIOS_BASE}.")
+        print("       Inicie com: bash .aios-kernel/runtime/launch_kernel.sh")
+        print("       Ou use /novais-digital:aios-status (filesystem-only) para ver progresso sem kernel.")
+        sys.exit(2)
+
+    if args.command == "spec":
+        asyncio.run(run_spec(args.module))
+    elif args.command == "schema":
+        asyncio.run(run_schema())
+    elif args.command == "build":
+        asyncio.run(run_build(args.module))
+    elif args.command == "test":
+        asyncio.run(run_test(args.module, mode=args.mode))
+    elif args.command == "review":
+        asyncio.run(run_review(args.module))
+    elif args.command == "pipeline":
+        asyncio.run(run_pipeline(args.module))
+    elif args.command == "status":
+        show_status()
+    elif args.command == "health":
+        ok = health_check()
+        print(f"Kernel: {'ONLINE' if ok else 'OFFLINE'} ({AIOS_BASE})")
+        sys.exit(0 if ok else 1)
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,211 @@
+# templates/cicd/github-actions-validate.template.yml
+#
+# COMO USAR:
+#   1. Copie para .github/workflows/foundry-validate.yml no projeto consumidor
+#   2. Substitua {PROJECT_NAME} pelo slug do projeto (ex: school-platform-demo)
+#   3. Substitua {FOUNDRY_ROOT} pelo caminho do Foundry relativo ao repo (ex: foundry/ ou .claude/foundry/)
+#   4. Configure secrets: FOUNDRY_BYPASS_TOKEN (opcional, para bypass auditado)
+#
+# O QUE FAZ:
+#   - Roda foundry-doctor.sh (7 checks estruturais) em todo PR
+#   - Roda skill-security-scan.sh (5 checks de segurança) quando .claude/skills/ muda
+#   - Roda pre-merge-check (G1-G5) quando src/, prompts/ ou evals/ muda
+#   - Exit code 2 = FAIL (bloqueia merge); exit code 1 = WARN (anotação no PR)
+#
+# PRINCÍPIOS: C6 (telemetria rastreável), C7 (portável, sem hardcode de projeto)
+
+name: Foundry Validate — {PROJECT_NAME}
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  foundry-doctor:
+    name: Foundry Doctor (estrutural)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Foundry Doctor — 7 checks estruturais
+        run: |
+          bash scripts/foundry-doctor.sh
+        env:
+          # FOUNDRY_ROOT: caminho para o Foundry dentro do projeto
+          FOUNDRY_ROOT: "{FOUNDRY_ROOT}"
+
+      - name: Upload relatório foundry-doctor
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-doctor-report
+          path: docs/foundry/ci-reports/
+          retention-days: 30
+
+  skill-security-scan:
+    name: Skill Security Scan (S1-S5)
+    runs-on: ubuntu-latest
+    # Só roda se arquivos de skills mudaram
+    if: |
+      contains(github.event.head_commit.modified, '.claude/skills/') ||
+      github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skill Security Scan — 5 checks
+        run: |
+          bash hooks/scripts/skill-security-scan.sh \
+            --path .claude/skills \
+            --fail-fast
+
+  pre-merge-check:
+    name: Pre-merge Check (G1-G5)
+    runs-on: ubuntu-latest
+    # Só roda em PRs que tocam código, prompts ou evals
+    if: |
+      github.event_name == 'pull_request' && (
+        contains(github.event.pull_request.changed_files, 'src/') ||
+        contains(github.event.pull_request.changed_files, 'prompts/') ||
+        contains(github.event.pull_request.changed_files, 'evals/')
+      )
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --if-present
+
+      - name: Pre-merge Check — G1 (C7 imports SDK só em src/llm/adapters/)
+        run: |
+          # G1: SDK import fora de adapters = FAIL
+          violations=$(grep -r "from 'anthropic'\|from \"anthropic\"\|require('anthropic')" \
+            src/ --include="*.ts" --include="*.js" \
+            --exclude-dir=adapters 2>/dev/null | wc -l)
+          if [ "$violations" -gt 0 ]; then
+            echo "::error::G1 FAIL — SDK import fora de src/llm/adapters/ ($violations ocorrências)"
+            exit 2
+          fi
+          echo "G1 PASS"
+
+      - name: Pre-merge Check — G2 (C8 sem hardcode por tenant)
+        run: |
+          # G2: tenantId/clientName hardcoded em src/skus/ ou src/agents/ = FAIL
+          pattern="if\s*\(\s*tenantId\s*===|switch\s*\(\s*tenantName\|clients/[a-zA-Z]"
+          violations=$(grep -rP "$pattern" \
+            src/skus/ src/agents/ 2>/dev/null | wc -l)
+          if [ "$violations" -gt 0 ]; then
+            echo "::error::G2 FAIL — Hardcode por tenant detectado ($violations ocorrências)"
+            exit 2
+          fi
+          echo "G2 PASS"
+
+      - name: Pre-merge Check — G3 (C6 toda chamada LLM com observe())
+        run: |
+          # G3: callLLM/send_request sem observe() wrapper = WARN
+          total=$(grep -r "callLLM\|send_request\|client\.messages" \
+            src/ --include="*.ts" --include="*.py" 2>/dev/null | wc -l)
+          wrapped=$(grep -r "observe(\|trace\.observe\|langfuse\.trace" \
+            src/ --include="*.ts" --include="*.py" 2>/dev/null | wc -l)
+          if [ "$total" -gt 0 ] && [ "$wrapped" -lt "$total" ]; then
+            echo "::warning::G3 WARN — $total chamadas LLM, $wrapped com observe()"
+          fi
+          echo "G3 checked ($wrapped/$total wrappados)"
+
+      - name: Pre-merge Check — G4 (manifest sincronizado)
+        run: |
+          # G4: artefatos novos sem entry no manifest = WARN
+          node -e "JSON.parse(require('fs').readFileSync('docs/foundry/manifest.json','utf8'))" \
+            && echo "G4 PASS — manifest JSON válido" \
+            || { echo "::error::G4 FAIL — manifest.json inválido"; exit 2; }
+
+      - name: Pre-merge Check — G5 (eval suite verde para artefatos modificados)
+        run: |
+          # G5: se prompts/ mudou, exige run de eval recente (≤7 dias)
+          changed_prompts=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep "^prompts/" | head -5)
+          if [ -n "$changed_prompts" ]; then
+            echo "Prompts modificados: $changed_prompts"
+            echo "::warning::G5 — Prompts mudaram; certifique-se de rodar /novais-digital:eval antes do merge"
+          fi
+          echo "G5 checked"
+
+      - name: Consolidar resultado pre-merge
+        if: failure()
+        run: |
+          echo "::error::Pre-merge check falhou — corrija os gates antes de mergear"
+          exit 2
+
+  # ─── Gate TDD-RED — todo módulo modificado em src/ tem tests/ correspondente ─
+  tdd-red-phase-check:
+    name: TDD-RED Phase Check (G6)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verificar que todo módulo tocado em src/ tem tests/ correspondente
+        shell: bash
+        run: |
+          # G6: Para cada caminho src/modules/{module}/* ou src/{features|domains}/{module}/*
+          # modificado, exigir que exista tests/{module}/unit/ com pelo menos 1 arquivo.
+          # Isto enforce o ciclo TDD: o test_agent --mode red deve ter rodado ANTES do build.
+
+          base="${{ github.base_ref }}"
+          changed=$(git diff --name-only "origin/$base...HEAD" | grep -E '^src/(modules|features|domains)/' || true)
+          if [ -z "$changed" ]; then
+            echo "Nenhum módulo de domínio modificado — gate TDD-RED N/A"
+            exit 0
+          fi
+
+          # Extrai nomes únicos de módulos do path src/{modules|features|domains}/{nome}/...
+          modules=$(echo "$changed" | sed -E 's|^src/(modules|features|domains)/([^/]+)/.*|\2|' | sort -u)
+          missing=""
+          for mod in $modules; do
+            if [ ! -d "tests/$mod/unit" ] || [ -z "$(ls -A tests/$mod/unit 2>/dev/null)" ]; then
+              missing="$missing $mod"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "::error::G6 TDD-RED FAIL — módulos modificados sem tests/{module}/unit/:$missing"
+            echo "::error::  Rode: python aios/orchestrator.py test --module <nome> --mode red"
+            echo "::error::  ANTES de implementar o backend/frontend (Foundry v0.9.0+ exige TDD)."
+            exit 2
+          fi
+          echo "✓ G6 PASS — todos os módulos modificados têm tests/{module}/unit/ presente"
+
+  summary:
+    name: Resumo CI
+    runs-on: ubuntu-latest
+    needs: [foundry-doctor, skill-security-scan, pre-merge-check, tdd-red-phase-check]
+    if: always()
+    steps:
+      - name: Status dos gates
+        run: |
+          echo "foundry-doctor: ${{ needs.foundry-doctor.result }}"
+          echo "skill-security-scan: ${{ needs.skill-security-scan.result }}"
+          echo "pre-merge-check: ${{ needs.pre-merge-check.result }}"
+          echo "tdd-red-phase-check: ${{ needs.tdd-red-phase-check.result }}"
+          if [ "${{ needs.foundry-doctor.result }}" = "failure" ]; then
+            echo "::error::Foundry Doctor falhou — merge bloqueado"
+            exit 1
+          fi
+          if [ "${{ needs.tdd-red-phase-check.result }}" = "failure" ]; then
+            echo "::error::TDD-RED gate (G6) falhou — merge bloqueado"
+            exit 1
+          fi

@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# foundry — CLI wrapper unificado do Novais Digital Foundry
+#
+# Uso:
+#   bash scripts/foundry <verbo> [args]
+#
+# Verbos:
+#   start          Wizard interativo (detecta persona e direciona)
+#   doctor         Validação completa (alias para foundry-doctor.sh)
+#   version        Versão atual do framework
+#   mode <vibe|dev>  Define modo de operação (escreve .foundry-mode)
+#   help [verbo]   Ajuda contextual
+#
+# Filosofia: 1 comando para tudo. Tradução de erros para humanos.
+# Não substitui os slash commands /novais-digital:* (usados dentro do Claude Code).
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# Cores (degradam graciosamente em terminais sem suporte)
+if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
+  C_RESET=$(tput sgr0)
+  C_BOLD=$(tput bold)
+  C_DIM=$(tput dim)
+  C_BLUE=$(tput setaf 4)
+  C_CYAN=$(tput setaf 6)
+  C_GREEN=$(tput setaf 2)
+  C_YELLOW=$(tput setaf 3)
+  C_RED=$(tput setaf 1)
+else
+  C_RESET="" C_BOLD="" C_DIM="" C_BLUE="" C_CYAN="" C_GREEN="" C_YELLOW="" C_RED=""
+fi
+
+# Detecta raiz do repo
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+MODE_FILE="${REPO_ROOT}/.foundry-mode"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Utilidades
+# ─────────────────────────────────────────────────────────────────────────────
+
+print_header() {
+  echo ""
+  echo "${C_BOLD}${C_CYAN}╔══════════════════════════════════════════════════╗${C_RESET}"
+  echo "${C_BOLD}${C_CYAN}║         Novais Digital Foundry — CLI wrapper               ║${C_RESET}"
+  echo "${C_BOLD}${C_CYAN}╚══════════════════════════════════════════════════╝${C_RESET}"
+  echo ""
+}
+
+print_error() {
+  echo "${C_RED}❌ $1${C_RESET}" >&2
+}
+
+print_warn() {
+  echo "${C_YELLOW}⚠️  $1${C_RESET}"
+}
+
+print_info() {
+  echo "${C_BLUE}ℹ️  $1${C_RESET}"
+}
+
+print_success() {
+  echo "${C_GREEN}✅ $1${C_RESET}"
+}
+
+get_current_mode() {
+  if [[ -f "${MODE_FILE}" ]]; then
+    cat "${MODE_FILE}"
+  else
+    echo "unset"
+  fi
+}
+
+get_framework_version() {
+  local manifest_rel="docs/foundry/manifest.json"
+  local manifest="${REPO_ROOT}/${manifest_rel}"
+  if [[ ! -f "${manifest}" ]]; then
+    echo "unknown"
+    return
+  fi
+  # Estratégia: cd para REPO_ROOT e usar caminho relativo (evita problemas Unix↔Windows no node)
+  if command -v jq >/dev/null 2>&1; then
+    (cd "${REPO_ROOT}" && jq -r '.framework.version // "unknown"' "${manifest_rel}")
+  elif command -v node >/dev/null 2>&1; then
+    (cd "${REPO_ROOT}" && node -e "console.log(JSON.parse(require('fs').readFileSync('${manifest_rel}','utf8')).framework.version || 'unknown')" 2>/dev/null) || echo "unknown"
+  else
+    grep -E '"version"' "${manifest}" | head -1 | sed -E 's/.*"version": *"([^"]+)".*/\1/'
+  fi
+}
+
+get_framework_phase() {
+  local manifest_rel="docs/foundry/manifest.json"
+  local manifest="${REPO_ROOT}/${manifest_rel}"
+  if [[ ! -f "${manifest}" ]]; then
+    echo "unknown"
+    return
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    (cd "${REPO_ROOT}" && jq -r '.framework.phase // "unknown"' "${manifest_rel}" | head -c 80)
+  elif command -v node >/dev/null 2>&1; then
+    (cd "${REPO_ROOT}" && node -e "const p=JSON.parse(require('fs').readFileSync('${manifest_rel}','utf8')).framework.phase||'unknown'; console.log(p.substring(0,80))" 2>/dev/null) || echo "unknown"
+  else
+    echo "(jq ou node necessário para ler phase)"
+  fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Verbos
+# ─────────────────────────────────────────────────────────────────────────────
+
+cmd_help() {
+  local topic="${1:-}"
+
+  if [[ -z "${topic}" ]]; then
+    print_header
+    cat <<EOF
+${C_BOLD}Uso:${C_RESET}  bash scripts/foundry <verbo> [args]
+
+${C_BOLD}Verbos disponíveis:${C_RESET}
+
+  ${C_CYAN}start${C_RESET}              Wizard interativo (perfeito para primeira vez)
+  ${C_CYAN}doctor${C_RESET}             Validação completa do framework
+  ${C_CYAN}version${C_RESET}            Versão atual + fase Foundry
+  ${C_CYAN}mode${C_RESET} <vibe|dev>    Define seu modo de operação
+  ${C_CYAN}help${C_RESET} [verbo]       Ajuda contextual
+
+${C_BOLD}Atalhos por persona:${C_RESET}
+
+  ${C_GREEN}🎨 CEO / vibecoder${C_RESET}   → leia ${C_BOLD}QUICKSTART_VIBE.md${C_RESET}
+  ${C_GREEN}🛠️  Dev no time${C_RESET}      → leia ${C_BOLD}QUICKSTART_DEV.md${C_RESET}
+  ${C_GREEN}🤖 Agente IA${C_RESET}         → use ${C_BOLD}templates/master-prompt.md${C_RESET}
+
+${C_BOLD}Não sei por onde começar:${C_RESET}
+  bash scripts/foundry start
+
+${C_DIM}Modo atual: $(get_current_mode)${C_RESET}
+${C_DIM}Foundry $(get_framework_version)${C_RESET}
+EOF
+    echo ""
+    return 0
+  fi
+
+  case "${topic}" in
+    start)
+      echo "${C_BOLD}foundry start${C_RESET} — wizard interativo"
+      echo ""
+      echo "Detecta sua persona (vibe / dev / agente) e direciona para o quickstart correto."
+      echo "Salva sua preferência em .foundry-mode para customizar próximas execuções."
+      ;;
+    doctor)
+      echo "${C_BOLD}foundry doctor${C_RESET} — validação completa"
+      echo ""
+      echo "Equivalente a 'bash scripts/foundry-doctor.sh'. Roda 25 checks:"
+      echo "  C1: JSON parse · C2: paths · C3: versão coerente · C4: constitution"
+      echo "  C5: sintaxe hooks · C6: artefatos órfãos · C7: permissions · C8: AIOS TDD"
+      ;;
+    version)
+      echo "${C_BOLD}foundry version${C_RESET} — versão atual"
+      echo ""
+      echo "Mostra framework.version + manifest_version + phase Foundry."
+      ;;
+    mode)
+      echo "${C_BOLD}foundry mode <vibe|dev>${C_RESET} — modo de operação"
+      echo ""
+      echo "Salva preferência em .foundry-mode (gitignored)."
+      echo "  vibe → otimiza outputs para linguagem natural, sem jargão técnico"
+      echo "  dev  → otimiza outputs para precisão técnica, com comandos exatos"
+      ;;
+    *)
+      print_error "Verbo desconhecido: ${topic}"
+      echo "Verbos válidos: start, doctor, version, mode, help"
+      exit 1
+      ;;
+  esac
+}
+
+cmd_start() {
+  print_header
+
+  echo "${C_BOLD}Vamos descobrir como você prefere usar o Foundry.${C_RESET}"
+  echo ""
+  echo "${C_DIM}Responda com o número da opção (1, 2, 3 ou 4):${C_RESET}"
+  echo ""
+  echo "  ${C_CYAN}1${C_RESET}) 🎨 Sou CEO / founder / criador — quero vibecodar"
+  echo "  ${C_CYAN}2${C_RESET}) 🛠️  Sou dev — vou contribuir com código"
+  echo "  ${C_CYAN}3${C_RESET}) 🤖 Sou um agente de IA"
+  echo "  ${C_CYAN}4${C_RESET}) 🆘 Não tenho certeza"
+  echo ""
+  read -rp "Sua escolha: " choice
+
+  case "${choice}" in
+    1)
+      echo "${C_BLUE}vibe${C_RESET}" > "${MODE_FILE}"
+      echo ""
+      print_success "Modo definido: ${C_BOLD}vibe${C_RESET}"
+      echo ""
+      echo "📖 Próximo passo: leia ${C_BOLD}QUICKSTART_VIBE.md${C_RESET}"
+      echo "   (5 min de leitura, sem nada técnico)"
+      echo ""
+      echo "💡 Atalho: abra ${C_BOLD}QUICKSTART_VIBE.md${C_RESET} no seu editor agora."
+      ;;
+    2)
+      echo "${C_BLUE}dev${C_RESET}" > "${MODE_FILE}"
+      echo ""
+      print_success "Modo definido: ${C_BOLD}dev${C_RESET}"
+      echo ""
+      echo "📖 Próximo passo: leia ${C_BOLD}QUICKSTART_DEV.md${C_RESET}"
+      echo "   (15 min — cheatsheet de 1 página)"
+      echo ""
+      echo "💡 Já pode rodar: ${C_BOLD}bash scripts/foundry doctor${C_RESET} para validar instalação"
+      ;;
+    3)
+      echo "${C_BLUE}agent${C_RESET}" > "${MODE_FILE}"
+      echo ""
+      print_success "Modo definido: ${C_BOLD}agent${C_RESET}"
+      echo ""
+      echo "📖 Próximo passo: carregue ${C_BOLD}templates/master-prompt.md${C_RESET}"
+      echo "   como system prompt no Claude Code"
+      echo ""
+      echo "💡 Esse documento tem 12 seções operacionais para você."
+      ;;
+    4)
+      echo ""
+      print_info "Sem problema. Vamos com calma."
+      echo ""
+      echo "Me responde 1 pergunta:"
+      echo ""
+      echo "  ${C_CYAN}A${C_RESET}) Você abre terminal e digita comandos? (git, npm, etc)"
+      echo "  ${C_CYAN}B${C_RESET}) Você só usa Claude Code interativo / VS Code com IA?"
+      echo ""
+      read -rp "Sua escolha (A/B): " hint
+
+      case "${hint^^}" in
+        A)
+          echo "${C_BLUE}dev${C_RESET}" > "${MODE_FILE}"
+          print_success "Você é ${C_BOLD}dev${C_RESET}. Vá para QUICKSTART_DEV.md"
+          ;;
+        B)
+          echo "${C_BLUE}vibe${C_RESET}" > "${MODE_FILE}"
+          print_success "Você é ${C_BOLD}vibe${C_RESET}. Vá para QUICKSTART_VIBE.md"
+          ;;
+        *)
+          print_warn "Não entendi. Mas tudo bem: leia ${C_BOLD}HELLO.md${C_RESET} e escolha lá."
+          ;;
+      esac
+      ;;
+    *)
+      print_error "Opção inválida. Rode 'bash scripts/foundry start' de novo."
+      exit 1
+      ;;
+  esac
+
+  echo ""
+  echo "${C_DIM}Modo salvo em: ${MODE_FILE}${C_RESET}"
+  echo "${C_DIM}Para mudar depois: bash scripts/foundry mode <vibe|dev>${C_RESET}"
+  echo ""
+}
+
+cmd_doctor() {
+  local doctor_script="${REPO_ROOT}/scripts/foundry-doctor.sh"
+  if [[ ! -f "${doctor_script}" ]]; then
+    print_error "foundry-doctor.sh não encontrado em ${doctor_script}"
+    exit 1
+  fi
+  bash "${doctor_script}" "$@"
+}
+
+cmd_version() {
+  local version=$(get_framework_version)
+  local phase=$(get_framework_phase)
+  local mode=$(get_current_mode)
+
+  echo ""
+  echo "${C_BOLD}Novais Digital Foundry${C_RESET}"
+  echo "  Versão:       ${C_GREEN}${version}${C_RESET}"
+  echo "  Fase atual:   ${C_CYAN}${phase}${C_RESET}"
+  echo "  Modo local:   ${mode}"
+  echo ""
+}
+
+cmd_mode() {
+  local new_mode="${1:-}"
+
+  if [[ -z "${new_mode}" ]]; then
+    local current=$(get_current_mode)
+    echo ""
+    echo "Modo atual: ${C_BOLD}${current}${C_RESET}"
+    echo ""
+    echo "Para mudar:"
+    echo "  bash scripts/foundry mode vibe   ${C_DIM}# linguagem natural, sem jargão${C_RESET}"
+    echo "  bash scripts/foundry mode dev    ${C_DIM}# técnico, comandos exatos${C_RESET}"
+    echo "  bash scripts/foundry mode agent  ${C_DIM}# para agentes IA${C_RESET}"
+    echo ""
+    return 0
+  fi
+
+  case "${new_mode}" in
+    vibe|dev|agent)
+      echo "${new_mode}" > "${MODE_FILE}"
+      print_success "Modo definido: ${C_BOLD}${new_mode}${C_RESET}"
+      echo "${C_DIM}Salvo em: ${MODE_FILE}${C_RESET}"
+      ;;
+    *)
+      print_error "Modo inválido: ${new_mode}"
+      echo "Modos válidos: vibe, dev, agent"
+      exit 1
+      ;;
+  esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Router principal
+# ─────────────────────────────────────────────────────────────────────────────
+
+main() {
+  local verb="${1:-help}"
+  shift || true
+
+  case "${verb}" in
+    start)    cmd_start "$@" ;;
+    doctor)   cmd_doctor "$@" ;;
+    version|--version|-v) cmd_version ;;
+    mode)     cmd_mode "$@" ;;
+    help|--help|-h) cmd_help "$@" ;;
+    "")       cmd_help ;;
+    *)
+      print_error "Verbo desconhecido: ${verb}"
+      echo ""
+      echo "Verbos disponíveis: start, doctor, version, mode, help"
+      echo "Rode: ${C_BOLD}bash scripts/foundry help${C_RESET}"
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

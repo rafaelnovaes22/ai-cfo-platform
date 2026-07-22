@@ -1,0 +1,1951 @@
+{
+  "$schema": "https://novais-digital.com.br/foundry/manifest-v1.json",
+  "manifest_version": "0.22.1",
+  "framework": {
+    "name": "Novais Digital Foundry",
+    "version": "0.22.1",
+    "phase": "Foundry-21 — Aicfo consumer aligned with canonical v0.22.1 (WireLog analytics_provider opcional + bifurcação C6 + patch Langfuse→LangSmith)",
+    "last_updated": "2026-06-29",
+    "constitution_version": "0.4.0",
+    "constitution_path": ".claude/CONSTITUTION.md",
+    "constitution_sha256": null,
+    "owner": "Novais Digital / Novais Digital",
+    "license": "private",
+    "consumer_types": [
+      {
+        "type": "human-developer",
+        "entry_point": "QUICKSTART.md",
+        "tooling": "Claude Code IDE"
+      },
+      {
+        "type": "deep-agent",
+        "entry_point": "DEEPAGENT_GUIDE.md",
+        "tooling": "GPT-5.5 via OpenAI SDK (Python deepagents OR Node @langchain/langgraph)"
+      },
+      {
+        "type": "framework-maintainer",
+        "entry_point": "CONTRIBUTING.md",
+        "tooling": "Claude Code IDE + git"
+      }
+    ],
+    "reviewer": {
+      "type": "deep-agent",
+      "stack": "deepagents-cli (LangChain Python, v0.0.34+)",
+      "model": "configurable via DEEPAGENTS_MODEL env",
+      "provider": "openai (default — F10)",
+      "frequency": "monthly",
+      "contract_path": "docs/foundry/reviewer-contract.md",
+      "implementation_status": "infrastructure-complete (10 skills converted; runtime invocation pending in consumer project)",
+      "implementation_decisions": [
+        "F17",
+        "F18"
+      ],
+      "converter_repo": "https://github.com/andersonamaral2/Claude-Code-to-Deep-Agents-Skills-Converter",
+      "artifacts": {
+        "prompt": "reviewer/prompt.template.md",
+        "output_schema": "reviewer/output-schema.json",
+        "validation_rules": "reviewer/validation-rules.json",
+        "example_audit": "reviewer/example-audit.md",
+        "deepagents_root": "reviewer/deepagents/",
+        "deepagents_readme": "reviewer/deepagents/README.md",
+        "deepagents_conversion_log": "reviewer/deepagents/conversion-log.md",
+        "deepagents_skills": [
+          "reviewer/deepagents/skills/L0/company-dna/SKILL.md",
+          "reviewer/deepagents/skills/L0/icp-loader/SKILL.md",
+          "reviewer/deepagents/skills/L0/offerings-loader/SKILL.md",
+          "reviewer/deepagents/skills/L1/baseline-cost-builder/SKILL.md",
+          "reviewer/deepagents/skills/L1/diagnostic-runner/SKILL.md",
+          "reviewer/deepagents/skills/L1/process-mapper/SKILL.md",
+          "reviewer/deepagents/skills/L2/artifact-prompt-builder/SKILL.md",
+          "reviewer/deepagents/skills/L2/eval-case-author/SKILL.md",
+          "reviewer/deepagents/skills/L2/shadow-mode-runner/SKILL.md",
+          "reviewer/deepagents/skills/reviewer/foundry-auditor/SKILL.md"
+        ]
+      }
+    },
+    "framework_version_required": "0.21.0",
+    "last_synced_at": "2026-06-22"
+  },
+  "principles": [
+    {
+      "id": "C1",
+      "name": "Diagnose-before-design",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C2",
+      "name": "Outcome-first, never tech-first",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C3",
+      "name": "Cost ≤ 25% of price",
+      "scope": "all-categories",
+      "shadow_exemption": true
+    },
+    {
+      "id": "C4",
+      "name": "SHADOW antes de cobrar",
+      "scope": "platform-skus",
+      "products_alternative": "Beta declared"
+    },
+    {
+      "id": "C5",
+      "name": "Three-tier context",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C6",
+      "name": "Telemetry-by-default",
+      "scope": "all-categories"
+    },
+    {
+      "id": "C7",
+      "name": "Portability over lock-in",
+      "scope": "all-categories",
+      "products_relax": "stack divergente em Beta com plano de migração"
+    },
+    {
+      "id": "C8",
+      "name": "Anti-customização heroica",
+      "scope": "all-categories"
+    }
+  ],
+  "principle_extensions_path": "examples/novais-digital/constitution-extension.md",
+  "artifacts": {
+    "documentation": {
+      "core": [
+        {
+          "id": "readme",
+          "path": "README.md",
+          "type": "documentation",
+          "audience": [
+            "human-developer",
+            "deep-agent",
+            "framework-maintainer"
+          ],
+          "version": "0.4.1",
+          "sha256": null,
+          "description": "Multi-consumer overview e ponteiros — atualizado para v0.4.1 (badges, status, estrutura expandida)"
+        },
+        {
+          "id": "quickstart",
+          "path": "QUICKSTART.md",
+          "type": "documentation",
+          "audience": [
+            "human-developer"
+          ],
+          "version": "0.2.0",
+          "sha256": null,
+          "description": "Instalar Foundry em projeto novo em <5 min"
+        },
+        {
+          "id": "architecture",
+          "path": "ARCHITECTURE.md",
+          "type": "documentation",
+          "audience": [
+            "human-developer",
+            "framework-maintainer"
+          ],
+          "version": "0.2.0",
+          "sha256": null,
+          "description": "Visão estrutural, fluxos, camadas de governança"
+        },
+        {
+          "id": "install",
+          "path": "INSTALL.md",
+          "type": "documentation",
+          "audience": [
+            "human-developer"
+          ],
+          "version": "0.1.0",
+          "sha256": null,
+          "description": "Instalação manual detalhada"
+        },
+        {
+          "id": "contributing",
+          "path": "CONTRIBUTING.md",
+          "type": "documentation",
+          "audience": [
+            "framework-maintainer"
+          ],
+          "version": "0.2.0",
+          "sha256": null,
+          "description": "Como evoluir o framework"
+        },
+        {
+          "id": "deepagent-guide",
+          "path": "DEEPAGENT_GUIDE.md",
+          "type": "documentation",
+          "audience": [
+            "deep-agent"
+          ],
+          "version": "0.2.0",
+          "sha256": null,
+          "description": "Como agente autônomo navega e audita projetos Foundry"
+        },
+        {
+          "id": "glossary",
+          "path": "GLOSSARY.md",
+          "type": "documentation",
+          "audience": [
+            "human-developer",
+            "deep-agent",
+            "framework-maintainer"
+          ],
+          "version": "0.2.0",
+          "sha256": null,
+          "description": "Vocabulário compartilhado"
+        },
+        {
+          "id": "claude-md-meta",
+          "path": "CLAUDE.md",
+          "type": "documentation",
+          "audience": [
+            "framework-maintainer"
+          ],
+          "version": "0.1.0",
+          "sha256": null,
+          "description": "Meta-doc para devs do framework"
+        },
+        {
+          "id": "claude-md-template",
+          "path": "CLAUDE.md.template",
+          "type": "template",
+          "audience": [
+            "human-developer"
+          ],
+          "version": "0.1.0",
+          "sha256": null,
+          "description": "Template para projeto consumidor adaptar como CLAUDE.md raiz"
+        },
+        {
+          "id": "changelog",
+          "path": "CHANGELOG.md",
+          "type": "documentation",
+          "audience": [
+            "all"
+          ],
+          "version": "0.6.0",
+          "sha256": null,
+          "description": "Histórico de versões (entradas até v0.6.0 — Foundry-7)"
+        }
+      ],
+      "foundry_docs": [
+        {
+          "id": "foundry-readme",
+          "path": "docs/foundry/README.md",
+          "type": "documentation",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Overview interno do framework"
+        },
+        {
+          "id": "foundry-decisions",
+          "path": "docs/foundry/decisions.md",
+          "type": "documentation",
+          "version": "0.6.0",
+          "sha256": null,
+          "description": "Decisões F1-F24"
+        },
+        {
+          "id": "foundry-roadmap",
+          "path": "docs/foundry/roadmap.md",
+          "type": "documentation",
+          "version": "0.6.0",
+          "sha256": null,
+          "description": "Roadmap das 7 ondas (incluindo Foundry-6 AIOS infraestrutura + Foundry-7 AIOS templates portáveis)"
+        },
+        {
+          "id": "foundry-aios-telemetry-pattern",
+          "path": "docs/foundry/aios-telemetry-pattern.md",
+          "type": "documentation",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Padrão oficial de telemetria LangSmith para agentes AIOS — campos obrigatórios, mock fallback, integração com hook langsmith-trace-check"
+        },
+        {
+          "id": "foundry-reviewer-contract",
+          "path": "docs/foundry/reviewer-contract.md",
+          "type": "documentation",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6"
+          ],
+          "description": "Contrato formal com reviewer DeepAgent"
+        },
+        {
+          "id": "foundry-out-of-scope",
+          "path": "docs/foundry/out-of-scope.md",
+          "type": "documentation",
+          "version": "0.2.0",
+          "sha256": null,
+          "description": "O que NÃO entra no Foundry"
+        },
+        {
+          "id": "foundry-manifest",
+          "path": "docs/foundry/manifest.json",
+          "type": "manifest",
+          "version": "0.6.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6"
+          ],
+          "description": "Este arquivo - inventory machine-readable"
+        },
+        {
+          "id": "foundry-helper-pattern",
+          "path": "docs/foundry/helper-pattern.md",
+          "type": "documentation",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5"
+          ],
+          "description": "Helper pattern (BMAD) — cache strategy para skills Tier 1 com meta de ≥70% redução de tokens"
+        }
+      ]
+    },
+    "constitution": {
+      "id": "constitution",
+      "path": ".claude/CONSTITUTION.md",
+      "type": "constitution",
+      "version": "0.2.0",
+      "sha256": null,
+      "owner": "Mantenedor",
+      "approval_required_for_change": true,
+      "description": "8 princípios genéricos versionados (C1-C8) — desacoplados de Novais Digital específico"
+    },
+    "settings": {
+      "id": "claude-settings",
+      "path": ".claude/settings.json",
+      "type": "settings",
+      "version": "0.4.1",
+      "sha256": null,
+      "description": "Permissões e hooks do Claude Code (Foundry layer; settings.local.json continua para overrides do dev). Foundry-4: 9 hooks ativos. _foundry_version e _constitution_version espelham manifest — não são fonte canônica."
+    },
+    "templates": [
+      {
+        "id": "template-platform-sku-spec",
+        "path": "templates/platform-sku-spec.template.md",
+        "type": "template",
+        "version": "0.2.0",
+        "sha256": null,
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4"
+        ],
+        "use_case": "platform-sku",
+        "description": "Spec de SKU vertical em plataforma high-touch (cliente não loga, entrega async). Renomeado de sku-spec na v0.2.0."
+      },
+      {
+        "id": "template-product-spec",
+        "path": "templates/product-spec.template.md",
+        "type": "template",
+        "version": "0.2.0",
+        "sha256": null,
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C8"
+        ],
+        "use_case": "self-serve-product",
+        "description": "Spec de produto self-serve (cliente loga, mensalidade fixa) — Novais Digital Fin, Novais Digital Educacional, etc."
+      },
+      {
+        "id": "template-diagnostic-spec",
+        "path": "templates/diagnostic-spec.template.md",
+        "type": "template",
+        "version": "0.2.0",
+        "sha256": null,
+        "linked_principles": [
+          "C1",
+          "C2"
+        ],
+        "use_case": "diagnostic-fase-0",
+        "description": "Spec de Diagnóstico/Fase 0 cobrável"
+      },
+      {
+        "id": "template-adr",
+        "path": "templates/adr.template.md",
+        "type": "template",
+        "version": "0.1.0",
+        "sha256": null,
+        "linked_principles": [
+          "C7"
+        ],
+        "description": "Architecture Decision Record"
+      },
+      {
+        "id": "template-eval-case",
+        "path": "templates/eval-case.template.md",
+        "type": "template",
+        "version": "0.1.0",
+        "sha256": null,
+        "linked_principles": [
+          "C4"
+        ],
+        "description": "Caso de eval suite por SKU/produto"
+      },
+      {
+        "id": "template-unit-economics",
+        "path": "templates/unit-economics.template.md",
+        "type": "template",
+        "version": "0.1.0",
+        "sha256": null,
+        "linked_principles": [
+          "C3"
+        ],
+        "description": "Validação de unit economics (regra C3)"
+      },
+      {
+        "id": "template-lifecycle-stage",
+        "path": "templates/lifecycle-stage.template.md",
+        "type": "template",
+        "version": "0.2.0",
+        "sha256": null,
+        "linked_principles": [],
+        "description": "Declaração de stage atual (Discovery → MVP → Beta → GA → Maturity → Sunset) com critérios de promoção"
+      },
+      {
+        "id": "template-monthly-audit",
+        "path": "templates/monthly-audit.template.md",
+        "type": "template",
+        "version": "0.2.0",
+        "sha256": null,
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C5",
+          "C6",
+          "C7",
+          "C8"
+        ],
+        "description": "Output do reviewer DeepAgent — relatório mensal de auditoria"
+      },
+      {
+        "id": "template-clickup-blueprint",
+        "path": "templates/clickup-blueprint.template.md",
+        "type": "template",
+        "version": "0.2.0",
+        "sha256": null,
+        "linked_principles": [
+          "C5"
+        ],
+        "description": "Estrutura ClickUp aplicando Three-tier (Sincra) — opcional"
+      },
+      {
+        "id": "template-adr-reviewer-runtime",
+        "path": "templates/adr-reviewer-runtime.template.md",
+        "type": "template",
+        "version": "0.1.0",
+        "sha256": null,
+        "linked_principles": [
+          "C6"
+        ],
+        "use_case": "consumer-adr-002",
+        "description": "Template para ADR-002 do projeto consumidor — runtime do reviewer DeepAgent (D1-D7: local de execução, modelo, telemetry, cadência, output, auto-rollback, credenciais)"
+      },
+      {
+        "id": "template-playbook",
+        "path": "templates/playbook.template.md",
+        "type": "template",
+        "version": "0.1.0",
+        "sha256": null,
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C8"
+        ],
+        "use_case": "vertical-playbook",
+        "description": "Template para playbook vertical — blocos reutilizáveis, padrões de integração e métricas de esforço. Meta: cliente 2 custa ≤30% do cliente 1."
+      },
+      {
+        "id": "template-retrospective",
+        "path": "templates/retrospective.template.md",
+        "type": "template",
+        "version": "0.1.0",
+        "sha256": null,
+        "linked_principles": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C6"
+        ],
+        "use_case": "sku-retrospective",
+        "description": "Template de retrospectiva por SKU pós-AUTONOMOUS — compliance C1-C8, gate failures, métricas reais, lições aprendidas."
+      }
+    ],
+    "templates_aios": {
+      "_status": "Foundry-7 — 6/6 agentes portáveis + orchestrator + config (v0.6.0). Boilerplate canônico copiado pelo /novais-digital:aios-init v0.2.0.",
+      "root": "templates/aios/",
+      "linked_principles": [
+        "C5",
+        "C6",
+        "C7",
+        "C8"
+      ],
+      "files": [
+        {
+          "id": "template-aios-readme",
+          "path": "templates/aios/README.md",
+          "type": "template-doc",
+          "version": "0.1.0",
+          "sha256": null,
+          "description": "Documentação dos placeholders, estrutura e diferenças vs. implementação de referência (SchoolPlatform)."
+        },
+        {
+          "id": "template-aios-orchestrator",
+          "path": "templates/aios/orchestrator.py.template",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Pipeline multiagente para o projeto consumidor — lê módulos de aios/config.yaml (sem hardcode). Gates humanos C4 obrigatórios em pipeline completo."
+        },
+        {
+          "id": "template-aios-config",
+          "path": "templates/aios/config.yaml.template",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C7",
+            "C8"
+          ],
+          "description": "Config canônica AIOS — llm/server/memory/storage + project.* + stack.{backend,frontend,database,tests} + modules[]."
+        },
+        {
+          "id": "template-aios-agent-spec",
+          "path": "templates/aios/agents/spec_agent/",
+          "path_kind": "directory",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "shared": false,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Especializado por módulo — converte descrição em spec executável. Tier configurável (A/B/C)."
+        },
+        {
+          "id": "template-aios-agent-backend",
+          "path": "templates/aios/agents/backend_agent/",
+          "path_kind": "directory",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "shared": false,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Especializado por módulo — implementa API + service layer. Stack lida de aios/config.yaml → stack.backend."
+        },
+        {
+          "id": "template-aios-agent-frontend",
+          "path": "templates/aios/agents/frontend_agent/",
+          "path_kind": "directory",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "shared": false,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Especializado por módulo — implementa UI/telas. Stack lida de aios/config.yaml → stack.frontend."
+        },
+        {
+          "id": "template-aios-agent-schema",
+          "path": "templates/aios/agents/schema_agent/",
+          "path_kind": "directory",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "shared": true,
+          "stack_agnostic": true,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Compartilhado e stack-agnostic — gera schema na stack declarada em aios/config.yaml → stack.database; se vazia, propõe 1-3 stacks com tradeoffs."
+        },
+        {
+          "id": "template-aios-agent-test",
+          "path": "templates/aios/agents/test_agent/",
+          "path_kind": "directory",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "shared": true,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Compartilhado — gera testes priorizando edge cases financeiros e regras críticas. Stack de testes lida de aios/config.yaml → stack.tests."
+        },
+        {
+          "id": "template-aios-agent-review",
+          "path": "templates/aios/agents/review_agent/",
+          "path_kind": "directory",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "shared": true,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Compartilhado — revisa output contra spec + checklist Constitution C5-C8. Output parseável (linha 'APROVADO PARA MERGE: Sim/Não')."
+        }
+      ]
+    },
+    "templates_cicd": {
+      "_status": "Foundry-8 — 4 templates de CI/CD entregues (v0.7.0). Copie para .github/workflows/ e docs/ no projeto consumidor. Gate 6 do /novais-digital:promote lê docs/cicd-checklist-{artifact_id}.md antes de autorizar assisted_to_autonomous.",
+      "root": "templates/cicd/",
+      "linked_principles": [
+        "C1",
+        "C4",
+        "C6",
+        "C7"
+      ],
+      "files": [
+        {
+          "id": "template-cicd-validate",
+          "path": "templates/cicd/github-actions-validate.template.yml",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6",
+            "C7"
+          ],
+          "use_case": "pr-validation",
+          "description": "Workflow GitHub Actions para todo PR — foundry-doctor (7 checks), skill-security-scan (S1-S5), pre-merge G1-G5 (C7/C8/C6/manifest/eval). Copiar para .github/workflows/foundry-validate.yml."
+        },
+        {
+          "id": "template-cicd-eval",
+          "path": "templates/cicd/github-actions-eval.template.yml",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4",
+            "C6",
+            "C7"
+          ],
+          "use_case": "eval-automation",
+          "description": "Workflow GitHub Actions para eval automático em mudanças de prompts/ — detecta artifact_id, roda eval por categoria, falha PR se pass_rate < threshold, trace LangSmith obrigatório. Copiar para .github/workflows/foundry-eval.yml."
+        },
+        {
+          "id": "template-cicd-audit",
+          "path": "templates/cicd/github-actions-audit.template.yml",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C4",
+            "C6"
+          ],
+          "use_case": "monthly-audit",
+          "description": "Workflow GitHub Actions com cron mensal (1ª seg. 06:00 UTC) — invoca foundry-auditor DeepAgent, commit automático do relatório em docs/foundry/audits/, Issue se SLA breach. Copiar para .github/workflows/foundry-audit.yml."
+        },
+        {
+          "id": "template-cicd-checklist",
+          "path": "templates/cicd/cicd-checklist.template.md",
+          "type": "template",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C4",
+            "C6",
+            "C7"
+          ],
+          "use_case": "gate-6-evidence",
+          "description": "Checklist platform-agnostic com 27 itens (18 obrigatórios 🔴, 9 recomendados 🟡). Preencher em docs/cicd-checklist-{artifact_id}.md — campo gate_6_status lido pelo promotion-officer antes de assinar assisted_to_autonomous."
+        }
+      ]
+    },
+    "reviewer_assets": [
+      {
+        "id": "reviewer-readme",
+        "path": "reviewer/README.md",
+        "type": "reviewer-asset",
+        "version": "0.4.1",
+        "sha256": null,
+        "audience": [
+          "deep-agent",
+          "human-developer"
+        ],
+        "description": "Índice do diretório reviewer/ — ordem de leitura, links para assets e deepagents/"
+      },
+      {
+        "id": "reviewer-prompt",
+        "path": "reviewer/prompt.template.md",
+        "type": "reviewer-asset",
+        "version": "0.2.0",
+        "sha256": null,
+        "audience": [
+          "deep-agent"
+        ],
+        "description": "System prompt para DeepAgent reviewer"
+      },
+      {
+        "id": "reviewer-output-schema",
+        "path": "reviewer/output-schema.json",
+        "type": "reviewer-asset",
+        "version": "0.2.0",
+        "sha256": null,
+        "audience": [
+          "deep-agent"
+        ],
+        "description": "JSON schema do output da auditoria mensal"
+      },
+      {
+        "id": "reviewer-validation-rules",
+        "path": "reviewer/validation-rules.json",
+        "type": "reviewer-asset",
+        "version": "0.2.0",
+        "sha256": null,
+        "audience": [
+          "deep-agent"
+        ],
+        "description": "Validation rules machine-readable para os 8 princípios"
+      },
+      {
+        "id": "reviewer-example-audit",
+        "path": "reviewer/example-audit.md",
+        "type": "reviewer-asset",
+        "version": "0.2.0",
+        "sha256": null,
+        "audience": [
+          "deep-agent",
+          "framework-maintainer"
+        ],
+        "description": "Exemplo sintético de output bem-feito"
+      }
+    ],
+    "examples": [
+      {
+        "id": "example-novais-digital",
+        "path": "examples/novais-digital/",
+        "path_kind": "directory",
+        "type": "example",
+        "version": "0.1.0",
+        "description": "Caso Novais Digital — projeto que originou o Foundry",
+        "subartifacts": [
+          {
+            "path": "examples/novais-digital/README.md",
+            "description": "Overview do caso"
+          },
+          {
+            "path": "examples/novais-digital/portfolio.md",
+            "description": "Portfolio em 3 categorias (Diagnóstico/Plataforma/Produtos)"
+          },
+          {
+            "path": "examples/novais-digital/constitution-extension.md",
+            "description": "C9, C10, C11 específicas Novais Digital"
+          },
+          {
+            "path": "examples/novais-digital/clickup-blueprint.md",
+            "description": "ClickUp interno Novais Digital"
+          },
+          {
+            "path": "examples/novais-digital/methodology/metodologia.md",
+            "description": "Metodologia Novais Digital clássica"
+          },
+          {
+            "path": "examples/novais-digital/methodology/metodologia_acme.md",
+            "description": "Metodologia Novais Digital SaaS²"
+          },
+          {
+            "path": "examples/novais-digital/methodology/metodologia_sincra.md",
+            "description": "Metodologia Sincra (origem do C5)"
+          },
+          {
+            "path": "examples/novais-digital/products/novais-digital-fin.md",
+            "description": "Spec do Novais Digital Fin (Beta em produção)"
+          },
+          {
+            "path": "examples/novais-digital/products/novais-digital-educacional.md",
+            "description": "Novais Digital Educacional (Discovery)"
+          }
+        ]
+      }
+    ],
+    "skills": {
+      "L0": [
+        {
+          "id": "skill-company-dna",
+          "path": ".claude/skills/L0/company-dna.md",
+          "type": "skill",
+          "tier": 1,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C7"
+          ],
+          "helper_pattern": "bmad",
+          "cache_strategy": "ephemeral-strong",
+          "reads_from_tier": [
+            1
+          ],
+          "must_not_read": [
+            2,
+            3
+          ],
+          "description": "Carrega DNA da organização (purpose, mission, values, north-star) em YAML compacto cacheável."
+        },
+        {
+          "id": "skill-icp-loader",
+          "path": ".claude/skills/L0/icp-loader.md",
+          "type": "skill",
+          "tier": 1,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C7"
+          ],
+          "helper_pattern": "bmad",
+          "cache_strategy": "ephemeral-strong",
+          "reads_from_tier": [
+            1
+          ],
+          "must_not_read": [
+            2,
+            3
+          ],
+          "description": "Carrega ICP (Ideal Customer Profile) com sinais de qualificação e anti-ICP."
+        },
+        {
+          "id": "skill-offerings-loader",
+          "path": ".claude/skills/L0/offerings-loader.md",
+          "type": "skill",
+          "tier": 1,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2",
+            "C5",
+            "C7"
+          ],
+          "helper_pattern": "bmad",
+          "cache_strategy": "ephemeral-strong",
+          "reads_from_tier": [
+            1
+          ],
+          "must_not_read": [
+            2,
+            3
+          ],
+          "description": "Carrega catálogo de ofertas (produtos, SKUs, diagnósticos) com lifecycle_stage e pricing_model."
+        },
+        {
+          "id": "skill-using-foundry",
+          "path": ".claude/skills/L0/using-foundry.md",
+          "type": "skill",
+          "tier": 0,
+          "version": "1.0.0",
+          "description": "Meta-skill Foundry: flowchart de descoberta, hierarquia C5, modos de operacao. Injetada pelo SessionStart hook.",
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "auto_inject": true,
+          "sha256": "bfeec206dc68bc9e"
+        }
+      ],
+      "L1": [
+        {
+          "id": "skill-baseline-cost-builder",
+          "path": ".claude/skills/L1/baseline-cost-builder.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "reads_from_tier": [
+            1,
+            2
+          ],
+          "must_not_read": [
+            3
+          ],
+          "requires_helper": [
+            "company-dna",
+            "offerings-loader"
+          ],
+          "description": "Calcula custo humano baseline (volume × tempo × custo-hora) e deriva preço de venda mínimo para cumprir hard gate C3."
+        },
+        {
+          "id": "skill-diagnostic-runner",
+          "path": ".claude/skills/L1/diagnostic-runner.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "reads_from_tier": [
+            1,
+            2
+          ],
+          "must_not_read": [
+            3
+          ],
+          "requires_helper": [
+            "company-dna",
+            "icp-loader",
+            "offerings-loader"
+          ],
+          "description": "Executa roteiro estruturado de diagnóstico Fase 0 (10 blocos) — produz docs/clients/{client}/diagnostic.md. Critério: relatório em ≤10 min."
+        },
+        {
+          "id": "skill-process-mapper",
+          "path": ".claude/skills/L1/process-mapper.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C5",
+            "C7"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "reads_from_tier": [
+            1,
+            2
+          ],
+          "must_not_read": [
+            3
+          ],
+          "requires_helper": [
+            "offerings-loader"
+          ],
+          "description": "Mapeia processo as-is em formato agent-ready (trigger, steps, decision points, métricas, automatable hypotheses + agent_readiness_score)."
+        },
+        {
+          "id": "skill-foundry-release-discipline",
+          "path": ".claude/skills/L1/foundry-release-discipline.md",
+          "type": "skill",
+          "tier": 1,
+          "version": "1.0.0",
+          "description": "Disciplina SemVer + git workflow para Foundry framework e consumer projects.",
+          "linked_principles": [
+            "C4",
+            "C5"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "sha256": "9076a803fd7c911b"
+        },
+        {
+          "id": "skill-context-engineering",
+          "path": ".claude/skills/L1/context-engineering.md",
+          "type": "skill",
+          "tier": 1,
+          "version": "1.0.0",
+          "sha256": null,
+          "description": "Curadoria deliberada do contexto do agente: hierarquia L0/L1/L2 como context engineering, CLAUDE.md como rules file, SessionStart hook, confusion management. Adaptado de context-engineering (agent-skills).",
+          "linked_principles": [
+            "C1",
+            "C5",
+            "C6"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none"
+        },
+        {
+          "id": "skill-sdk-migration",
+          "path": ".claude/skills/L1/sdk-migration.md",
+          "type": "skill",
+          "tier": 1,
+          "version": "1.0.0",
+          "sha256": null,
+          "description": "Migracoes SDK externo, modelos depreciados e atualizacoes Foundry. Adaptado de deprecation-and-migration (agent-skills).",
+          "linked_principles": [
+            "C7",
+            "C4"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none"
+        }
+      ],
+      "L2": [
+        {
+          "id": "skill-artifact-prompt-builder",
+          "path": ".claude/skills/L2/artifact-prompt-builder.md",
+          "type": "skill",
+          "tier": 3,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "reads_from_tier": [
+            1,
+            2,
+            3
+          ],
+          "must_not_read": [],
+          "requires_helper": [
+            "company-dna",
+            "offerings-loader"
+          ],
+          "description": "Constrói system prompt versionado em 9 seções canônicas com prompt_hash, instrumentação C6 obrigatória e zero hardcode por tenant. Disparou recalc_unit_economics_required."
+        },
+        {
+          "id": "skill-eval-case-author",
+          "path": ".claude/skills/L2/eval-case-author.md",
+          "type": "skill",
+          "tier": 3,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "reads_from_tier": [
+            1,
+            2,
+            3
+          ],
+          "must_not_read": [],
+          "requires_helper": [
+            "offerings-loader"
+          ],
+          "description": "Gera eval cases (real/synthetic/edge/adversarial) com sanitização PII, gabarito justificado e cobertura por outcome_category (≥30 para passar C4)."
+        },
+        {
+          "id": "skill-shadow-mode-runner",
+          "path": ".claude/skills/L2/shadow-mode-runner.md",
+          "type": "skill",
+          "tier": 3,
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4",
+            "C6"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "reads_from_tier": [
+            1,
+            2,
+            3
+          ],
+          "must_not_read": [],
+          "requires_helper": [
+            "offerings-loader"
+          ],
+          "description": "Coordena modo SHADOW (start/tick/report) com mínimo 14 dias mandatórios, output isolado em runs/{client}/shadow/, métricas de concordância e recomendação de promoção (decisão humana)."
+        },
+        {
+          "id": "skill-doubt-driven-review",
+          "path": ".claude/skills/L2/doubt-driven-review.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "1.0.0",
+          "description": "Revisao adversarial fresh-context de artefatos Foundry antes de SHADOW/promote/merge.",
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6",
+            "C7"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "sha256": "538a8d3908b38191"
+        },
+        {
+          "id": "skill-debugging-pipeline",
+          "path": ".claude/skills/L2/debugging-pipeline.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "1.0.0",
+          "description": "Depuracao sistematica de artefatos Foundry: hooks, eval regression, SHADOW anomalia.",
+          "linked_principles": [
+            "C4",
+            "C6"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "sha256": "88183b23bb468f52"
+        },
+        {
+          "id": "skill-prompt-simplification",
+          "path": ".claude/skills/L2/prompt-simplification.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "1.0.0",
+          "description": "Simplificacao de prompt Foundry (reducao tokens C3) e codigo consumer.",
+          "linked_principles": [
+            "C3",
+            "C5",
+            "C6",
+            "C7"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none",
+          "sha256": "995fe66f1698034c"
+        },
+        {
+          "id": "skill-source-driven-implementation",
+          "path": ".claude/skills/L2/source-driven-implementation.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "1.0.0",
+          "sha256": null,
+          "description": "Fundamenta decisoes de SDK em documentacao oficial antes de implementar. Detecta versoes Anthropic/LangSmith/Prisma, busca doc oficial, cita fontes. Adaptado de source-driven-development (agent-skills).",
+          "linked_principles": [
+            "C6",
+            "C7"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none"
+        },
+        {
+          "id": "skill-wave-implementation",
+          "path": ".claude/skills/L2/wave-implementation.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "1.0.0",
+          "sha256": null,
+          "description": "Implementa em ondas verticais finas com foundry-doctor como gate entre commits. TDD-red first, disciplina C8, save point pattern. Adaptado de incremental-implementation (agent-skills).",
+          "linked_principles": [
+            "C3",
+            "C6",
+            "C8"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none"
+        },
+        {
+          "id": "skill-llm-security-hardening",
+          "path": ".claude/skills/L2/llm-security-hardening.md",
+          "type": "skill",
+          "tier": 2,
+          "version": "1.0.0",
+          "sha256": null,
+          "description": "Hardening LLM: prompt injection, PII eval cases LGPD/GDPR, secret leakage LangSmith, TenantContext validacao. Adaptado de security-and-hardening (agent-skills).",
+          "linked_principles": [
+            "C6",
+            "C8"
+          ],
+          "helper_pattern": "none",
+          "cache_strategy": "none"
+        }
+      ],
+      "_status": "Foundry-1 generic complete — Tier 1 (L0) 3/3 + Tier 2 (L1) 3/3 + Tier 3 (L2) 3/3. Novais Digital-specific skills (tenant-onboarding, outcome-classifier, billing-calculator, flywheel-collector) reserved for examples/novais-digital/skills/ scope per F13/F14."
+    },
+    "agents": {
+      "guardians_opus": [
+        {
+          "id": "agent-po-guardian",
+          "path": ".claude/agents/po-guardian.md",
+          "type": "subagent",
+          "model": "claude-opus-4-7",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C8"
+          ],
+          "description": "Product Owner — valida outcome clause, ICP fit, scope. Cross-approver of /novais-digital:promote (par com promotion-officer)."
+        },
+        {
+          "id": "agent-artifact-architect",
+          "path": ".claude/agents/artifact-architect.md",
+          "type": "subagent",
+          "model": "claude-opus-4-7",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C7",
+            "C8"
+          ],
+          "description": "Technical architect — valida agent_readiness, layers, abstractions. Renomeado de sku-architect (v0.2.0)."
+        },
+        {
+          "id": "agent-unit-economist",
+          "path": ".claude/agents/unit-economist.md",
+          "type": "subagent",
+          "model": "claude-opus-4-7",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C3"
+          ],
+          "description": "Economic firewall — c3_check, baseline-cost, recalc_unit_economics. Bloqueia /novais-digital:sla-threshold se unviable."
+        },
+        {
+          "id": "agent-promotion-officer",
+          "path": ".claude/agents/promotion-officer.md",
+          "type": "subagent",
+          "model": "claude-opus-4-7",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4"
+          ],
+          "description": "Promotion authority — assina transição de modo (Gate 5 do /novais-digital:promote). Cross-approval mandatório com po-guardian."
+        }
+      ],
+      "guardians_sonnet": [
+        {
+          "id": "agent-eval-engineer",
+          "path": ".claude/agents/eval-engineer.md",
+          "type": "subagent",
+          "model": "claude-sonnet-4-6",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6"
+          ],
+          "description": "Eval suite quality — coverage por outcome_category, source_mode breakdown, ground-truth justification, regressão por prompt_hash."
+        },
+        {
+          "id": "agent-tenant-context-curator",
+          "path": ".claude/agents/tenant-context-curator.md",
+          "type": "subagent",
+          "model": "claude-sonnet-4-6",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C8"
+          ],
+          "description": "Anti-customização — TenantContext schema, lint regex C8 em src/skus, src/products, src/skills."
+        },
+        {
+          "id": "agent-observability-guardian",
+          "path": ".claude/agents/observability-guardian.md",
+          "type": "subagent",
+          "model": "claude-sonnet-4-6",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6"
+          ],
+          "description": "Telemetry coverage — Section 8 dos prompts, observe() wrapper, trace_coverage ≥99%, prompt_hash drift detection."
+        },
+        {
+          "id": "agent-security-privacy-guardian",
+          "path": ".claude/agents/security-privacy-guardian.md",
+          "type": "subagent",
+          "model": "claude-sonnet-4-6",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6",
+            "C8"
+          ],
+          "description": "PII/LGPD/secrets — lint em eval-cases, prompts, traces. Assinatura terceira mandatória para assisted_to_autonomous."
+        }
+      ],
+      "cross_llm_reviewers": [
+        {
+          "id": "agent-code-reviewer-claude",
+          "path": ".claude/agents/code-reviewer-claude.md",
+          "type": "subagent",
+          "model": "claude-sonnet-4-6",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Code review nativo Claude — focado em PR diff (src/, prompts/, evals/) com checks C5-C8."
+        },
+        {
+          "id": "agent-code-reviewer-cross",
+          "path": ".claude/agents/code-reviewer-cross.md",
+          "type": "subagent",
+          "model": "claude-haiku-4-5-20251001",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "delegates_to": "foundry-auditor (DeepAgent skill)",
+          "description": "Bridge Claude Code → LangChain DeepAgent. Não revisa código diretamente — invoca deepagents CLI e traduz output. F17/F18."
+        }
+      ],
+      "_status": "Foundry-3 — 10/10 agents delivered (4 Opus Guardians + 4 Sonnet Guardians + 2 cross-LLM reviewers). Pending: ADR-002 in consumer + first monthly audit run."
+    },
+    "commands": {
+      "spec_economics": [
+        {
+          "id": "command-diagnose",
+          "path": ".claude/commands/novais-digital/diagnose.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2"
+          ],
+          "invokes_skills": [
+            "company-dna",
+            "icp-loader",
+            "offerings-loader",
+            "diagnostic-runner"
+          ],
+          "trace_required": true,
+          "description": "Conduz Fase 0 cobrável (10 blocos) — porta de entrada do pipeline. Output: docs/clients/{client_id}/diagnostic.md."
+        },
+        {
+          "id": "command-spec",
+          "path": ".claude/commands/novais-digital/spec.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C8"
+          ],
+          "invokes_skills": [
+            "company-dna",
+            "offerings-loader",
+            "process-mapper"
+          ],
+          "trace_required": true,
+          "description": "Gera spec do artefato com cláusula de outcome literal. --type ∈ {platform-sku, product, diagnostic} resolve template. Renomeada de /novais-digital:spec-sku."
+        },
+        {
+          "id": "command-unit-economics",
+          "path": ".claude/commands/novais-digital/unit-economics.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3"
+          ],
+          "invokes_skills": [
+            "offerings-loader",
+            "baseline-cost-builder"
+          ],
+          "trace_required": true,
+          "description": "Calcula baseline humano e deriva preço mínimo C3. Bloqueia /novais-digital:sla-threshold se c3_check.status == unviable."
+        },
+        {
+          "id": "command-sla-threshold",
+          "path": ".claude/commands/novais-digital/sla-threshold.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2",
+            "C3",
+            "C4"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
+          "trace_required": true,
+          "human_approval_required": true,
+          "description": "Pré-contrata SLA mensurável (agreement_rate, latency_p95, cost_per_outcome, min_run_count, min_window_days). Persiste em spec.c4_thresholds com signature_hash."
+        }
+      ],
+      "implementation": [
+        {
+          "id": "command-plan",
+          "path": ".claude/commands/novais-digital/plan.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
+          "trace_required": true,
+          "description": "Plano técnico em 8 seções canônicas (escopo, camadas, fluxo, instrumentação, tenant, cronograma, riscos, critérios). Não escolhe modelo final."
+        },
+        {
+          "id": "command-tasks",
+          "path": ".claude/commands/novais-digital/tasks.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C5",
+            "C6"
+          ],
+          "invokes_skills": [],
+          "trace_required": true,
+          "description": "Quebra plan em DAG de tasks ordenadas em 5 ondas (scaffolding → prompt → eval seed → SHADOW prep → metrics) com gate de pronto por task."
+        },
+        {
+          "id": "command-implement",
+          "path": ".claude/commands/novais-digital/implement.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "artifact-prompt-builder",
+            "eval-case-author",
+            "offerings-loader"
+          ],
+          "trace_required": true,
+          "description": "Executa as 5 ondas do tasks.md, gera scaffolding com instrumentação obrigatória e camada de abstração; pausa em gates subjetivos. NÃO inicia SHADOW (responsabilidade de /novais-digital:promote)."
+        }
+      ],
+      "validation": [
+        {
+          "id": "command-eval",
+          "path": ".claude/commands/novais-digital/eval.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2",
+            "C4",
+            "C6"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
+          "trace_required": true,
+          "description": "Executa eval suite contra prompt atual; pass rate por outcome_category, source_mode breakdown, regressão vs último run com mesmo prompt_hash. Output: evals/{id}/runs/{date}-eval-{prompt_hash}.md."
+        },
+        {
+          "id": "command-promote",
+          "path": ".claude/commands/novais-digital/promote.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C6"
+          ],
+          "invokes_skills": [
+            "offerings-loader",
+            "shadow-mode-runner"
+          ],
+          "trace_required": true,
+          "human_approval_required": true,
+          "gate_count": 5,
+          "description": "Único caminho legítimo para mudar subscription.mode. 5 gates obrigatórios + aprovação cruzada PO × Promotion Officer com signature_hash. Append-only log em subscriptions/{id}/promotions.md."
+        },
+        {
+          "id": "command-audit-monthly",
+          "path": ".claude/commands/novais-digital/audit-monthly.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C3",
+            "C4",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
+          "trace_required": true,
+          "deep_agent_consumable": true,
+          "description": "Sample 5-10% de runs ASSISTED/AUTONOMOUS, drift detection, audit estrutural C5-C8, formato consumível pelo reviewer DeepAgent. Output: docs/foundry/audits/{YYYY-MM}.md."
+        },
+        {
+          "id": "command-pre-merge-check",
+          "path": ".claude/commands/novais-digital/pre-merge-check.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [],
+          "trace_required": false,
+          "read_only": true,
+          "gate_count": 5,
+          "description": "Read-only consolidação de 5 gates (C7 imports, C8 hardcode, C6 observe, manifest sync, eval green) — go/no-go para CI/pre-commit. Exit code 0/1/2 conforme overall."
+        }
+      ],
+      "_status": "Foundry-2+5+6+7 — 15 commands: spec_economics 4/4 + implementation 3/3 + validation 4/4 + playbooks 1/1 + aios 3/3 (aios-init v0.2.0 copia de templates físicos a partir de Foundry-7).",
+      "aios": [
+        {
+          "id": "command-aios-init",
+          "path": ".claude/commands/novais-digital/aios-init.md",
+          "type": "slash-command",
+          "version": "0.2.0",
+          "sha256": null,
+          "linked_principles": [
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [],
+          "trace_required": false,
+          "description": "Scaffolda aios/agents/{module}/ COPIANDO de templates/aios/ (Foundry-7). Cobre 6 agentes (3 especializados + 3 compartilhados criados se ausentes). Gera orchestrator/config quando ausentes. Gate: 7 checks antes de copiar qualquer arquivo."
+        },
+        {
+          "id": "command-aios-run",
+          "path": ".claude/commands/novais-digital/aios-run.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4",
+            "C6",
+            "C7"
+          ],
+          "invokes_skills": [],
+          "trace_required": true,
+          "description": "Wrapper para python aios/orchestrator.py pipeline. Health check, execução com gates humanos C4 obrigatórios, telemetria C6. Não re-executa automaticamente após gate rejeitado."
+        },
+        {
+          "id": "command-aios-status",
+          "path": ".claude/commands/novais-digital/aios-status.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4",
+            "C6"
+          ],
+          "invokes_skills": [],
+          "trace_required": false,
+          "read_only": true,
+          "description": "Read-only — exibe tabela de status de todos os módulos AIOS (spec/backend/frontend/testes/review/kernel). Detecta BLOCKERs em review. Fallback filesystem sem kernel."
+        }
+      ],
+      "playbooks": [
+        {
+          "id": "command-playbook-extract",
+          "path": ".claude/commands/novais-digital/playbook-extract.md",
+          "type": "slash-command",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "invokes_skills": [
+            "offerings-loader"
+          ],
+          "trace_required": false,
+          "requires_autonomous_sku": true,
+          "description": "Extrai playbook vertical a partir de SKUs em AUTONOMOUS. Gera docs/playbooks/{vertical}/playbook.md + docs/retrospectives/{sku}/retrospective.md."
+        }
+      ]
+    },
+    "hooks": {
+      "_status": "Foundry-4 complete — 9 hooks ativos + skill-security-scan + bypass auditado",
+      "bypass_env_var": "NOVAIS_FOUNDRY_BYPASS",
+      "bypass_log_path": "docs/foundry/bypass-log/",
+      "pre_tool_use": [
+        {
+          "id": "hook-outcome-clause-guard",
+          "path": "hooks/pre-tool-use/outcome-clause-guard.sh",
+          "type": "hook",
+          "hook_type": "PreToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C2"
+          ],
+          "exit_block": 2,
+          "bypass_aware": true,
+          "description": "Bloqueia edição de cláusulas de outcome aprovadas em docs/onda-*/clients/**."
+        },
+        {
+          "id": "hook-adr-approval-gate",
+          "path": "hooks/pre-tool-use/adr-approval-gate.sh",
+          "type": "hook",
+          "hook_type": "PreToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C7"
+          ],
+          "exit_block": 2,
+          "bypass_aware": true,
+          "description": "Bloqueia edição de ADRs com aprovação já assinada."
+        },
+        {
+          "id": "hook-secret-scan",
+          "path": "hooks/pre-tool-use/secret-scan.sh",
+          "type": "hook",
+          "hook_type": "PreToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6",
+            "C8"
+          ],
+          "exit_block": 2,
+          "bypass_aware": true,
+          "description": "Detecta API keys, tokens e connection strings hardcoded antes de escrever."
+        },
+        {
+          "id": "hook-any-type-guard",
+          "path": "hooks/pre-tool-use/any-type-guard.sh",
+          "type": "hook",
+          "hook_type": "PreToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C7",
+            "C8"
+          ],
+          "exit_block": 2,
+          "bypass_aware": true,
+          "description": "Bloqueia uso de 'any' TypeScript em src/skus/** e src/monthly-analysis/graph/nodes/**."
+        }
+      ],
+      "post_tool_use": [
+        {
+          "id": "hook-langsmith-trace-check",
+          "path": "hooks/post-tool-use/langsmith-trace-check.sh",
+          "type": "hook",
+          "hook_type": "PostToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6"
+          ],
+          "exit_warn": 1,
+          "description": "Avisa quando chamadas LLM em src/monthly-analysis/graph/nodes/** não têm trace LangSmith."
+        },
+        {
+          "id": "hook-unit-economics-recalc",
+          "path": "hooks/post-tool-use/unit-economics-recalc.sh",
+          "type": "hook",
+          "hook_type": "PostToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C3"
+          ],
+          "exit_warn": 1,
+          "description": "Avisa quando prompt files mudam e /novais-digital:unit-economics recalc é necessário."
+        },
+        {
+          "id": "hook-manifest-sync",
+          "path": "hooks/post-tool-use/manifest-sync.sh",
+          "type": "hook",
+          "hook_type": "PostToolUse",
+          "matcher": "Edit|Write",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6"
+          ],
+          "exit_warn": 0,
+          "description": "Informa quando artefatos Foundry mudam e manifest.json precisa ser atualizado."
+        }
+      ],
+      "stop": [
+        {
+          "id": "hook-5-gates-summary",
+          "path": "hooks/stop/5-gates-summary.sh",
+          "type": "hook",
+          "hook_type": "Stop",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C1",
+            "C3",
+            "C4",
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "exit_warn": 1,
+          "description": "Gera relatório dos 5 gates Foundry (manifest, any, evals, secrets, ADRs) ao fim da sessão."
+        },
+        {
+          "id": "hook-eval-suite-fresh",
+          "path": "hooks/stop/eval-suite-fresh.sh",
+          "type": "hook",
+          "hook_type": "Stop",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C4"
+          ],
+          "exit_warn": 1,
+          "description": "Avisa ao fim da sessão se eval suites têm menos de 30 casos (mínimo C4)."
+        }
+      ],
+      "scripts": [
+        {
+          "id": "script-foundry-doctor",
+          "path": "scripts/foundry-doctor.sh",
+          "type": "script",
+          "usage": "standalone CI/PR/pre-push",
+          "version": "0.4.1",
+          "sha256": null,
+          "linked_principles": [
+            "C6"
+          ],
+          "description": "Validador CI: C1 JSON parse, C2 paths existem, C3 versões coerentes, C4 constitution coerente, C5 bash -n hooks, C6 artefatos órfãos, C7 permissions sanity. Exit 0/1/2."
+        },
+        {
+          "id": "script-skill-security-scan",
+          "path": "hooks/scripts/skill-security-scan.sh",
+          "type": "script",
+          "usage": "standalone CI/PR",
+          "version": "0.1.0",
+          "sha256": null,
+          "linked_principles": [
+            "C6",
+            "C7",
+            "C8"
+          ],
+          "description": "Escaneia skill files (S1-S5: secrets, URLs, comandos destrutivos, bypass, frontmatter). Uso: bash hooks/scripts/skill-security-scan.sh"
+        }
+      ],
+      "session_start": [
+        {
+          "id": "hook-foundry-context",
+          "path": "hooks/session-start/foundry-context.sh",
+          "type": "hook",
+          "hook_type": "SessionStart",
+          "matcher": null,
+          "version": "1.0.0",
+          "sha256": "bdb357de400dc4ee",
+          "linked_principles": [
+            "C5"
+          ],
+          "description": "Injeta meta-skill using-foundry + contexto do projeto em toda nova sessao."
+        }
+      ]
+    },
+    "references": [
+      {
+        "id": "ref-orchestration-patterns",
+        "path": "docs/foundry/orchestration-patterns.md",
+        "type": "reference",
+        "version": "1.0.0",
+        "sha256": "0354e49d2530b38c",
+        "description": "Catalogo de padroes de orquestracao: invocacao direta, fan-out, pipeline sequencial, isolamento."
+      }
+    ]
+  },
+  "external_repos_absorbed": [
+    {
+      "repo": "github/spec-kit",
+      "absorbed": [
+        "Constitution pattern",
+        "Pipeline /diagnose → /promote"
+      ]
+    },
+    {
+      "repo": "vbomfim/sdlc-guardian-agents",
+      "absorbed": [
+        "Spec template structure",
+        "5 quality gates",
+        "Guardian roles"
+      ]
+    },
+    {
+      "repo": "addyosmani/agent-skills",
+      "absorbed": [
+        "Anti-rationalization tables",
+        "Verification gates"
+      ]
+    },
+    {
+      "repo": "aj-geddes/claude-code-bmad-skills",
+      "absorbed": [
+        "Helper pattern (token reduction in L0 only)"
+      ]
+    },
+    {
+      "repo": "carlrannaberg/claudekit",
+      "absorbed": [
+        "File-guard hook",
+        "Secret scan",
+        "Bash deny list"
+      ]
+    },
+    {
+      "repo": "peterkrueck/Claude-Code-Development-Kit",
+      "absorbed": [
+        "Documental structure",
+        "Cross-LLM review pattern"
+      ]
+    },
+    {
+      "repo": "VoltAgent/awesome-claude-code-subagents",
+      "absorbed": [
+        "Smart model routing Opus/Sonnet/Haiku"
+      ]
+    },
+    {
+      "repo": "anthropics/skills",
+      "absorbed": [
+        "Skill format reference (frontmatter)"
+      ]
+    },
+    {
+      "repo": "giuseppe-trisciuoglio/developer-kit",
+      "absorbed": [
+        "Path-scoped auto-activation"
+      ]
+    },
+    {
+      "repo": "alirezarezvani/claude-skills",
+      "absorbed": [
+        "Skill security auditor pattern"
+      ]
+    }
+  ],
+  "external_repos_excluded": [
+    {
+      "repo": "rohitg00/awesome-claude-code-toolkit",
+      "reason": "meta-list, redundant"
+    },
+    {
+      "repo": "feiskyer/claude-code-settings (multi-provider)",
+      "reason": "ADR 001 fixes Claude primary; OpenAI usado apenas para reviewer DeepAgent"
+    },
+    {
+      "repo": "lc-spec-driven",
+      "reason": "repo not found - awaiting confirmation of correct name"
+    }
+  ],
+  "checks_for_reviewer_summary": "Detalhe completo em reviewer/validation-rules.json. Reviewer deve carregar esse arquivo como input primário de checks.",
+  "_meta": {
+    "manifest_generator": "manual (hook manifest-sync informa quando atualizar)",
+    "next_update": "after each Foundry-X wave completion",
+    "validation_schema_url": "https://novais-digital.com.br/foundry/manifest-v1.json (to be published in Foundry-5)",
+    "sha256_policy": "post-install — hashes ficam null neste repo; consumidor e reviewer recomputam na auditoria via sha256sum no arquivo local (LF line endings). settings.json não é fonte canônica de versão — manifest é.",
+    "sha256_truncation": "first 16 hex chars of SHA-256; reviewer should recompute full hash for integrity check",
+    "sha256_method": "sha256sum on file bytes (LF line endings); cross-platform note: Windows CRLF may produce different hashes — normalize to LF for stable hashes",
+    "version_bumps": {
+      "0.1.0_to_0.2.0": "Repositioning as standalone framework consumable by external projects + DeepAgents. Constitution generalized; templates expanded from 4 to 9; reviewer/ folder added; examples/novais-digital/ added.",
+      "0.2.0_to_0.3.0": "Foundry-4 hooks runtime: 9 hooks activated (PreToolUse x4, PostToolUse x3, Stop x2), skill-security-scan script, bypass auditado em bypass-log/, settings.json _foundry_version bumped to 0.3.0.",
+      "0.3.0_to_0.4.0": "Foundry-5 infrastructure: playbook.template.md + retrospective.template.md, /novais-digital:playbook-extract command, docs/playbooks/ + docs/retrospectives/, decisions F19-F21 (playbook strategy, global deploy eval, plugin eval).",
+      "0.4.0_to_0.4.1": "Doc sync (F22): README badges/status/estrutura atualizados para v0.4.1; settings.json _foundry_version + _constitution_version corrigidos; decisions.md header F1-F22; roadmap.md header; manifest sha256_policy explicitado; reviewer/README.md criado; path_kind adicionado em examples/novais-digital/.",
+      "0.4.1_to_0.5.0": "Foundry-6 AIOS (F23): 3 novos commands (aios-init/run/status) + seção AIOS condicional em plan/tasks/implement + aios-telemetry-pattern.md + aios_tier no template spec + roadmap Foundry-6 section.",
+      "0.5.0_to_0.6.0": "Foundry-7 AIOS portable agents (F24): 6 agentes em templates/aios/agents/ (3 especializados + 3 compartilhados, sendo schema_agent stack-agnostic), orchestrator.py.template + config.yaml.template, /novais-digital:aios-init bumped para v0.2.0 (copia de templates físicos em vez de boilerplate inline), README dos templates AIOS, F24 em decisions, Foundry-7 section em roadmap.",
+      "0.6.0_to_0.7.0": "Foundry-8 CI/CD esteira completa (F25): 4 templates em templates/cicd/ (github-actions-validate/eval/audit + cicd-checklist), Gate 6 adicionado ao /novais-digital:promote (obrigatório para assisted_to_autonomous), Wave 6 no /novais-digital:tasks (T6.1-T6.5), promotion-officer.md atualizado com Gate 6, F25 em decisions, Foundry-8 section em roadmap.",
+      "0.15.0_to_0.21.0": "Aicfo consumer ingest of Foundry-15/16/17/18/19/20: SDLC skills (Foundry-15/16/17/18 already synced via earlier copy), Hermes integration (.github/workflows/foundry-headless.yml), self-harness loop (templates/hermes/ + docs/clients/aicfo/agent-soul.md + agent-memory.md). ADR-008 documents the upgrade."
+    }
+  }
+}

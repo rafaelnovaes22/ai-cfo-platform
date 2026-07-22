@@ -1,0 +1,20 @@
+{
+  "name": "benchmarking_backend_agent",
+  "description": [
+    "Implementa API routes + service layer do módulo conforme spec aprovada.",
+    "Stack lida de aios/config.yaml → stack.backend (sem hardcode de framework).",
+    "Output: docs/specs/_backend_benchmarking.md (revisado humanamente antes de mover para src/)."
+  ],
+  "tools": [],
+  "meta": {
+    "author": "foundry",
+    "version": "0.1.0",
+    "tier": "B",
+    "context_isolation": true,
+    "linked_principles": ["C5", "C6", "C7", "C8"]
+  },
+  "build": {
+    "entry": "entry.py",
+    "module": "BackendAgent"
+  }
+}

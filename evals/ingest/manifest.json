@@ -1,0 +1,20 @@
+{
+  "module": "ingest",
+  "outcomes": [
+    "ingest_completed",
+    "ingest_partial",
+    "ingest_failed",
+    "new_analysis_triggered"
+  ],
+  "eval_method": "assertion_shape",
+  "pass_rate_threshold": 0.95,
+  "source_distribution": {
+    "real": ">=0.40",
+    "synthetic": "<=0.40",
+    "edge": ">=0.10",
+    "adversarial": ">=0.10"
+  },
+  "min_cases_per_outcome": 10,
+  "total_cases": 40,
+  "last_updated": "2026-05-12"
+}

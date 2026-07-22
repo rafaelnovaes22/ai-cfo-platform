@@ -1,0 +1,474 @@
+// Prisma schema — Aicfo
+// Onda 0 (auth-tenant + workspace-setup + billing + tenant-config) cobre as entidades abaixo.
+// Onda 1 (monthly-analysis) adiciona LedgerEntry, MonthlyAnalysis, NarrativeCard, ActionPlanItem em migrations futuras.
+//
+// Multi-tenant via tenantId em TODAS as entidades de negócio (C8). Nenhum if/switch por tenant em código.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== TENANT (empresa cliente) =====
+
+model Tenant {
+  id              String  @id @default(uuid())
+  name            String
+  cnpj            String? @unique
+  industrySegment String  @default("geral") // agencia | industria-leve | servicos-b2b | saas | varejo | geral
+  taxRegime       String  @default("simples") // simples | lucro-presumido | lucro-real
+
+  // Configuração por tenant via JSONB (C8 — sem branches por cliente)
+  // Estrutura: { monthlyAnalysis: { toneOfVoice, ...}, ... }
+  productConfig Json @default("{}")
+
+  learningAutonomyState Json @default("{\"classification\":\"needs_review\",\"narrative\":\"needs_review\",\"action\":\"needs_review\"}")
+
+  // Canal WhatsApp (LGPD Art. 7 — opt-in explícito obrigatório)
+  // @unique: um número só pode estar vinculado a UM tenant — sem isso, dois tenants
+  // com o mesmo número causariam roteamento cross-tenant no canal inbound.
+  whatsappPhone   String?   @unique // número E.164 vinculado ao canal WhatsApp
+  whatsappOptInAt DateTime? // timestamp do opt-in explícito (LGPD Art. 7)
+  whatsappEnabled Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  subscriptions     Subscription[]
+  ledgerEntries     LedgerEntry[]
+  monthlyAnalyses   MonthlyAnalysis[]
+  apiTokens         ApiToken[]
+  memoryItems       TenantMemoryItem[]
+  validationMetrics ValidationMetric[]
+  whatsappMessages  WhatsappMessage[]
+
+  @@index([industrySegment])
+}
+
+// ===== USER (membros do tenant) =====
+
+enum UserRole {
+  admin
+  editor
+  viewer
+}
+
+model User {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(editor)
+
+  emailVerified Boolean @default(false)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([tenantId])
+}
+
+// ===== PASSWORD RESET (Wave 2 — Onda 0 extension) =====
+
+model PasswordResetToken {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String    @unique // SHA-256 — token bruto entregue só por email
+  expiresAt DateTime // TTL 1h
+  usedAt    DateTime? // single-use; null = ainda válido
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ===== SESSION (refresh tokens) =====
+
+model Session {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ===== SUBSCRIPTION (plano + modo SHADOW/ASSISTED/AUTONOMOUS) =====
+
+enum SubscriptionPlan {
+  student // free tier para estudantes — cashflow summary only
+  trial
+  lite
+  pro
+  business
+}
+
+enum SubscriptionMode {
+  shadow // C4 — análise gerada mas não entregue
+  assisted // C4 — entregue com revisão humana
+  autonomous // C4 — entregue diretamente
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+  paused
+}
+
+model Subscription {
+  id       String @id @default(uuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  plan   SubscriptionPlan   @default(trial)
+  mode   SubscriptionMode   @default(assisted)
+  status SubscriptionStatus @default(active)
+
+  // Stripe (billing — Onda 0)
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  canceledAt         DateTime?
+
+  // Mode promotion log (C4) — JSONB array de { from, to, at, approvedBy }
+  modeHistory Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([mode])
+}
+
+// ===== API TOKENS (tenant-config — Onda 0) =====
+
+model ApiToken {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name      String
+  tokenHash String   @unique // SHA-256 — token real retornado uma vez e nunca armazenado
+  scopes    String[] @default([]) // ex: ["analysis:read", "webhook:write"]
+
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// ===== ONDA 1 — monthly-analysis =====
+
+enum LedgerDirection {
+  credit // entrada
+  debit // saída
+}
+
+enum AnalysisStatus {
+  pending // aguardando lançamentos suficientes
+  generating // pipeline rodando
+  ready // gerado, aguardando entrega (SHADOW: Rafael revisa)
+  delivered // entregue ao cliente (ASSISTED/AUTONOMOUS)
+  approved // cliente aprovou (fecha o mês)
+  failed // pipeline esgotou tentativas — visível ao usuário (re-tentar/re-ingest)
+}
+
+enum CardType {
+  critical_gap // gargalo crítico
+  attention // atenção
+  healthy // saudável
+}
+
+enum PlanHorizon {
+  short // curto prazo (até 30 dias)
+  medium // médio prazo (30-90 dias)
+  long // longo prazo (90+ dias)
+}
+
+model LedgerEntry {
+  id         String           @id @default(uuid())
+  tenantId   String
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  analysisId String?
+  analysis   MonthlyAnalysis? @relation(fields: [analysisId], references: [id])
+
+  date        DateTime
+  description String
+  amountCents Int // valores em centavos — nunca Float (evita arredondamento)
+  direction   LedgerDirection
+  // true = direção veio de fallback (arquivo sem coluna Tipo e sem sinais sistemáticos);
+  // o classificador pode corrigi-la pela natureza da categoria prevista
+  directionInferred Boolean @default(false)
+
+  // Flywheel de treinamento — pares rotulados gerados pelo pipeline SHADOW/ASSISTED
+  predictedCategory        String? // saída do modelo atual
+  classificationConfidence Float? // 0.0-1.0; <0.7 → revisão necessária
+  correctedCategory        String? // correção do humano (Rafael ou cliente)
+  confirmedCategory        String? // categoria final aceita
+  correctionSource         String? // "rafael" | "client" | "auto-approved" | "needs_review"
+
+  // Chave de deduplicação por conteúdo (md5 de data|descrição|valor|direção + índice
+  // de ocorrência). Garante que reenviar o mesmo extrato não duplique lançamentos —
+  // o cashflow agrega por tenant+período e duplicatas inflavam o resultado. Ver src/ingest/dedupe.ts.
+  dedupeHash String?
+
+  importedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, dedupeHash]) // bloqueia reinserção do mesmo lançamento (NULLs são distintos no Postgres)
+  @@index([tenantId])
+  @@index([analysisId])
+  @@index([date])
+  @@index([tenantId, date]) // cashflow: queries de período por tenant
+  @@index([tenantId, confirmedCategory]) // acelera extração de dataset de treinamento
+}
+
+model MonthlyAnalysis {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  referenceMonth String // "2026-04" — YYYY-MM do mês de fechamento
+  status         AnalysisStatus   @default(pending)
+  mode           SubscriptionMode // snapshot do modo no momento da geração (C4)
+
+  generatedAt DateTime?
+  deliveredAt DateTime?
+  approvedAt  DateTime?
+
+  // Conteúdo gerado (JSONB — estrutura evolui sem migrations)
+  dreJson        Json? // DRE classificado estruturado
+  anomaliesJson  Json? // anomalias detectadas (Anomaly[])
+  narrativeJson  Json? // resumo dos 3 cards
+  actionPlanJson Json? // resumo do plano 3-horizontes
+
+  // Feedback do cliente em ASSISTED
+  clientEditedNarrative  String?
+  clientEditedActionPlan String?
+
+  // Saldo inicial de caixa — informado pelo cliente no momento do import
+  openingBalanceCents Int? // centavos; null = não informado (runway não calculado)
+
+  // Rastreabilidade de custo (C3) e telemetria (C6)
+  costCents Int? // custo real de inferência em centavos
+  traceId   String? // ID do trace do provider canônico (LangSmith) para auditoria
+
+  ledgerEntries  LedgerEntry[]
+  narrativeCards NarrativeCard[]
+  actionItems    ActionPlanItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, referenceMonth]) // 1 análise por empresa por mês
+  @@index([tenantId])
+  @@index([status])
+}
+
+model NarrativeCard {
+  id         String          @id @default(uuid())
+  analysisId String
+  analysis   MonthlyAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  cardType CardType
+  title    String
+  body     String
+  evidence Json // [{ metric: string, value: number, unit: string }]
+
+  // Feedback ASSISTED
+  clientApproved Boolean?
+  clientComment  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([analysisId])
+}
+
+model ActionPlanItem {
+  id         String          @id @default(uuid())
+  analysisId String
+  analysis   MonthlyAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  // Denormalizado para consultas e reconciliação no nível do tenant (plano estável
+  // incremental): o item persiste entre regenerações da análise canônica.
+  tenantId   String
+
+  horizon      PlanHorizon
+  // Alavanca canônica + chave de reconciliação. matchKey = leverKey para alavancas
+  // conhecidas, ou "other:<slug-do-título>" fora da taxonomia (ver action-plan/levers.ts).
+  // (analysisId, matchKey, horizon) identifica o "mesmo" item entre regenerações.
+  leverKey     String @default("other")
+  matchKey     String @default("")
+  title        String
+  description  String
+  effortLevel  String // "low" | "medium" | "high"
+  riskLevel    String // "low" | "medium" | "high"
+  impactCents  Int // estimativa de impacto financeiro em centavos
+  deadlineDays Int?
+  doneWhen     String? // critério mensurável de conclusão ("feita quando...")
+
+  // Feedback ASSISTED
+  clientApproved Boolean?
+  clientComment  String?
+
+  // Lifecycle de execução — sinal de validação para self-harness (ADR-011 Etapa 2)
+  status              String    @default("pending") // "pending" | "in_progress" | "blocked" | "done" | "abandoned"
+  statusReason        String?
+  lastStatusUpdatedAt DateTime?
+
+  // Marcado quando uma regeneração não propõe mais esta alavanca e a cliente não a
+  // estava executando: sai da lista ativa, fica no histórico (plano estável incremental).
+  supersededAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([analysisId, matchKey, horizon])
+  @@index([analysisId])
+  @@index([tenantId])
+}
+
+// ===== ONDA 1 — learning / memória per-tenant (ADR-011 Etapa 3) =====
+
+model TenantMemoryItem {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  kind         String // "fact" | "preference" | "pattern" | "interpretation"
+  content      Json
+  confidence   Float  @default(1.0)
+  evidenceRefs Json   @default("[]")
+
+  clientEdited    Boolean   @default(false)
+  dismissedAt     DateTime?
+  dismissalReason String?
+
+  contributesToGlobal Boolean @default(false)
+  globalSignalId      String?
+
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([tenantId, kind])
+  @@index([globalSignalId])
+}
+
+model GlobalSignal {
+  id               String @id @default(uuid())
+  segment          String
+  kind             String // "fact" | "pattern"
+  content          Json
+  contributorCount Int    @default(0)
+
+  promotedAt DateTime  @default(now())
+  retiredAt  DateTime?
+
+  @@index([segment, kind])
+}
+
+model ValidationMetric {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  agentName      String // "classification" | "narrative-synthesis" | "action-planning"
+  confidenceBand String? // "easy" | "hard" | null
+  signal         String // "positive" | "negative"
+  refType        String // "ledger_entry" | "narrative_card" | "action_item"
+  refId          String
+
+  observedAt DateTime @default(now())
+
+  @@index([tenantId, agentName, observedAt])
+}
+
+model LegalRetention {
+  id               String  @id @default(uuid())
+  originalTenantId String
+  cnpj             String?
+
+  retainedData   Json
+  retentionUntil DateTime
+
+  forgottenAt      DateTime @default(now())
+  termAcceptedHash String
+
+  @@index([retentionUntil])
+}
+
+// ===== WHATSAPP MESSAGE LOG (ADR-017) =====
+// Log append-only de mensagens do canal WhatsApp para visibilidade do operador.
+// Inclui mensagens SUPRIMIDAS por opt-out (status skipped_disabled).
+// Retenção 180 dias (job de purge). Body de mensagens de caixa NÃO guarda valores
+// (redação ADR-018 §5) — mantém o log não-sensível.
+
+enum WaMsgDirection {
+  outbound
+  inbound
+}
+
+enum WaMsgKind {
+  daily_cashflow
+  cashflow_from_statement
+  analysis_ready
+  reply
+  other
+}
+
+enum WaMsgStatus {
+  sent
+  delivered
+  read
+  failed
+  skipped_disabled
+}
+
+model WhatsappMessage {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  direction         WaMsgDirection
+  kind              WaMsgKind
+  body              String // contexto + link; valores de caixa redigidos (ADR-018 §5)
+  status            WaMsgStatus
+  providerMessageId String? // id Unnichat; null em skipped_*
+  error             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt]) // listagem paginada por tenant
+  @@index([providerMessageId]) // update de status (delivered/read) via webhook
+  @@index([createdAt]) // job de retenção: purge < now-180d
+}

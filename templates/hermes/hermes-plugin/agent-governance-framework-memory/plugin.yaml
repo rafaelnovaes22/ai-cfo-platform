@@ -1,0 +1,152 @@
+name: agent-governance-framework-memory
+version: "1.0.0"
+description: >
+  Plugin Hermes para memória distribuída do Novais Digital Foundry.
+  Permite ao Hermes/Codex acessar e atualizar agent-memory.md de cada consumer
+  via GitHub API, sem necessidade de acesso local à máquina.
+author: Novais Digital
+linked_principles:
+  - C6  # rastreabilidade: toda operação tem run_id + timestamp
+  - C7  # agnóstico: usa GitHub API pura, sem dependência de plataforma
+  - C8  # anti-hardcode: client_id como parâmetro, nunca hardcoded
+
+# Configuração
+config:
+  gh_token_env: GH_TOKEN           # PAT com escopo repo
+  foundry_repo_env: FOUNDRY_REPO       # ex: novais-digital/agent-governance-framework
+  clients_base_path: docs/clients  # base path dos clients no repo
+
+# Tools expostas ao Hermes/Codex
+tools:
+  - name: foundry_recall_memory
+    description: >
+      Busca fatos em agent-memory.md de um projeto consumer.
+      Retorna fatos relevantes à query, ordenados por confidence.
+    parameters:
+      project_id:
+        type: string
+        description: "ID do consumer (ex: school-platform, aicfo)"
+        required: true
+      query:
+        type: string
+        description: "Texto livre para busca semântica nos fatos"
+        required: true
+      section:
+        type: string
+        description: "Seção específica: integration_quirks | process_patterns | pitfalls | confirmed_patterns | tech_constraints | economics_real | telemetry_hints | pii_categories"
+        required: false
+    implementation:
+      type: gh_api
+      method: GET
+      path: "repos/{FOUNDRY_REPO}/contents/{clients_base_path}/{project_id}/agent-memory.md"
+      transform: |
+        # Fetch + base64 decode + parse sections + filter by query
+        content = base64.b64decode(response["content"]).decode()
+        facts = parse_facts(content, section=params.get("section"))
+        return semantic_filter(facts, query=params["query"])
+
+  - name: foundry_store_learning
+    description: >
+      Persiste um novo fato aprendido em agent-memory.md de um consumer.
+      Cria ou atualiza o arquivo via commit direto (apenas em branches de learning).
+      Para persistência em main, use foundry_propose_pr.
+    parameters:
+      project_id:
+        type: string
+        required: true
+      fact:
+        type: string
+        description: "Fato no formato § [confidence] [date] [run:id] Descrição"
+        required: true
+      section:
+        type: string
+        description: "Seção do agent-memory onde adicionar"
+        required: true
+      confidence:
+        type: string
+        enum: [local, shadow, assisted, autonomous]
+        required: true
+      run_id:
+        type: string
+        description: "GitHub run ID da sessão que gerou este fato"
+        required: true
+    implementation:
+      type: gh_api
+      method: PUT
+      path: "repos/{FOUNDRY_REPO}/contents/{clients_base_path}/{project_id}/agent-memory.md"
+      validation:
+        - "assert not contains_pii(fact), 'Fato contém PII — violação C8'"
+        - "assert not contains_credentials(fact), 'Fato contém credencial — violação C8'"
+        - "assert run_id in fact, 'Fato deve incluir run_id para rastreabilidade — C6'"
+
+  - name: foundry_get_soul
+    description: >
+      Carrega o agent-soul.md de um consumer para injeção de contexto.
+      Usado pelo SessionStart hook e pelo learning curator.
+    parameters:
+      project_id:
+        type: string
+        required: true
+    implementation:
+      type: gh_api
+      method: GET
+      path: "repos/{FOUNDRY_REPO}/contents/{clients_base_path}/{project_id}/agent-soul.md"
+      transform: "base64.b64decode(response['content']).decode()"
+
+  - name: foundry_propose_pr
+    description: >
+      Propõe PR com patches ao agent-memory.md de um consumer.
+      Chamado pelo learning-loop após decidir persistir fatos.
+    parameters:
+      project_id:
+        type: string
+        required: true
+      new_facts:
+        type: array
+        items:
+          type: object
+          properties:
+            section: {type: string}
+            fact: {type: string}
+            confidence: {type: string}
+            run_id: {type: string}
+        required: true
+      run_id:
+        type: string
+        required: true
+      run_url:
+        type: string
+        required: true
+      command:
+        type: string
+        required: true
+    implementation:
+      type: gh_cli
+      command: |
+        # 1. Criar branch foundry-learning/{project_id}/{date}-{run_id[:8]}
+        # 2. Atualizar agent-memory.md com novos fatos via gh api
+        # 3. gh pr create com template padronizado
+        # Ver templates/hermes/learning-loop.md § propose_pr() para detalhes
+
+# Hooks automáticos
+hooks:
+  post_foundry_run:
+    description: "Triggered após foundry-headless webhook com exit_code=0"
+    skill: foundry-learning-loop
+    conditions:
+      - "payload.exit_code == 0"
+      - "payload.learning_snapshot_path is not null"
+      - "payload.hmac_valid == true"
+    async: true  # não bloqueia resposta ao usuário
+
+# Segurança
+security:
+  pii_patterns_blocked:
+    - '\b\d{3}\.\d{3}\.\d{3}-\d{2}\b'   # CPF
+    - '\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b'  # CNPJ
+    - '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'  # email
+    - 'ghp_[a-zA-Z0-9]{36}'  # GitHub PAT
+    - 'sk-[a-zA-Z0-9]{48}'   # OpenAI key
+  tenant_isolation:
+    rule: "project_id sempre passado como parâmetro — nunca hardcoded no plugin"
+    enforcement: "validate que project_id não está no código do plugin, apenas em dados"

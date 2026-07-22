@@ -1,0 +1,124 @@
+name: ci
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+# Cancel runs concorrentes na mesma ref (não rodar PR duplo).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: lint • typecheck • build • tests • eval • prisma
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Sem banco externo no CI — Prisma generate/validate roda offline.
+    env:
+      # Dummies necessários só para o Prisma client gerar sem reclamar de env.
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+      # Dummies para Stripe/LangSmith — código não chama em build/teste.
+      STRIPE_SECRET_KEY: "sk_test_dummy"
+      STRIPE_WEBHOOK_SECRET: "whsec_dummy"
+      LANGSMITH_API_KEY: ""
+      LANGSMITH_PROJECT: "aicfo-ci"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Prisma — validate schema
+        run: npx prisma validate
+
+      - name: Prisma — generate client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Foundry doctor (consistência de governança — sem drift de versão)
+        run: npm run foundry:doctor
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Eval runner (validação estrutural offline)
+        run: npm run eval:run
+
+      - name: Audit (informational only — xlsx CVE documentada em ADR-003)
+        run: npm audit --omit=dev --audit-level=high || true
+        # `|| true` mantém o passo verde. ADR-003 documenta o risco residual.
+        # Quando o `xlsx` ganhar fix upstream, remover o `|| true` e revisar a ADR.
+
+  validate-frontend:
+    name: frontend lint • typecheck • build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      - name: Frontend lint
+        working-directory: app
+        run: npm run lint
+
+      - name: Frontend typecheck
+        working-directory: app
+        run: npx tsc --noEmit
+
+      - name: Frontend build
+        working-directory: app
+        run: npm run build
+
+  # ─── Auto-merge para staging ────────────────────────────────────────
+  # Permite que contribuidores (ex: Edu) tenham PRs absorvidos em `staging`
+  # sem aprovação manual, desde que o job `validate` esteja verde.
+  # Railway (serviço de staging) faz o auto-deploy no push resultante.
+  # PRs contra `main` (produção) NÃO entram aqui: continuam exigindo merge
+  # deliberado, preservando a regra de CLAUDE.md.
+  auto-merge:
+    name: auto-merge → staging
+    needs: [validate, validate-frontend]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.base_ref == 'staging' &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Squash-merge do PR (CI verde)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --squash --delete-branch
