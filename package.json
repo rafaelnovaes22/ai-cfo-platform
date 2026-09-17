@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "tsup",
     "start": "node dist/server.js",
