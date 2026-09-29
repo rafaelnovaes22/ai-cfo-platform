@@ -128,6 +128,28 @@ export function formatStudentCashflowHint(): string {
 }
 
 /**
+ * Dica curta para texto não reconhecido: convida linguagem natural em vez de
+ * despejar o menu completo (fluidez da conversa). Plano "student" é centrado
+ * no extrato, como no menu reduzido.
+ */
+export function formatUnknownHint(plan: string): string {
+  if (plan === "student") {
+    return (
+      "Hmm, não entendi. 🤔\n" +
+      "Fala comigo em linguagem natural ou me envie um *extrato* (PDF, Excel ou CSV) " +
+      "que eu calculo seu fluxo de caixa na hora.\n\n" +
+      "_Digite *menu* para ver as opções._"
+    )
+  }
+  return (
+    "Hmm, não entendi. 🤔\n" +
+    "Fala comigo em linguagem natural, por exemplo: *caixa de hoje*, *resumo da semana*, " +
+    "*análise do mês* ou *status*.\n\n" +
+    "_Digite *menu* para ver as opções._"
+  )
+}
+
+/**
  * Formata mensagem de erro amigável para o usuário final.
  */
 export function formatError(
