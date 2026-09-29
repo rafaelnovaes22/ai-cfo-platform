@@ -17,6 +17,7 @@ import {
   formatError,
   formatIngestReceived,
   formatStudentCashflowHint,
+  formatUnknownHint,
 } from "./response-formatter.js"
 import { classifyCommand, isSupportedDocument } from "./message-parser.js"
 import { handleIngestDocument as ingestDoc } from "./ingest-handler.js"
@@ -443,10 +444,10 @@ async function handleMenu(
 
     case "UNKNOWN":
     default: {
-      // Texto não reconhecido → reenviar menu de ajuda
+      // Texto não reconhecido → dica curta que convida linguagem natural.
+      // Despejar o menu completo aqui travava a conversa (restritivo demais).
       const plan = await getTenantPlan(tenantId)
-      const helpText = formatWelcomeMenu(await greetingName(tenantId), plan)
-      await deps.adapter.sendText(msg.from, helpText)
+      await deps.adapter.sendText(msg.from, formatUnknownHint(plan))
       break
     }
   }

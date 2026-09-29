@@ -155,10 +155,13 @@ export function extractStatuses(payload: WaWebhookPayload): WaStatusUpdate[] {
 
 /**
  * Classifica texto livre em WaCommand.
- * Normalização: trim → lowercase → remove diacríticos (NFD + strip Mn).
- * Match: verifica se alguma palavra-chave é igual ao texto normalizado;
- * para frases multi-palavra verifica se o texto começa com a chave.
- * Retorna UNKNOWN se nenhuma categoria encaixar.
+ * Normalização: trim → lowercase → remove diacríticos (NFD + strip Mn) →
+ * pontuação vira espaço ("caixa?" → "caixa").
+ * Match: palavra/frase inteira em QUALQUER posição da mensagem (pedido em
+ * linguagem natural: "me mostra meu caixa" → CAIXA). Substring cru é proibido:
+ * "foi" não pode casar "oi" (ver intent-classifier, mesma técnica).
+ * Pedido (conteúdo) tem prioridade sobre saudação: "oi, me mostra o caixa"
+ * → CAIXA, não MENU. Retorna UNKNOWN se nenhuma categoria encaixar.
  */
 // Seleção numérica do menu (formatWelcomeMenu). Match exato para não confundir
 // com valores numéricos colados. Mantido em sincronia com a numeração do menu.
@@ -174,19 +177,23 @@ export function classifyCommand(text: string): WaCommand {
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Mn}/gu, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
 
   // Usuário respondeu com o número da opção do menu.
   const numeric = NUMERIC_MENU[normalized]
   if (numeric) return numeric
 
-  for (const [command, keywords] of COMMAND_MAP) {
-    for (const kw of keywords) {
-      // Palavra única: igualdade exata; frase: starts-with + boundary
-      if (kw === normalized) return command
-      if (normalized.startsWith(kw + " ") || normalized.startsWith(kw + "\t")) {
-        return command
-      }
-    }
+  // Pedido em linguagem natural: palavra/frase inteira em qualquer posição.
+  const padded = ` ${normalized} `
+  const contentCommands = COMMAND_MAP.filter(([command]) => command !== "MENU")
+  for (const [command, keywords] of contentCommands) {
+    if (keywords.some((kw) => padded.includes(` ${kw} `))) return command
+  }
+  const menuEntry = COMMAND_MAP.find(([command]) => command === "MENU")
+  if (menuEntry && menuEntry[1].some((kw) => padded.includes(` ${kw} `))) {
+    return "MENU"
   }
 
   return "UNKNOWN"

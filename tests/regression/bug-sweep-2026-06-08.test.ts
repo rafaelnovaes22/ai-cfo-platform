@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { normalizeAmountCents, detectColumns } from "@/ingest/normalize.js"
 import { classifyCommand } from "@/channels/whatsapp/message-parser.js"
+import { formatUnknownHint } from "@/channels/whatsapp/response-formatter.js"
 
 vi.mock("@/persistence/prisma.js", () => ({ getPrisma: () => ({}) }))
 import { requireRole } from "@/auth/middleware.js"
@@ -52,6 +53,34 @@ describe("classifyCommand — seleção numérica do menu (#18)", () => {
   it("comandos de texto continuam funcionando", () => {
     expect(classifyCommand("caixa")).toBe("CAIXA")
     expect(classifyCommand("análise")).toBe("ANALISE")
+  })
+  it("pedido em linguagem natural (palavra em qualquer posição) → comando", () => {
+    expect(classifyCommand("me mostra meu caixa")).toBe("CAIXA")
+    expect(classifyCommand("qual o saldo de hoje?")).toBe("CAIXA")
+    expect(classifyCommand("oi, me manda o resumo da semana")).toBe("SEMANA")
+    expect(classifyCommand("quero ver minha análise do mês")).toBe("ANALISE")
+    expect(classifyCommand("como estou?")).toBe("STATUS")
+  })
+  it("pedido tem prioridade sobre saudação", () => {
+    expect(classifyCommand("oi, me mostra o caixa")).toBe("CAIXA")
+  })
+  it("substring cru não casa (foi ≠ oi, oito ≠ oi)", () => {
+    expect(classifyCommand("foi trabalhar")).toBe("UNKNOWN")
+    expect(classifyCommand("cheguei as oito")).toBe("UNKNOWN")
+  })
+})
+
+describe("formatUnknownHint — dica curta, sem despejar o menu", () => {
+  it("convida linguagem natural e cita o menu como opção", () => {
+    const hint = formatUnknownHint("pro")
+    expect(hint).toContain("caixa de hoje")
+    expect(hint).toContain("*menu*")
+    expect(hint).not.toContain("1️⃣")
+  })
+  it("plano student centra no extrato", () => {
+    const hint = formatUnknownHint("student")
+    expect(hint).toContain("extrato")
+    expect(hint).not.toContain("1️⃣")
   })
 })
 
