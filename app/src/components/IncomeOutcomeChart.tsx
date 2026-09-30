@@ -1,5 +1,5 @@
-import { getDateByGranularity } from "@/lumen/pages/CashFlow";
-import type { CashFlowChartEntry } from "@/lumen/data/useCashFlow";
+import { getDateByGranularity } from "@/aicfo/pages/CashFlow";
+import type { CashFlowChartEntry } from "@/aicfo/data/useCashFlow";
 import {
   Chart as ChartJS,
   LinearScale,

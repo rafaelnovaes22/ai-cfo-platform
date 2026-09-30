@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "../auth/AuthContext.tsx";
-import { LumenLogo } from "../components/Logo.tsx";
+import { AicfoLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
 import { api } from "@/lib/api/index.js";
 import { ApiProblem } from "@/lib/api/client.js";
@@ -178,7 +178,7 @@ export default function Auth() {
       <div className="w-full h-screen max-w-[560px]">
         <div className="relative bg-white shadow-2xl shadow-black border h-full text-black p-12 pt-16 flex flex-col justify-center overflow-y-auto">
           <div className="absolute top-12 left-12">
-            <LumenLogo size={36} />
+            <AicfoLogo size={36} />
           </div>
           <h1 className="text-[20px] font-medium mb-1">
             {mode === "signin" && "Entrar"}

@@ -1,4 +1,4 @@
-import { formatBRL } from "@/lumen/data/analytics";
+import { formatBRL } from "@/aicfo/data/analytics";
 
 const kpis = [
   {

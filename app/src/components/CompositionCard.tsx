@@ -1,4 +1,4 @@
-import { formatBRL } from "@/lumen/data/categories";
+import { formatBRL } from "@/aicfo/data/categories";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 

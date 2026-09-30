@@ -62,7 +62,7 @@ function deriveAnalysisUIState(analysis: Analysis, hasData?: boolean): AnalysisU
   return "PROCESSING";
 }
 
-const STORAGE_KEY = "lumen.activeAnalysisId";
+const STORAGE_KEY = "aicfo.activeAnalysisId";
 
 const TERMINAL_STATUSES = new Set([
   "pending",

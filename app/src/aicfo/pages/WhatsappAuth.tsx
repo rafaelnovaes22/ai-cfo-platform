@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
-import { LumenLogo } from "../components/Logo.tsx";
+import { AicfoLogo } from "../components/Logo.tsx";
 
 type Status = "loading" | "success" | "error";
 
@@ -42,7 +42,7 @@ export default function WhatsappAuth() {
     <div className="min-h-screen bg-[#0b0918] flex items-center justify-center px-6">
       <div className="w-full max-w-[420px] text-center">
         <div className="flex justify-center mb-8">
-          <LumenLogo size={48} className="brightness-[1000%]" />
+          <AicfoLogo size={48} />
         </div>
         <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-lg p-10">
           {status === "loading" && (

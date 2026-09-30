@@ -1,5 +1,5 @@
-import { formatBRL } from "@/lumen/data/analytics";
-import { useAnalyses } from "@/lumen/data/useAnalyses";
+import { formatBRL } from "@/aicfo/data/analytics";
+import { useAnalyses } from "@/aicfo/data/useAnalyses";
 import { Check } from "lucide-react";
 
 export default function AnalysesCard({ summaries }: { summaries: Record<string, { income: number; expense: number; count: number }> }) {

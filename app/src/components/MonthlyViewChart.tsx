@@ -12,7 +12,7 @@ import {
   BarController,
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
-import { formatBRL } from "@/lumen/data/analytics";
+import { formatBRL } from "@/aicfo/data/analytics";
 import type { TrendPoint } from "@/lib/api";
 import { formatDate } from "date-fns";
 import { ptBR } from "date-fns/locale";

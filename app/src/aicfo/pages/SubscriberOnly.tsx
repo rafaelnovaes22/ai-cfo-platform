@@ -1,5 +1,5 @@
 import { useAuth } from "../auth/AuthContext.tsx";
-import { LumenLogo } from "../components/Logo.tsx";
+import { AicfoLogo } from "../components/Logo.tsx";
 
 // Destino do lead logado (plan student/trial): a conta foi criada e os dados
 // capturados, mas o painel é exclusivo de assinante. Não expõe o app.
@@ -11,7 +11,7 @@ export default function SubscriberOnly() {
     <div className="min-h-screen bg-[#0b0918] flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-[440px] text-center">
         <div className="flex justify-center mb-8">
-          <LumenLogo size={48} className="brightness-[1000%]" />
+          <AicfoLogo size={48} />
         </div>
         <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-lg p-10">
           <div className="text-4xl mb-4">🔒</div>
