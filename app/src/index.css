@@ -193,7 +193,7 @@
     }
   }
   .animate-fade-up {
-    animation: fadeUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: fadeUp 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
   .delay-1 {
     animation-delay: 60ms;
@@ -209,5 +209,26 @@
   }
   .delay-5 {
     animation-delay: 300ms;
+  }
+
+  ::selection {
+    background: hsl(var(--ink));
+    color: hsl(var(--cream));
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ink));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up {
+      animation: none;
+    }
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+    }
   }
 }

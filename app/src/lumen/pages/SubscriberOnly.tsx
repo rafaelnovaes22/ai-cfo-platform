@@ -13,7 +13,7 @@ export default function SubscriberOnly() {
         <div className="flex justify-center mb-8">
           <LumenLogo size={48} className="brightness-[1000%]" />
         </div>
-        <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-3xl p-10">
+        <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-lg p-10">
           <div className="text-4xl mb-4">🔒</div>
           <h1 className="text-[20px] font-medium mb-2">
             {firstName ? `${firstName}, sua conta está pronta` : "Sua conta está pronta"}

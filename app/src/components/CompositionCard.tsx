@@ -2,12 +2,32 @@ import { formatBRL } from "@/lumen/data/categories";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export default function CompositionCard({ current, composition }) {
+type Composition = {
+  income?: number;
+  expense?: number;
+};
+
+type Current = {
+  netProfit?: number;
+  margin?: number;
+};
+
+export default function CompositionCard({
+  current,
+  composition,
+  monthLabel,
+}: {
+  current: Current;
+  composition: Composition;
+  monthLabel?: string;
+}) {
   return (
-    <article className="relative text-white z-10 h-full animate-fade-up delay-1 grid grid-cols-12 gap-6  pb-16 overflow-hidden">
+    <article className="relative text-cream z-10 h-full animate-fade-up delay-1 grid grid-cols-12 gap-6 pb-16 overflow-hidden">
       <div className="col-span-12 px-10 pl-0">
-        <div className="font-semibold  mb-4">Lucro líquido</div>
-        <div className="text-5xl font-semibold leading-none -tracking-[3px]  tabular font-sans">
+        <div className="eyebrow !text-cream/60 mb-4">
+          {monthLabel ? `Lucro líquido · ${monthLabel}` : "Lucro líquido"}
+        </div>
+        <div className="text-4xl md:text-5xl font-semibold leading-none -tracking-[3px] tabular font-serif [overflow-wrap:anywhere]">
           {current.netProfit ? formatBRL(current.netProfit) : "-"}
         </div>
         <div className="mt-8 pl-4 border-l-2 flex flex-col items-start gap-0 text-[13px]">

@@ -28,7 +28,6 @@ import ResultChart from "@/components/ResultChart.tsx";
 import AccountsCard from "@/components/AccountsCard.tsx";
 import PaymentsCard from "@/components/PaymentsCard.tsx";
 import KPIsCard from "@/components/KPIsCard.tsx";
-import DemoRibbon from "@/components/DemoRibbon.tsx";
 import MonthlyViewChart from "@/components/MonthlyViewChart.tsx";
 
 const inputMethods = [
@@ -66,8 +65,6 @@ export default function Dashboard() {
       setIsInitialGeneration(false);
     }
   }, [isInitialGeneration, isProcessing, analyses]);
-
-  // console.log("trend/anomaly", trend, anomaly);
 
   const current = currentKey ? summarizeMonth(transactions, currentKey) : {};
   const composition = currentKey
@@ -141,15 +138,17 @@ export default function Dashboard() {
         )}
 
         {current && composition && (
-          <div className="relative bg-gradient-to-br from-[#7a21ff] via-[#9900ff] to-[#140f73] overflow-hidden rounded-3xl py-6 px-6 animate-fade-up delay-1 min-w-full md:min-w-[440px] grow grow-1">
-            <CompositionCard current={current} composition={composition} />
-            <div className="absolute top-0 left-0 w-full h-full -z-1 rotate-180 md:rotate-0 md:scale-150 bg-[url('https://images.unsplash.com/photo-1635776063043-ab23b4c226f6?fm=jpg&q=60&w=1000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover"></div>
+          <div className="relative bg-ink text-cream overflow-hidden rounded-lg py-6 px-6 animate-fade-up delay-1 min-w-full md:min-w-[440px] grow grow-1">
+            <CompositionCard
+              current={current}
+              composition={composition}
+              monthLabel={currentKey?.split("-").reverse().join("/")}
+            />
           </div>
         )}
 
         {current && (
           <DashboardCard className="md:min-w-[490px] md:max-w-[700px] grow-[2]">
-            <DemoRibbon />
             <ResultChart />
           </DashboardCard>
         )}
@@ -164,21 +163,18 @@ export default function Dashboard() {
 
         {current && (
           <DashboardCard className="md:min-w-[440px] grow-[1]">
-            <DemoRibbon />
             <AccountsCard />
           </DashboardCard>
         )}
 
         {current && (
           <DashboardCard className="md:min-w-[440px] grow-[1]">
-            <DemoRibbon />
             <PaymentsCard />
           </DashboardCard>
         )}
 
         {current && (
           <DashboardCard className="md:min-w-[440px] grow-[1]">
-            <DemoRibbon />
             <KPIsCard />
           </DashboardCard>
         )}

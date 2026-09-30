@@ -8,7 +8,6 @@ export default function AppLayout() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full overflow-auto pb-16 bg-cream text-[#09080f] dark:bg-[#09080f] dark:text-white">
-        <div className="-z-1 blur-3xl opacity-20 bg-[#5b24ff] w-full h-[200px] rounded-full fixed top-0 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
         <div className="relative z-1 flex-1 flex flex-col min-w-0">
           <Sidebar />
           <Topbar />
