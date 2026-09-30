@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api/index.js";
 import { ApiProblem } from "@/lib/api/client.js";
-import { LumenLogo } from "../components/Logo.tsx";
+import { AicfoLogo } from "../components/Logo.tsx";
 import { toast } from "@/components/ui/sonner";
 
 export default function ResetPassword() {
@@ -47,7 +47,7 @@ export default function ResetPassword() {
     <div className="min-h-screen bg-cream flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-[400px]">
         <div className="flex justify-center mb-10">
-          <LumenLogo size={32} />
+          <AicfoLogo size={32} />
         </div>
         <div className="bg-card border border-border rounded-lg p-8">
           <h1 className="text-[20px] font-medium  mb-1">Redefinir senha</h1>

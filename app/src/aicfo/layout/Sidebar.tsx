@@ -9,7 +9,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { LumenLogo } from "../components/Logo.tsx";
+import { AicfoLogo } from "../components/Logo.tsx";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { useState, useRef, useEffect } from "react";
 import { useAnalyses } from "../data/useAnalyses.ts";
@@ -115,7 +115,7 @@ export function Sidebar() {
     >
       <div className={`py-2 flex items-center`}>
         <a href="/">
-          <LumenLogo size={32} />
+          <AicfoLogo size={32} />
         </a>
         <h1 className="hidden md:flex whitespace-nowrap ml-8 pl-8 py-2 border-l border-1 border-[#245fff]/30 text-xl">
           Hub de Análises
@@ -144,7 +144,7 @@ export function Sidebar() {
           onClick={() => setMenuOpen(false)}
         />
         <div className="flex md:hidden flex-col md:h-auto py-6">
-          <LumenLogo size={32} className="mb-8 mr-auto ml-4" />
+          <AicfoLogo size={32} className="mb-8 mr-auto ml-4" />
           {[...routes, ...configRoutes].map((route) => (
             <NavLink
               key={route.to}

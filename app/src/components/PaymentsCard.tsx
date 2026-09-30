@@ -1,4 +1,4 @@
-import { formatBRL } from "@/lumen/data/categories";
+import { formatBRL } from "@/aicfo/data/categories";
 
 const payments = [
   {

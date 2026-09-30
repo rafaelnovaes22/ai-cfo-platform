@@ -1,5 +1,5 @@
-import { useActionItems, type ActionItem } from "@/lumen/data/useActionItems";
-import { useAnalyses } from "@/lumen/data/useAnalyses";
+import { useActionItems, type ActionItem } from "@/aicfo/data/useActionItems";
+import { useAnalyses } from "@/aicfo/data/useAnalyses";
 import {
   ArrowRight,
   Inbox,

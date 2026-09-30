@@ -207,7 +207,7 @@ Storage: tabela `TenantContext.productConfig.{{ product_code }}` ou equivalente 
 
 | Camada | Tecnologia | Justificativa |
 |---|---|---|
-| Frontend | {{ ex: Lovable, Next.js, React+Vite }} | {{ time-to-market vs. controle }} |
+| Frontend | {{ ex: React+Vite, Next.js }} | {{ time-to-market vs. controle }} |
 | Auth | {{ ex: Supabase Auth, Auth0 }} | {{ ... }} |
 | Backend / API | {{ ex: Supabase Edge Functions, Next.js API }} | {{ ... }} |
 | LLM | {{ provedor primário + fallback }} | {{ ... }} |
