@@ -22,7 +22,7 @@ export function SubscriberGate({
         {children}
       </div>
       <div className="absolute inset-0 flex items-start justify-center px-6 pt-20">
-        <div className="w-full max-w-[460px] text-center rounded-3xl border border-[#15152f] bg-[#171132]/90 backdrop-blur-sm p-10 text-white shadow-2xl">
+        <div className="w-full max-w-[460px] text-center rounded-lg border border-[#15152f] bg-[#171132]/90 backdrop-blur-sm p-10 text-white shadow-2xl">
           <div className="text-4xl mb-4">🔒</div>
           <h1 className="text-[20px] font-medium mb-2">
             {feature ? `${feature} é exclusivo do plano pago` : "Recurso do plano pago"}

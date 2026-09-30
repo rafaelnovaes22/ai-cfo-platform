@@ -174,7 +174,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-[url('https://images.unsplash.com/photo-1635776063043-ab23b4c226f6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover flex items-center justify-start">
+    <div className="min-h-screen bg-ink bg-[repeating-linear-gradient(0deg,transparent_0px,transparent_31px,hsl(40_30%_96%/0.05)_31px,hsl(40_30%_96%/0.05)_32px)] flex items-center justify-start">
       <div className="w-full h-screen max-w-[560px]">
         <div className="relative bg-white shadow-2xl shadow-black border h-full text-black p-12 pt-16 flex flex-col justify-center overflow-y-auto">
           <div className="absolute top-12 left-12">

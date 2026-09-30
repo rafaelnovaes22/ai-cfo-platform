@@ -1,4 +1,4 @@
-import { Loader, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const phrases = [
@@ -23,7 +23,6 @@ export default function ImportLoading({ show }: { show: boolean }) {
         const currentIndex = phrases.indexOf(prev);
         return getPhraseInOrder(currentIndex + 1);
       });
-      console.log("Changing phrase to:", set);
     }, 5000);
 
     return () => clearInterval(interval);

@@ -7,7 +7,6 @@ import {
 import { formatBRL } from "../data/analytics.ts";
 import { categoryLabel } from "../data/categoryLabels.ts";
 import { useAnalyses } from "../data/useAnalyses.ts";
-import DemoRibbon from "@/components/DemoRibbon.tsx";
 import IncomeOutcomeChart from "@/components/IncomeOutcomeChart.tsx";
 import {
   useCashFlow,

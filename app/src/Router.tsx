@@ -28,7 +28,6 @@ const Router = () => {
   const location = useLocation();
 
   useEffect(() => {
-    console.log("Route changed:", location.pathname);
     nprogress.start();
     nprogress.done();
   }, [location.pathname]);
