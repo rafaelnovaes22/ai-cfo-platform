@@ -60,7 +60,7 @@ export default function PaymentsCard() {
         <div className="font-semibold mb-8">Contas a pagar</div>
       </div>
       <div className="text-sm col-span-12 grid grid-cols-12 gap-2">
-        <div className="col-span-12 grid grid-cols-12 gap-2 border-b border-[#15152f] pb-2 mb-2">
+        <div className="col-span-12 grid grid-cols-12 gap-2 border-b border-ink pb-2 mb-2">
           <div className="col-span-4 md:col-span-6 font-semibold">Conta</div>
           <div className="hidden md:block col-span-2 text-center font-semibold">
             Vencimento

@@ -42,7 +42,7 @@ function Section({ items }: { items: typeof workspace }) {
               <>
                 <it.icon
                   className={`h-[22px] w-[22px] md:h-[15px] md:w-[15px] shrink-0 ${
-                    isActive ? "text-[#3D24A0] dark:text-[#96ff7e]" : ""
+                    isActive ? "text-copper dark:text-copper" : ""
                   }`}
                   strokeWidth={1.75}
                 />
@@ -59,10 +59,10 @@ function Section({ items }: { items: typeof workspace }) {
                   )}
                 </span>
                 <span
-                  className={`bg-[#3D24A0] dark:bg-[#96ff7e] rounded rounded-t-none rounded-b md:rounded-t md:rounded-b-none absolute left-0 h-1 w-full transition-all duration-300 group-hover:top-0 group-hover:bottom-auto group-hover:md:bottom-0 group-hover:md:top-auto ${
+                  className={`bg-copper dark:bg-copper rounded rounded-t-none rounded-b md:rounded-t md:rounded-b-none absolute left-0 h-1 w-full transition-all duration-300 group-hover:top-0 group-hover:bottom-auto group-hover:md:bottom-0 group-hover:md:top-auto ${
                     isActive
                       ? "md:top-auto md:bottom-0 top-0 bottom-auto "
-                      : "-top-1 bottom-auto md:top-auto md:-bottom-1 bg-white"
+                      : "-top-1 bottom-auto md:top-auto md:-bottom-1 bg-cream dark:bg-ink"
                   }`}
                 ></span>
               </>
@@ -76,8 +76,8 @@ function Section({ items }: { items: typeof workspace }) {
 
 export function Topbar() {
   return (
-    <header className="fixed bottom-0 w-full md:sticky md:top-0 z-50 bg-gray-200 dark:bg-[#120d2a] flex items-center justify-between px-2 md:px-8">
-      <div className="hidden pointer-events-none dark:block absolute -top-10 left-0 w-full h-10 bg-gradient-to-t from-[#09080f] to-transparent md:hidden"></div>
+    <header className="fixed bottom-0 w-full md:sticky md:top-0 z-50 bg-cream dark:bg-night border-t md:border-t-0 md:border-b border-border flex items-center justify-between px-2 md:px-8">
+      <div className="hidden pointer-events-none dark:block absolute -top-10 left-0 w-full h-10 bg-gradient-to-t from-night to-transparent md:hidden"></div>
       <div className="hidden md:flex justify-between w-full">
         <Section items={workspace} />
         <Section items={dados} />

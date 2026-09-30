@@ -12,9 +12,9 @@ export default function UserConfig() {
       </header>
       <div
         id="tabs"
-        className="border-b-2 border-gray-200 dark:border-[#15152f] flex items-end"
+        className="border-b-2 border-gray-200 dark:border-ink flex items-end"
       >
-        <span className="px-6 -mb-0.5 cursor-pointer text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-200 border-b-2 border-[#3D24A0] hover:border-gray-300 dark:hover:border-gray-600 pb-4">
+        <span className="px-6 -mb-0.5 cursor-pointer text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-200 border-b-2 border-copper hover:border-gray-300 dark:hover:border-gray-600 pb-4">
           Dados do usuário
         </span>
         <Link
@@ -24,7 +24,7 @@ export default function UserConfig() {
           Notificações
         </Link>
       </div>
-      <div className="animate-fade-up rounded-lg bg-popover dark:bg-[#15152f] p-6">
+      <div className="animate-fade-up rounded-lg bg-popover dark:bg-ink p-6">
         <div className="space-y-6">
           <div className="space-y-2">
             <h2 className="text-lg font-semibold leading-none tracking-tight">
@@ -46,7 +46,7 @@ export default function UserConfig() {
                 type="text"
                 id="name"
                 placeholder="Digite seu nome"
-                className="flex h-10 w-full rounded-md bg-input dark:bg-[#0b0918] px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-black/50 dark:placeholder:text-white/30 dark:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-md bg-input dark:bg-night px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-black/50 dark:placeholder:text-white/30 dark:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div className="grid w-full items-center gap-2">
@@ -60,7 +60,7 @@ export default function UserConfig() {
                 type="text"
                 id="empresa"
                 placeholder="Digite sua empresa"
-                className="flex h-10 w-full rounded-md bg-input dark:bg-[#0b0918] px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-black/50 dark:placeholder:text-white/30 dark:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-md bg-input dark:bg-night px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-black/50 dark:placeholder:text-white/30 dark:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </form>

@@ -10,7 +10,7 @@ export default function CreateAnalysisCard({ current, inputMethods }) {
             <h2 className="font-semibold  mb-4">
               {current ? "Criar nova análise" : "Iniciar primeira análise"}
             </h2>
-            <p className="text-[13px] dark:text-[#96ff7e] mt-1">
+            <p className="text-[13px] dark:text-copper mt-1">
               Escolha o formato dos dados e leve cerca de 2 minutos.
             </p>
           </div>
@@ -20,10 +20,10 @@ export default function CreateAnalysisCard({ current, inputMethods }) {
             <Link
               key={m.id}
               to={`/importar?method=${m.id}`}
-              className="group flex items-center gap-3 p-4 rounded-md bg-cream dark:bg-[#15152f] hover:bg-[#15152f]/10 dark:bg-[#15152f]/40 transition-all"
+              className="group flex items-center gap-3 p-4 rounded-md bg-cream dark:bg-ink hover:bg-ink/10 dark:bg-ink/40 transition-all"
             >
               <m.icon
-                className="h-4 w-4 text-[#3D24A0] dark:text-[#96ff7e] group-hover:"
+                className="h-4 w-4 text-copper dark:text-copper group-hover:"
                 strokeWidth={1.6}
               />
               <span className="text-[13px] ">{m.label}</span>

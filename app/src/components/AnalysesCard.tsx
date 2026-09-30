@@ -10,7 +10,7 @@ export default function AnalysesCard({ summaries }: { summaries: Record<string, 
       <div className="flex items-end justify-between mb-2">
         <h2 className="font-semibold mb-4">Todas as análises ({analyses.length})</h2>
       </div>
-      <div className="-mx-6 overflow-hidden divide-y dark:divide-[#0b0918]/50">
+      <div className="-mx-6 overflow-hidden divide-y dark:divide-night/50">
         {analyses.map((a) => {
           const s = summaries[a.id] ?? { income: 0, expense: 0, count: 0 };
           const net = s.income - s.expense;
@@ -20,7 +20,7 @@ export default function AnalysesCard({ summaries }: { summaries: Record<string, 
             <div
               key={a.id}
               className={`flex flex-wrap justify-between items-start md:grid grid-cols-12 md:items-center gap-2 px-6 py-4 transition-colors ${
-                isActive ? "bg-cream dark:bg-[#15152f]" : "hover:bg-[#15152f]/10 hover:dark:bg-[#15152f]/40"
+                isActive ? "bg-cream dark:bg-ink" : "hover:bg-ink/10 hover:dark:bg-ink/40"
               }`}
             >
               <button

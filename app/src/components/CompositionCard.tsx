@@ -1,6 +1,7 @@
 import { formatBRL } from "@/aicfo/data/categories";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useCountUp } from "@/hooks/useCountUp";
 
 type Composition = {
   income?: number;
@@ -21,6 +22,7 @@ export default function CompositionCard({
   composition: Composition;
   monthLabel?: string;
 }) {
+  const animatedProfit = useCountUp(current.netProfit ?? 0);
   return (
     <article className="relative text-cream z-10 h-full animate-fade-up delay-1 grid grid-cols-12 gap-6 pb-16 overflow-hidden">
       <div className="col-span-12 px-10 pl-0">
@@ -28,7 +30,7 @@ export default function CompositionCard({
           {monthLabel ? `Lucro líquido · ${monthLabel}` : "Lucro líquido"}
         </div>
         <div className="text-4xl md:text-5xl font-semibold leading-none -tracking-[3px] tabular font-serif [overflow-wrap:anywhere]">
-          {current.netProfit ? formatBRL(current.netProfit) : "-"}
+          {current.netProfit ? formatBRL(animatedProfit) : "-"}
         </div>
         <div className="mt-8 pl-4 border-l-2 flex flex-col items-start gap-0 text-[13px]">
           <span className="font-semibold">Margem</span>

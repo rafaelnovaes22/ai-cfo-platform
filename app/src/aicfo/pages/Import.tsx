@@ -177,7 +177,7 @@ function PasteModal({
 
   return (
     <ModalShell onClose={onClose} title="Cole sua planilha">
-      <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+      <p className="text-[13px] dark:text-copper mb-4">
         Cole as linhas do extrato ou da planilha (uma por linha, com data,
         descrição e valor). Categorizamos automaticamente. Para um DRE fechado
         do contador, use “DRE em PDF”.
@@ -199,7 +199,7 @@ function PasteModal({
           setText(next);
         }}
         disabled={submitting}
-        className="w-full h-56 bg-cream-deep dark:bg-[#0b0918] text-ink dark:text-cream border border-[#171132] rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-[#96ff7e] mt-3"
+        className="w-full h-56 bg-cream-deep dark:bg-night text-ink dark:text-cream border border-ink rounded-md p-4 text-[12.5px] resize-none focus:outline-none focus:border-copper mt-3"
         placeholder={
           "Data\tDescrição\tValor\n01/09/2026\tCliente Vértice MRR\t14.200,00\n02/09/2026\tMeta Ads\t-22.840,00\n..."
         }
@@ -207,17 +207,17 @@ function PasteModal({
       {showFormatHelp && (
         <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-[12.5px] text-ink dark:text-cream">
           <p className="font-medium mb-1">Esperamos uma lista de lançamentos, não um relatório pronto.</p>
-          <p className="dark:text-[#96ff7e] mb-2">
+          <p className="dark:text-copper mb-2">
             Cole uma linha por lançamento, com data, descrição e valor (use o
             valor negativo para saídas):
           </p>
-          <pre className="whitespace-pre overflow-x-auto rounded bg-cream-deep dark:bg-[#0b0918] border border-[#171132] p-3 text-[11.5px] leading-relaxed">
+          <pre className="whitespace-pre overflow-x-auto rounded bg-cream-deep dark:bg-night border border-ink p-3 text-[11.5px] leading-relaxed">
 {`Data        Descrição              Valor
 01/07/2026  Cliente Alfa (MRR)     14.200,00
 03/07/2026  Meta Ads               -2.840,00
 05/07/2026  Aluguel                -6.500,00`}
           </pre>
-          <p className="dark:text-[#96ff7e] mt-3">
+          <p className="dark:text-copper mt-3">
             Se o que você tem é um <strong>DRE fechado do contador</strong>, feche
             este aviso e use o card “DRE em PDF”. Uma planilha exportada do banco
             ou ERP vai melhor em “Excel ou CSV”.
@@ -230,14 +230,14 @@ function PasteModal({
         </div>
         <button
           onClick={onClose}
-          className="px-4 py-2 text-[13px] dark:text-[#96ff7e] hover:"
+          className="px-4 py-2 text-[13px] dark:text-copper hover:"
         >
           Cancelar
         </button>
         <button
           onClick={handleSubmit}
           disabled={submitting || !text.trim()}
-          className="bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-1.5 disabled:opacity-50"
+          className="bg-ink text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-1.5 disabled:opacity-50"
         >
           {submitting ? (
             <>
@@ -336,7 +336,7 @@ function FileModal({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full border-2 border-dashed border-[#171132] rounded-lg p-10 text-center bg-cream-deep/30 hover:border-[#96ff7e] transition-colors mt-3"
+        className="w-full border-2 border-dashed border-ink rounded-lg p-10 text-center bg-cream-deep/30 hover:border-copper transition-colors mt-3"
       >
         {file ? (
           <>
@@ -345,18 +345,18 @@ function FileModal({
               strokeWidth={1.4}
             />
             <h3 className="text-[20px] mb-1">{file.name}</h3>
-            <p className="text-[12.5px] dark:text-[#96ff7e]">
+            <p className="text-[12.5px] dark:text-copper">
               {(file.size / 1024).toFixed(0)} KB · clique para trocar
             </p>
           </>
         ) : (
           <>
             <UploadCloud
-              className="h-10 w-10 mx-auto dark:text-[#96ff7e] mb-3"
+              className="h-10 w-10 mx-auto dark:text-copper mb-3"
               strokeWidth={1.4}
             />
             <h3 className="text-[20px] mb-1">Clique para selecionar</h3>
-            <p className="text-[12.5px] dark:text-[#96ff7e]">{format}</p>
+            <p className="text-[12.5px] dark:text-copper">{format}</p>
           </>
         )}
       </button>
@@ -373,14 +373,14 @@ function FileModal({
         </div>
         <button
           onClick={onClose}
-          className="px-4 py-2 text-[13px] dark:text-[#96ff7e] hover:"
+          className="px-4 py-2 text-[13px] dark:text-copper hover:"
         >
           Cancelar
         </button>
         <button
           onClick={handleSubmit}
           disabled={!file || submitting}
-          className="bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-1.5 disabled:opacity-50"
+          className="bg-ink text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-1.5 disabled:opacity-50"
         >
           {submitting ? (
             <>
@@ -471,7 +471,7 @@ function ManualEntry({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
+              className="w-full dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[13px]"
             />
           </Field>
           <Field label="Tipo" error={undefined}>
@@ -480,7 +480,7 @@ function ManualEntry({
               onChange={(e) =>
                 setDirection(e.target.value as "credit" | "debit")
               }
-              className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
+              className="w-full dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[13px]"
             >
               <option value="credit">Receita (entrada)</option>
               <option value="debit">Despesa (saída)</option>
@@ -494,7 +494,7 @@ function ManualEntry({
             maxLength={LIMITS.DESCRIPTION_MAX_CHARS}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Ex: Contrato cliente Alfa, Meta Ads setembro…"
-            className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
+            className="w-full dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[13px]"
           />
         </Field>
         <Field label="Valor (R$)" error={errors.amount}>
@@ -511,7 +511,7 @@ function ManualEntry({
               setAmount(e.target.value);
             }}
             placeholder="0,00"
-            className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px]"
+            className="w-full dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[13px]"
           />
         </Field>
         <div className="flex justify-end gap-2 mt-2">
@@ -521,14 +521,14 @@ function ManualEntry({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-[13px] dark:text-[#96ff7e]"
+            className="px-4 py-2 text-[13px] dark:text-copper"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-1.5 disabled:opacity-50"
+            className="bg-ink text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-1.5 disabled:opacity-50"
           >
             {submitting ? (
               <>
@@ -560,7 +560,7 @@ function MonthField({
         type="month"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[13px] w-full"
+        className="dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[13px] w-full"
       />
     </Field>
   );
@@ -577,7 +577,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[12px] dark:text-[#96ff7e]">{label}</span>
+      <span className="text-[12px] dark:text-copper">{label}</span>
       {children}
       {error && <span className="text-[11.5px] text-red-500">{error}</span>}
     </label>
@@ -596,10 +596,10 @@ function ModalShell({
   return (
     <div className="fixed inset-0 h-screen w-screen z-[500] !mt-0 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-[#111164]/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/30 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-cream dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg shadow-[#0b0918] w-full max-w-2xl p-7 animate-fade-up max-h-[90vh] overflow-auto">
+      <div className="relative bg-cream dark:bg-night border dark:border-ink rounded-lg shadow-night w-full max-w-2xl p-7 animate-fade-up max-h-[90vh] overflow-auto">
         <div className="flex items-start justify-between mb-5">
           <div>
             <div className="uppercase text-[11px] tracking-widest mb-1 text-ink-soft dark:text-cream/60">
@@ -613,7 +613,7 @@ function ModalShell({
             onClick={onClose}
             className="p-1 rounded-md hover:bg-cream-deep"
           >
-            <X className="h-4 w-4 dark:text-[#96ff7e]" />
+            <X className="h-4 w-4 dark:text-copper" />
           </button>
         </div>
         {children}
@@ -646,7 +646,7 @@ export default function Import() {
         <h1 className="text-3xl leading-[1.05] tracking-tight max-w-xl">
           Como você quer trazer seus números?
         </h1>
-        <p className="text-ink-soft dark:text-[#96ff7e] mt-3 text-[14px] max-w-lg">
+        <p className="text-ink-soft dark:text-copper mt-3 text-[14px] max-w-lg">
           Seja via planilha ou fazendo lançamentos individuais, escolha a melhor
           forma de trazer seus dados.
         </p>
@@ -657,10 +657,10 @@ export default function Import() {
           <button
             key={c.id}
             onClick={() => setOpen(c.id)}
-            className="group flex flex-col h-full text-left dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg p-6 hover:border-[#96ff7e] hover:shadow-[#0b0918] transition-all"
+            className="group flex flex-col h-full text-left dark:bg-night border dark:border-ink rounded-lg p-6 hover:border-copper hover:shadow-night transition-all"
           >
             <c.icon
-              className="h-5 w-5 text-ink-soft dark:text-[#96ff7e] mb-5"
+              className="h-5 w-5 text-ink-soft dark:text-copper mb-5"
               strokeWidth={1.6}
             />
             <div className="uppercase text-[11px] tracking-widest mb-2 text-ink-soft dark:text-cream/60">
@@ -669,11 +669,11 @@ export default function Import() {
             <h3 className="text-[20px] leading-snug tracking-tight mb-2 text-ink dark:text-cream">
               {c.title}
             </h3>
-            <p className="text-[12.5px] text-ink-soft dark:text-[#96ff7e] leading-relaxed flex-1">
+            <p className="text-[12.5px] text-ink-soft dark:text-copper leading-relaxed flex-1">
               {c.desc}
             </p>
             <div className="mt-5 flex justify-end">
-              <ArrowRight className="h-4 w-4 text-ink-soft dark:text-[#96ff7e] group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="h-4 w-4 text-ink-soft dark:text-copper group-hover:translate-x-0.5 transition-all" />
             </div>
           </button>
         ))}

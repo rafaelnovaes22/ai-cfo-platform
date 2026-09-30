@@ -22,7 +22,7 @@ export function SubscriberGate({
         {children}
       </div>
       <div className="absolute inset-0 flex items-start justify-center px-6 pt-20">
-        <div className="w-full max-w-[460px] text-center rounded-lg border border-[#15152f] bg-[#171132]/90 backdrop-blur-sm p-10 text-white shadow-2xl">
+        <div className="w-full max-w-[460px] text-center rounded-lg border border-ink bg-ink/90 backdrop-blur-sm p-10 text-white shadow-2xl">
           <div className="text-4xl mb-4">🔒</div>
           <h1 className="text-[20px] font-medium mb-2">
             {feature ? `${feature} é exclusivo do plano pago` : "Recurso do plano pago"}
@@ -35,7 +35,7 @@ export function SubscriberGate({
             href="https://wa.me/551153047368"
             target="_blank"
             rel="noopener noreferrer"
-            className="block h-10 leading-10 rounded-md bg-[#111164] text-cream text-[13.5px] font-medium hover:bg-[#111164]/90 transition-colors"
+            className="block h-10 leading-10 rounded-md bg-ink text-cream text-[13.5px] font-medium hover:bg-ink/90 transition-colors"
           >
             Liberar a análise completa
           </a>

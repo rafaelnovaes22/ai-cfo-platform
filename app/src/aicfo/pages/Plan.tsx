@@ -94,14 +94,14 @@ export default function Plan() {
               Erro ao gerar plano
             </h1>
           </header>
-          <section className="dark:bg-[#15152f] border dark:border-[#15152f]/50 rounded-lg p-12 text-center">
+          <section className="dark:bg-ink border dark:border-ink/50 rounded-lg p-12 text-center">
             <div className="h-12 w-12 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <RotateCcw className="h-6 w-6" />
             </div>
             <h2 className="text-[26px] tracking-tight mb-2">
               Vamos gerar seu plano de ação?
             </h2>
-            <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+            <p className="text-[13px] dark:text-copper mb-4">
               Por algum motivo não foi possível gerar o plano de ação
               automaticamente. <br />
               Clique no botão abaixo para gerar novamente.
@@ -115,7 +115,7 @@ export default function Plan() {
                   toast.error("Erro ao reiniciar análise.");
                 }
               }}
-              className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90"
+              className="inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-ink/90"
             >
               <RotateCcw className="h-4 w-4" /> Gerar plano de ação
             </button>
@@ -135,22 +135,22 @@ export default function Plan() {
               Próximos passos para a sua empresa
             </h1>
           </header>
-          <section className="dark:bg-[#15152f] border dark:border-[#15152f]/50 rounded-lg p-12 text-center">
+          <section className="dark:bg-ink border dark:border-ink/50 rounded-lg p-12 text-center">
             <Inbox
-              className="h-10 w-10 mx-auto dark:text-[#96ff7e] mb-4"
+              className="h-10 w-10 mx-auto dark:text-copper mb-4"
               strokeWidth={1.4}
             />
             <h2 className="text-[26px] tracking-tight mb-2">
               Dados insuficientes
             </h2>
-            <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
+            <p className="text-[14px] dark:text-copper max-w-md mx-auto mb-6">
               Não encontramos informações suficientes nos seus lançamentos para
               gerar recomendações precisas. Tente importar mais extratos ou
               detalhar melhor suas categorias.
             </p>
             <Link
               to="/importar"
-              className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90"
+              className="inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-ink/90"
             >
               Importar mais dados
             </Link>
@@ -169,21 +169,21 @@ export default function Plan() {
             Próximos passos para a sua empresa
           </h1>
         </header>
-        <section className="dark:bg-[#15152f] border dark:border-[#15152f]/50 rounded-lg p-12 text-center">
+        <section className="dark:bg-ink border dark:border-ink/50 rounded-lg p-12 text-center">
           <Inbox
-            className="h-10 w-10 mx-auto dark:text-[#96ff7e] mb-4"
+            className="h-10 w-10 mx-auto dark:text-copper mb-4"
             strokeWidth={1.4}
           />
           <h2 className="text-[26px] tracking-tight mb-2">
             Nenhum plano ainda
           </h2>
-          <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
+          <p className="text-[14px] dark:text-copper max-w-md mx-auto mb-6">
             O plano de ação é gerado automaticamente após a importação dos seus
             dados.
           </p>
           <Link
             to="/importar"
-            className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90"
+            className="inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-ink/90"
           >
             Importar dados
           </Link>
@@ -205,7 +205,7 @@ export default function Plan() {
         </div>
       </header>
 
-      <div className="animate-fade-up delay-1 flex border-b dark:border-[#15152f]">
+      <div className="animate-fade-up delay-1 flex border-b dark:border-ink">
         {horizons.map((h) => {
           const active = horizon === h.id;
           const count = grouped[h.id].length;
@@ -215,7 +215,7 @@ export default function Plan() {
               onClick={() => setHorizon(h.id)}
               className={`flex !text-left flex-col items-start px-2 md:px-5 pb-3 -mb-px border-b-2 transition-colors ${
                 active
-                  ? "border-[#3D24A0] dark:border-[#96ff7e]"
+                  ? "border-copper dark:border-copper"
                   : "border-transparent opacity-50 hover:"
               }`}
             >
@@ -223,7 +223,7 @@ export default function Plan() {
                 {h.label}{" "}
                 {count > 0 && <span className="text-[10.5px]">({count})</span>}
               </span>
-              <span className="text-[11.5px] text-[#3D24A0] dark:text-[#96ff7e]">
+              <span className="text-[11.5px] text-copper dark:text-copper">
                 {h.sub}
               </span>
             </button>
@@ -232,7 +232,7 @@ export default function Plan() {
       </div>
 
       {actions.length === 0 ? (
-        <p className="text-[13px] text-[#3D24A0] dark:text-[#96ff7e] italic">
+        <p className="text-[13px] text-copper dark:text-copper italic">
           Nenhuma ação neste horizonte.
         </p>
       ) : (
@@ -272,14 +272,14 @@ function ActionCard({
   const approved = item.clientApproved;
   return (
     <article
-      className={`dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg shadow-soft overflow-hidden grid grid-cols-12 ${
+      className={`dark:bg-night border dark:border-ink rounded-lg shadow-soft overflow-hidden grid grid-cols-12 ${
         approved === false ? "opacity-60" : ""
       }`}
     >
       <div className="col-span-12 lg:col-span-9 p-7 relative">
         <div className="grid grid-cols-12 gap-6">
           <div className="-z-1 absolute top-7 right-7 md:static col-span-2">
-            <div className="italic text-[64px] leading-none text-[#3D24A0] dark:text-[#96ff7e]/40 select-none">
+            <div className="italic text-[64px] leading-none text-copper dark:text-copper/40 select-none">
               {num}
             </div>
           </div>
@@ -313,7 +313,7 @@ function ActionCard({
           </div>
         </div>
       </div>
-      <div className="col-span-12 lg:col-span-3 p-6 lg:border-l border-t lg:border-t-0 dark:border-[#2b2b40] bg-gray-200 dark:bg-[#15152f] flex flex-col gap-3">
+      <div className="col-span-12 lg:col-span-3 p-6 lg:border-l border-t lg:border-t-0 dark:border-[#2b2b40] bg-gray-200 dark:bg-ink flex flex-col gap-3">
         <div className="uppercase text-[11px] tracking-widest mb-1 !opacity-30">
           Feedback
         </div>
@@ -322,7 +322,7 @@ function ActionCard({
           className={`flex items-center gap-2 text-[12px] px-2 py-1.5 rounded-md transition-colors ${
             approved === true
               ? "bg-[#29c89b]/20 text-[#29c89b]"
-              : "dark:text-[#96ff7e] hover:bg-cream-deep"
+              : "dark:text-copper hover:bg-cream-deep"
           }`}
         >
           <ThumbsUp className="h-3.5 w-3.5" />
@@ -333,7 +333,7 @@ function ActionCard({
           className={`flex items-center gap-2 text-[12px] px-2 py-1.5 rounded-md transition-colors ${
             approved === false
               ? "bg-[#ff9191]/20 text-[#ff9191]"
-              : "dark:text-[#96ff7e] hover:bg-cream-deep"
+              : "dark:text-copper hover:bg-cream-deep"
           }`}
         >
           <ThumbsDown className="h-3.5 w-3.5" />

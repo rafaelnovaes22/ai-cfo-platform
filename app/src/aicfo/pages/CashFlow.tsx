@@ -110,7 +110,7 @@ export default function CashFlow() {
           Sem lançamentos. Importe dados para começar.
           <Link
             to="/importar"
-            className="inline-flex items-center gap-2 mt-4 bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] hover:bg-[#111164]/90"
+            className="inline-flex items-center gap-2 mt-4 bg-ink text-cream px-4 py-2 rounded-md text-[13px] hover:bg-ink/90"
           >
             Importar dados
           </Link>
@@ -190,22 +190,22 @@ export default function CashFlow() {
                 amount={(summary.totalDebitsCents * -1) / 100}
               />
             </div>
-            <div className="col-span-1 border dark:border-[#15152f] rounded-xl p-6 flex flex-col md:flex-row md:items-center gap-4">
+            <div className="col-span-1 border dark:border-ink rounded-xl p-6 flex flex-col md:flex-row md:items-center gap-4">
               <IncomeOutcomeChart
                 data={chart}
                 granularity={filters.granularity}
               />
             </div>
           </div>
-          <section className="animate-fade-up delay-2 dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg overflow-x-auto">
+          <section className="animate-fade-up delay-2 dark:bg-night border dark:border-ink rounded-lg overflow-x-auto">
             {table && (
               <table className="w-full text-[13px]">
-                <thead className="bg-gray-200 dark:bg-[#15152f] border-b dark:border-[#171132]">
+                <thead className="bg-gray-200 dark:bg-ink border-b dark:border-ink">
                   <tr>
                     <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal text-left">
                       Categoria
                     </th>
-                    <th className="uppercase text-[11px] bg-gray-300 dark:bg-[#0b0918] tracking-widest !opacity-60 px-5 py-3 font-normal text-right">
+                    <th className="uppercase text-[11px] bg-gray-300 dark:bg-night tracking-widest !opacity-60 px-5 py-3 font-normal text-right">
                       Total no período
                     </th>
                     {getColumns().map((item, index) => (
@@ -219,7 +219,7 @@ export default function CashFlow() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="text-base border-b dark:border-[#171132]/60 last:border-0 hover:bg-[#15152f]/10 dark:bg-[#15152f]/40 transition-colors">
+                  <tr className="text-base border-b dark:border-ink/60 last:border-0 hover:bg-ink/10 dark:bg-ink/40 transition-colors">
                     <td className="px-5 py-3.5 border-l-2 border-[#29c89b] text-[#29c89b]">
                       Receitas
                     </td>
@@ -232,7 +232,7 @@ export default function CashFlow() {
                       cols={getColumns().length}
                     />
                   ))}
-                  <tr className="text-base border-b dark:border-[#171132]/60 last:border-0 hover:bg-[#15152f]/10 dark:bg-[#15152f]/40 transition-colors">
+                  <tr className="text-base border-b dark:border-ink/60 last:border-0 hover:bg-ink/10 dark:bg-ink/40 transition-colors">
                     <td className="px-5 py-3.5 border-l-2 border-[#ff9191] text-[#ff9191]">
                       Despesas
                     </td>
@@ -266,7 +266,7 @@ function DataCard({
   icon: React.ElementType;
 }) {
   return (
-    <div className="border dark:border-[#15152f] rounded-xl p-6 flex flex-col md:flex-row md:items-center gap-4">
+    <div className="border dark:border-ink rounded-xl p-6 flex flex-col md:flex-row md:items-center gap-4">
       <Icon
         className={`h-10 w-10 ${
           amount >= 0 ? "text-[#29c89b]" : "text-[#ff9191]"
@@ -300,7 +300,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="font-semibold bg-gray-100 dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[12.5px]  focus:outline-none focus:border-white/60"
+      className="font-semibold bg-gray-100 dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[12.5px]  focus:outline-none focus:border-white/60"
     >
       {options.map((o) => (
         <option key={o.v} value={o.v}>
@@ -325,9 +325,9 @@ function Row({
   }));
   const byPeriod = [...data.byPeriod, ...emptyByPeriod].slice(0, cols);
   return (
-    <tr className="group text-base border-b dark:border-[#171132]/60 last:border-0 dark:bg-[#15152f]/40 transition-colors">
+    <tr className="group text-base border-b dark:border-ink/60 last:border-0 dark:bg-ink/40 transition-colors">
       <td
-        className={`px-5 py-3.5 pl-12 border-l-2 group-hover:bg-[#15152f]/10 ${
+        className={`px-5 py-3.5 pl-12 border-l-2 group-hover:bg-ink/10 ${
           list === "entries" ? "border-[#29c89b]" : "border-[#ff9191]"
         }`}
       >
@@ -335,14 +335,14 @@ function Row({
         {categoryLabel(data.category)}
       </td>
       <td
-        className={`px-5 py-3.5 font-semibold bg-gray-100 dark:bg-[#0b0918] group-hover:bg-[#15152f]/5 text-right ${data.totalCents < 0 ? "text-[#ff9191]" : "text-[#29c89b]"}`}
+        className={`px-5 py-3.5 font-semibold bg-gray-100 dark:bg-night group-hover:bg-ink/5 text-right ${data.totalCents < 0 ? "text-[#ff9191]" : "text-[#29c89b]"}`}
       >
         {formatBRL(data.totalCents / 100)}
       </td>
       {byPeriod.map((p, index) => (
         <td
           key={index}
-          className={`px-5 py-3.5 text-right whitespace-nowrap group-hover:bg-[#15152f]/10 ${p.amountCents < 0 ? "text-[#ff9191]" : "text-[#29c89b]"}`}
+          className={`px-5 py-3.5 text-right whitespace-nowrap group-hover:bg-ink/10 ${p.amountCents < 0 ? "text-[#ff9191]" : "text-[#29c89b]"}`}
         >
           {p.amountCents === 0 ? "-" : formatBRL(p.amountCents / 100)}
         </td>

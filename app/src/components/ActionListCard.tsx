@@ -49,7 +49,7 @@ function ActionCard({
   const approved = item.clientApproved;
   return (
     <article
-      className={`border-b-2 dark:border-[#96ff7e]/5 -mx-6 md:mx-0 px-4 pt-3 pb-1 ${approved === false ? "opacity-60" : ""}`}
+      className={`border-b-2 dark:border-copper/5 -mx-6 md:mx-0 px-4 pt-3 pb-1 ${approved === false ? "opacity-60" : ""}`}
     >
       <h3 className="text-md tracking-tight leading-snug mb-2">{item.title}</h3>
       <div className="flex items-center gap-2 mb-3">
@@ -128,7 +128,7 @@ export default function ActionListCard({ current, transactions }) {
             <h2 className="text-[26px] tracking-tight mb-2">
               Vamos gerar seu plano de ação?
             </h2>
-            <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+            <p className="text-[13px] dark:text-copper mb-4">
               Por algum motivo não foi possível gerar o plano de ação
               automaticamente. <br />
               Clique no botão abaixo para gerar novamente.
@@ -142,7 +142,7 @@ export default function ActionListCard({ current, transactions }) {
                   toast.error("Não foi possível reiniciar a análise.");
                 }
               }}
-              className="bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-2 mx-auto hover:bg-[#111164]/90 transition-colors"
+              className="bg-ink text-cream px-4 py-2 rounded-md text-[13px] flex items-center gap-2 mx-auto hover:bg-ink/90 transition-colors"
             >
               <RotateCcw className="h-3.5 w-3.5" /> Gerar plano de ação
             </button>
@@ -157,15 +157,15 @@ export default function ActionListCard({ current, transactions }) {
           <div className="font-semibold mb-4">Plano de Ação</div>
           <div className="text-center py-8">
             <Inbox
-              className="h-8 w-8 mx-auto dark:text-[#96ff7e] mb-3"
+              className="h-8 w-8 mx-auto dark:text-copper mb-3"
               strokeWidth={1.4}
             />
-            <p className="text-[13px] dark:text-[#96ff7e] mb-4">
+            <p className="text-[13px] dark:text-copper mb-4">
               Sem ações materiais este mês.
             </p>
             <Link
               to="/importar"
-              className="inline-flex items-center gap-2 bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] hover:bg-[#111164]/90"
+              className="inline-flex items-center gap-2 bg-ink text-cream px-4 py-2 rounded-md text-[13px] hover:bg-ink/90"
             >
               Importar mais dados
             </Link>
@@ -190,17 +190,17 @@ export default function ActionListCard({ current, transactions }) {
         <div className="font-semibold mb-4">Plano de Ação</div>
         <div className="text-center py-8">
           <Inbox
-            className="h-8 w-8 mx-auto dark:text-[#96ff7e] mb-3"
+            className="h-8 w-8 mx-auto dark:text-copper mb-3"
             strokeWidth={1.4}
           />
-          <p className="text-[13px] dark:text-[#96ff7e]">
+          <p className="text-[13px] dark:text-copper">
             {(transactions?.length ?? 0) === 0
               ? "Importe dados para gerar o plano."
               : "O plano é gerado automaticamente após importar dados."}
           </p>
           <Link
             to="/importar"
-            className="inline-flex items-center gap-2 mt-4 bg-[#111164] text-cream px-4 py-2 rounded-md text-[13px] hover:bg-[#111164]/90"
+            className="inline-flex items-center gap-2 mt-4 bg-ink text-cream px-4 py-2 rounded-md text-[13px] hover:bg-ink/90"
           >
             Importar dados
           </Link>
@@ -212,7 +212,7 @@ export default function ActionListCard({ current, transactions }) {
   return (
     <article className="relative h-full flex flex-col pb-12">
       <div className="font-semibold mb-4">Plano de Ação</div>
-      <div className="flex -mx-6 md:mx-0 w-[calc(100%+48px)] md:w-full border-b dark:border-[#15152f]">
+      <div className="flex -mx-6 md:mx-0 w-[calc(100%+48px)] md:w-full border-b dark:border-ink">
         {horizons.map((h) => {
           const active = horizon === h.id;
           const count = grouped[h.id].length;
@@ -221,7 +221,7 @@ export default function ActionListCard({ current, transactions }) {
               key={h.id}
               onClick={() => setHorizon(h.id)}
               className={`flex flex-col md:flex-row items-baseline px-2 md:px-4 pb-2 -mb-px border-b-2 transition-colors ${
-                active ? "border-[#3D24A0] dark:!border-[#96ff7e]" : "hover:"
+                active ? "border-copper dark:!border-copper" : "hover:"
               }`}
             >
               <span className="text-sm leading-[1.2]">

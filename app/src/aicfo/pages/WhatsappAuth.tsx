@@ -39,14 +39,14 @@ export default function WhatsappAuth() {
   }, [token]);
 
   return (
-    <div className="min-h-screen bg-[#0b0918] flex items-center justify-center px-6">
+    <div className="min-h-screen bg-night flex items-center justify-center px-6">
       <div className="w-full max-w-[420px] text-center">
         <div className="flex justify-center mb-8">
           <AicfoLogo size={48} />
         </div>
-        <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-lg p-10">
+        <div className="bg-ink/80 border border-ink text-white rounded-lg p-10">
           {status === "loading" && (
-            <p className="text-[15px] text-[#96ff7e] animate-pulse">{message}</p>
+            <p className="text-[15px] text-copper animate-pulse">{message}</p>
           )}
           {status === "success" && (
             <>

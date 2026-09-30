@@ -18,7 +18,7 @@ export function AnalysisPicker({ label = "Análise" }: { label?: string }) {
         <select
           value={activeId ?? ""}
           onChange={(e) => setActiveId(e.target.value)}
-          className="appearance-none dark:bg-[#0b0918] border border-[#151132] rounded-md pl-3 pr-8 py-2 text-[13px]  hover:border-[#96ff7e] transition-colors focus:outline-none focus:border-[#96ff7e] cursor-pointer"
+          className="appearance-none dark:bg-night border border-ink rounded-md pl-3 pr-8 py-2 text-[13px]  hover:border-copper transition-colors focus:outline-none focus:border-copper cursor-pointer"
         >
           {analyses.map((a) => (
             <option key={a.id} value={a.id}>
@@ -26,7 +26,7 @@ export function AnalysisPicker({ label = "Análise" }: { label?: string }) {
             </option>
           ))}
         </select>
-        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 dark:text-[#96ff7e] pointer-events-none" />
+        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 dark:text-copper pointer-events-none" />
       </div>
     </div>
   );

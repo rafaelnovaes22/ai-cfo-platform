@@ -105,7 +105,7 @@ export function TransactionModal({ open, onClose, onSubmit, initial }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#111164]/40 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm px-4"
       onClick={onClose}
     >
       <div
@@ -117,7 +117,7 @@ export function TransactionModal({ open, onClose, onSubmit, initial }: Props) {
             {initial ? "Editar lançamento" : "Novo lançamento"}
           </h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-cream-deep">
-            <X className="h-4 w-4 text-[#96ff7e]" />
+            <X className="h-4 w-4 text-copper" />
           </button>
         </div>
 
@@ -132,7 +132,7 @@ export function TransactionModal({ open, onClose, onSubmit, initial }: Props) {
               className={`py-1.5 rounded text-[12.5px] transition-colors ${
                 type === "expense"
                   ? "bg-card  shadow-sm"
-                  : "text-[#96ff7e] hover:"
+                  : "text-copper hover:"
               }`}
             >
               Despesa
@@ -146,7 +146,7 @@ export function TransactionModal({ open, onClose, onSubmit, initial }: Props) {
               className={`py-1.5 rounded text-[12.5px] transition-colors ${
                 type === "income"
                   ? "bg-card  shadow-sm"
-                  : "text-[#96ff7e] hover:"
+                  : "text-copper hover:"
               }`}
             >
               Receita
@@ -223,14 +223,14 @@ export function TransactionModal({ open, onClose, onSubmit, initial }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 h-9 rounded-md text-[13px] text-[#96ff7e] hover: hover:bg-cream-deep transition-colors"
+              className="px-4 h-9 rounded-md text-[13px] text-copper hover: hover:bg-cream-deep transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 h-9 rounded-md bg-[#111164] text-cream text-[13px] font-medium hover:bg-[#111164]/90 transition-colors disabled:opacity-60"
+              className="px-4 h-9 rounded-md bg-ink text-cream text-[13px] font-medium hover:bg-ink/90 transition-colors disabled:opacity-60"
             >
               {submitting ? "Salvando…" : "Salvar"}
             </button>
@@ -252,7 +252,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[12px] text-[#96ff7e]">{label}</span>
+      <span className="text-[12px] text-copper">{label}</span>
       {children}
       {error && <span className="text-[11.5px] text-red-600">{error}</span>}
     </label>

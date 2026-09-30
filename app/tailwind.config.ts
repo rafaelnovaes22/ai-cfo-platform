@@ -32,6 +32,7 @@ export default {
         navy: { DEFAULT: "hsl(var(--navy))", soft: "hsl(var(--navy-soft))", foreground: "hsl(var(--navy-foreground))" },
         cream: { DEFAULT: "hsl(var(--cream))", deep: "hsl(var(--cream-deep))" },
         copper: { DEFAULT: "hsl(var(--copper))" },
+        night: { DEFAULT: "hsl(var(--night))" },
         ink: { DEFAULT: "hsl(var(--ink))", soft: "hsl(var(--ink-soft))" },
       },
       borderRadius: {
