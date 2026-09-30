@@ -111,15 +111,13 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`w-full shrink-0 py-2 px-8 items-center bg-transparent md:bg-cream md:dark:bg-[#09080f] flex transition-[width] duration-200 ease-out justify-between`}
+      className={`w-full shrink-0 py-2 px-8 items-center bg-transparent md:bg-cream md:dark:bg-night flex transition-[width] duration-200 ease-out justify-between`}
     >
-      <div className={`py-2 flex items-center`}>
-        <a href="/">
+      <div className={`py-2 flex items-center gap-3`}>
+        <a href="/" aria-label="Aicfo, início">
           <AicfoLogo size={32} />
         </a>
-        <h1 className="hidden md:flex whitespace-nowrap ml-8 pl-8 py-2 border-l border-1 border-[#245fff]/30 text-xl">
-          Hub de Análises
-        </h1>
+        <span className="eyebrow hidden md:inline">Painel do CFO</span>
       </div>
 
       <div className="md:hidden flex items-center gap-3">
@@ -137,7 +135,7 @@ export function Sidebar() {
           menuOpen
             ? "opacity-100 left-0 right-12"
             : "-left-[100%] right-auto opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto"
-        } flex flex-col transition-all duration-200 ease-out fixed md:static top-0 bottom-0 z-[150] md:p-0 bg-cream dark:bg-[#09080f] md:flex md:flex-row md:gap-4 md:items-center`}
+        } flex flex-col transition-all duration-200 ease-out fixed md:static top-0 bottom-0 z-[150] md:p-0 bg-cream dark:bg-night md:flex md:flex-row md:gap-4 md:items-center`}
       >
         <X
           className="absolute top-4 right-4 md:hidden h-6 w-6 cursor-pointer"
@@ -160,7 +158,7 @@ export function Sidebar() {
                 <>
                   <route.icon
                     className={`h-[22px] w-[22px] md:h-[15px] md:w-[15px] shrink-0 ${
-                      isActive ? "text-[#3D24A0] dark:text-[#96ff7e]" : ""
+                      isActive ? "text-copper dark:text-copper" : ""
                     }`}
                     strokeWidth={1.75}
                   />
@@ -178,7 +176,7 @@ export function Sidebar() {
                     )}
                   </span>
                   <span
-                    className={`bg-[#3D24A0] dark:bg-[#96ff7e] rounded rounded-r absolute h-full w-1 transition-all duration-300 group-hover:right-0 ${
+                    className={`bg-copper dark:bg-copper rounded rounded-r absolute h-full w-1 transition-all duration-300 group-hover:right-0 ${
                       isActive ? "right-0" : "-right-1 bg-white"
                     }`}
                   ></span>
@@ -197,7 +195,7 @@ export function Sidebar() {
                 ? "Exportar DRE da análise ativa"
                 : "Selecione uma análise para exportar"
             }
-            className="hidden md:flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-md text-white bg-[#3D24A0] dark:bg-[#245fff] text-[12.5px] hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="hidden md:flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-md bg-copper text-ink text-[12.5px] font-medium hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {exporting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -208,13 +206,13 @@ export function Sidebar() {
           </button>
           <div
             onClick={handleThemeToggle}
-            className="relative w-18 flex overflow-hidden cursor-pointer items-center mx-2 gap-4 px-3 py-2 rounded-full border border-[#3D24A0] dark:border-[#245fff]"
+            className="relative w-18 flex overflow-hidden cursor-pointer items-center mx-2 gap-4 px-3 py-2 rounded-full border border-copper dark:border-copper"
           >
             <Sun className="relative z-10 w-4 h-4 min-w-4 min-h-4 pointer-events-none text-white dark:text-inherit" />
             <Moon className="relative z-10 w-4 h-4 min-w-4 min-h-4 pointer-events-none" />
             <span className="sr-only pointer-events-none">Toggle theme</span>
             <span
-              className={`absolute pointer-events-none transition-all duration-300 z-1 top-0 h-full w-1/2 bg-[#3D24A0] dark:bg-[#245fff] ${
+              className={`absolute pointer-events-none transition-all duration-300 z-1 top-0 h-full w-1/2 bg-copper dark:bg-copper ${
                 theme === "dark" ? "right-0 left-auto" : "left-0 right-auto"
               }`}
             ></span>
@@ -229,12 +227,12 @@ export function Sidebar() {
               {initials || "?"}
             </button>
             {open && (
-              <div className="absolute top-auto bottom-[36px] md:bottom-auto right-auto md:right-0 mt-2 w-56 bg-card dark:bg-[#1a1a40] rounded-md shadow-md py-1 z-30">
+              <div className="absolute top-auto bottom-[36px] md:bottom-auto right-auto md:right-0 mt-2 w-56 bg-card dark:bg-night rounded-md shadow-md py-1 z-30">
                 {configRoutes.map((route) => (
                   <Link
                     key={route.to}
                     to={route.to}
-                    className="hidden group md:flex items-center border-b border-border dark:border-[#15152f] gap-2.5 px-3 py-2 rounded-md text-[12.5px] transition-colors cursor-pointer hover:bg-[#3D24A0]/10 dark:hover:bg-[#245fff]/10"
+                    className="hidden group md:flex items-center border-b border-border dark:border-ink gap-2.5 px-3 py-2 rounded-md text-[12.5px] transition-colors cursor-pointer hover:bg-copper/10 dark:hover:bg-copper/10"
                     onClick={() => setOpen(false)}
                   >
                     <route.icon
@@ -248,7 +246,7 @@ export function Sidebar() {
                   <div className="text-[12.5px] truncate">
                     {user?.role ?? "—"}
                   </div>
-                  <div className="text-[11.5px] text-[#96ff7e] truncate">
+                  <div className="text-[11.5px] text-copper truncate">
                     {user?.tenantId ?? ""}
                   </div>
                 </div>

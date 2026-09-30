@@ -8,12 +8,12 @@ export default function SubscriberOnly() {
   const firstName = user?.name?.trim().split(/\s+/)[0] ?? "";
 
   return (
-    <div className="min-h-screen bg-[#0b0918] flex items-center justify-center px-6 py-12">
+    <div className="min-h-screen bg-night flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-[440px] text-center">
         <div className="flex justify-center mb-8">
           <AicfoLogo size={48} />
         </div>
-        <div className="bg-[#171132]/80 border border-[#15152f] text-white rounded-lg p-10">
+        <div className="bg-ink/80 border border-ink text-white rounded-lg p-10">
           <div className="text-4xl mb-4">🔒</div>
           <h1 className="text-[20px] font-medium mb-2">
             {firstName ? `${firstName}, sua conta está pronta` : "Sua conta está pronta"}
@@ -30,13 +30,13 @@ export default function SubscriberOnly() {
             href="https://wa.me/551153047368"
             target="_blank"
             rel="noopener noreferrer"
-            className="block h-10 leading-10 rounded-md bg-[#111164] text-cream text-[13.5px] font-medium hover:bg-[#111164]/90 transition-colors mb-3"
+            className="block h-10 leading-10 rounded-md bg-ink text-cream text-[13.5px] font-medium hover:bg-ink/90 transition-colors mb-3"
           >
             Falar com o time
           </a>
           <button
             onClick={() => signOut()}
-            className="text-[12.5px] text-[#96ff7e] underline-offset-2 hover:underline"
+            className="text-[12.5px] text-copper underline-offset-2 hover:underline"
           >
             Sair
           </button>

@@ -78,7 +78,7 @@ export default function NotificationsConfig() {
       </header>
       <div
         id="tabs"
-        className="border-b-2 border-gray-200 dark:border-[#15152f] flex items-end"
+        className="border-b-2 border-gray-200 dark:border-ink flex items-end"
       >
         {/* <Link
           to="/config/usuario"
@@ -86,11 +86,11 @@ export default function NotificationsConfig() {
         >
           Dados do usuário
         </Link> */}
-        <span className="px-6 -mb-0.5 cursor-pointer text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-200 border-b-2 border-[#3D24A0] hover:border-gray-300 dark:hover:border-gray-600 pb-4">
+        <span className="px-6 -mb-0.5 cursor-pointer text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-200 border-b-2 border-copper hover:border-gray-300 dark:hover:border-gray-600 pb-4">
           Notificações
         </span>
       </div>
-      <div className="animate-fade-up rounded-lg bg-popover dark:bg-[#15152f] p-6">
+      <div className="animate-fade-up rounded-lg bg-popover dark:bg-ink p-6">
         <div className="space-y-6">
           <div className="space-y-2">
             <h2 className="text-lg font-semibold leading-none tracking-tight">
@@ -118,7 +118,7 @@ export default function NotificationsConfig() {
                 onChange={(e) =>
                   setValues({ ...values, phone: e.target.value })
                 }
-                className="auth-input ! !bg-[#0b0918] !text-white !border !border-[#171132]"
+                className="auth-input ! !bg-night !text-white !border !border-ink"
                 autoComplete="phone"
                 format="(##) #####-####" // Máscara para números de 9 dígitos
                 mask="_" // Opcional: exibe underscores enquanto digita
@@ -145,7 +145,7 @@ export default function NotificationsConfig() {
             <button
               type="submit"
               disabled={status.type === "saving"}
-              className="inline-flex mt-6 items-center justify-center rounded-md bg-[#3D24A0] px-4 py-2 text-sm font-medium text-white hover:bg-[#3D24A0]/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex mt-6 items-center justify-center rounded-md bg-copper px-4 py-2 text-sm font-medium text-white hover:bg-copper/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {status.type === "saving" ? "Salvando..." : "Salvar configurações"}
             </button>

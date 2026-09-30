@@ -88,7 +88,7 @@ export default function Dashboard() {
   if (analysesLoading && analyses.length === 0) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
-        <div className="animate-pulse text-[13px] dark:text-[#96ff7e]">
+        <div className="animate-pulse text-[13px] dark:text-copper">
           Carregando…
         </div>
       </div>
@@ -101,22 +101,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 relative">
-      <header className="animate-fade-up flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl tracking-tight  max-w-2xl">
-            {activeAnalysis ? activeAnalysis.name : "Suas análises financeiras"}
-          </h1>
-          <p className=" mt-2 text-sm opacity-65">
-            {analyses.length === 0
-              ? analysesLoading
-                ? "Carregando…"
-                : "Crie sua primeira análise importando dados ou cadastrando lançamentos."
-              : `${analyses.length} ${
-                  analyses.length === 1 ? "análise" : "análises"
-                } no total. Selecione uma abaixo para ver os detalhes.`}
-          </p>
-        </div>
-        <div></div>
+      <header className="animate-fade-up">
+        <p className="eyebrow mb-3">Visão geral</p>
+        <h1 className="font-serif text-[32px] md:text-[40px] leading-[1.05] tracking-tight max-w-2xl">
+          {activeAnalysis ? activeAnalysis.name : "Suas análises financeiras"}
+        </h1>
+        <p className="mt-3 text-[15px] opacity-65">
+          {analyses.length === 0
+            ? analysesLoading
+              ? "Carregando…"
+              : "Crie sua primeira análise importando dados ou cadastrando lançamentos."
+            : `${analyses.length} ${
+                analyses.length === 1 ? "análise" : "análises"
+              } no total. Selecione uma abaixo para ver os detalhes.`}
+        </p>
       </header>
 
       {analyses.length === 0 && !analysesLoading && (
@@ -124,21 +122,14 @@ export default function Dashboard() {
           <div className="relative z-[1] animate-fade-up">
             <EmptyState userName={userName} />
           </div>
-          <div className="absolute inset-0 bg-cream/80 dark:bg-[#0b0918]/80 -z-1 blur-2xl"></div>
+          <div className="absolute inset-0 bg-cream/80 dark:bg-night/80 -z-1 blur-2xl"></div>
         </div>
       )}
       <div
         className={`flex flex-wrap -mx-4 md:mx-0 gap-4 ${analyses.length === 0 && !analysesLoading ? "blur-md pointer-events-none max-h-[calc(100vh-300px)] md:max-h-[calc(100vh-370px)] overflow-hidden opacity-50" : ""}`}
       >
-        {current && trend?.length > 1 && (
-          <div className="w-full">
-            {/* trend já vem em reais (normalizado em api.analyses.trend). */}
-            <MonthlyViewChart chartData={trend} />
-          </div>
-        )}
-
         {current && composition && (
-          <div className="relative bg-ink text-cream overflow-hidden rounded-lg py-6 px-6 animate-fade-up delay-1 min-w-full md:min-w-[440px] grow grow-1">
+          <div className="relative bg-ink text-cream overflow-hidden rounded-lg border-t-2 border-t-copper py-6 px-6 animate-fade-up delay-1 min-w-full md:min-w-[440px] grow grow-1">
             <CompositionCard
               current={current}
               composition={composition}
@@ -147,15 +138,24 @@ export default function Dashboard() {
           </div>
         )}
 
+        <DashboardCard className="md:min-w-[490px] grow-[2]">
+          <p className="eyebrow mb-4">01 · Ações do plano</p>
+          <ActionListCard current={current} transactions={transactions} />
+        </DashboardCard>
+
+        {current && trend?.length > 1 && (
+          <div className="w-full">
+            <p className="eyebrow mb-4">02 · Evolução</p>
+            {/* trend já vem em reais (normalizado em api.analyses.trend). */}
+            <MonthlyViewChart chartData={trend} />
+          </div>
+        )}
+
         {current && (
           <DashboardCard className="md:min-w-[490px] md:max-w-[700px] grow-[2]">
             <ResultChart />
           </DashboardCard>
         )}
-
-        <DashboardCard className="md:min-w-[490px] grow-[2]">
-          <ActionListCard current={current} transactions={transactions} />
-        </DashboardCard>
 
         <DashboardCard className="md:min-w-[320px] grow-[1]">
           <CreateAnalysisCard current={current} inputMethods={inputMethods} />
@@ -203,7 +203,7 @@ function EmptyState({ userName }: { userName: string }) {
       </p>
       <Link
         to="/importar"
-        className="inline-flex items-center gap-2 bg-[#111164] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#111164]/90 transition-colors"
+        className="inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-ink/90 transition-colors"
       >
         Trazer meus números
         <ArrowRight className="h-4 w-4" />

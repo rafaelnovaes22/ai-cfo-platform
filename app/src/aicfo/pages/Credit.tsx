@@ -17,7 +17,7 @@ export default function Credit() {
           </div>
           <h1 className="text-2xl leading-[1.05] tracking-tight ">
             Crédito{" "}
-            <span className="ml-4 tracking-wider rounded-full align-middle text-center px-2 py-0.5 text-[9px] font-semibold bg-[#75cf5a] dark:bg-[#0f2707] border border-[#74b64d] dark:border-[#235015] dark:text-[#74b64d]">
+            <span className="ml-4 tracking-wider rounded-full align-middle text-center px-2 py-0.5 text-[9px] font-semibold bg-[#75cf5a] dark:bg-night border border-[#74b64d] dark:border-[#235015] dark:text-[#74b64d]">
               EM BREVE
             </span>
           </h1>

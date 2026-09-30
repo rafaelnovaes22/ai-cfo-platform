@@ -42,7 +42,7 @@ function Bar({ share, type }: { share: number; type: DRELine["type"] }) {
   const tone = toneFor(type);
   const pct = Math.min(Math.max(share, 0), 1) * 100;
   return (
-    <div className="h-1.5 w-full bg-gray-300 dark:bg-[#15152f] rounded-full overflow-hidden">
+    <div className="h-1.5 w-full bg-gray-300 dark:bg-ink rounded-full overflow-hidden">
       <div
         className={`h-full ${tone.bar} rounded-full transition-all duration-500`}
         style={{ width: `${pct}%` }}
@@ -68,7 +68,7 @@ function Row({
 
   if (isResult) {
     return (
-      <div className="bg-gray-200 dark:bg-[#15152f] -mx-6 px-12 py-7 mt-2 -mb-2">
+      <div className="bg-gray-200 dark:bg-ink -mx-6 px-12 py-7 mt-2 -mb-2">
         <div className="flex flex-col items-end">
           <div className="col-span-5  text-[24px] tracking-tight">
             {line.label}
@@ -103,15 +103,15 @@ function Row({
           hasChildren ? "cursor-pointer hover:bg-cream-deep/40" : ""
         } ${
           isSubtotal
-            ? "border-t dark:border-[#15152f] bg-cream-deep/30"
-            : "border-t dark:border-[#15152f]/60"
+            ? "border-t dark:border-ink bg-cream-deep/30"
+            : "border-t dark:border-ink/60"
         }`}
         style={{ paddingLeft: depth * 24 + 16, paddingRight: 16 }}
       >
         <div className="col-span-1 flex items-center gap-1.5">
           {hasChildren && (
             <ChevronRight
-              className={`h-3 w-3 text-[#96ff7e] transition-transform ${
+              className={`h-3 w-3 text-copper transition-transform ${
                 open ? "rotate-90" : ""
               }`}
             />
@@ -165,7 +165,7 @@ function InsightCard({ ins }: { ins: Insight }) {
   }[ins.level];
   return (
     <article
-      className={`rounded-lg border ${conf.border} dark:bg-[#0b0918] p-5`}
+      className={`rounded-lg border ${conf.border} dark:bg-night p-5`}
     >
       <div className="flex items-center gap-2 mb-3">
         <span
@@ -238,7 +238,7 @@ export default function DRE() {
           <select
             value={currentKey ?? ""}
             onChange={(e) => setSelected(e.target.value)}
-            className="dark:bg-[#0b0918] border dark:border-[#151132] rounded-md px-3 py-2 text-[13px]  "
+            className="dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[13px]  "
           >
             {months.map((k) => (
               <option key={k} value={k}>
@@ -246,15 +246,15 @@ export default function DRE() {
               </option>
             ))}
           </select>
-          <div className="inline-flex rounded-md border dark:border-[#151132] dark:bg-[#0b0918] p-0.5">
+          <div className="inline-flex rounded-md border dark:border-ink dark:bg-night p-0.5">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setView(t.id)}
                 className={`px-3 py-1.5 text-[12px] rounded-[4px] transition-colors ${
                   view === t.id
-                    ? "bg-gray-300 dark:bg-[#15152f] dark:text-cream"
-                    : "dark:text-[#96ff7e] hover:bg-cream-deep"
+                    ? "bg-gray-300 dark:bg-ink dark:text-cream"
+                    : "dark:text-copper hover:bg-cream-deep"
                 }`}
               >
                 {t.label}
@@ -264,8 +264,8 @@ export default function DRE() {
         </div>
       </header>
 
-      <section className="animate-fade-up delay-1 dark:bg-[#0b0918] border dark:border-[#151132] rounded-lg overflow-hidden shadow-soft">
-        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-200 dark:bg-[#15152f]/60 border-b dark:border-[#151132]">
+      <section className="animate-fade-up delay-1 dark:bg-night border dark:border-ink rounded-lg overflow-hidden shadow-soft">
+        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-200 dark:bg-ink/60 border-b dark:border-ink">
           <div className="uppercase text-[11px] tracking-widest col-span-1 !opacity-30">
             Tipo
           </div>
@@ -307,19 +307,19 @@ export default function DRE() {
 
 function DREEmpty() {
   return (
-    <div className="dark:bg-[#0b0918] border dark:border-[#151132] rounded-lg p-12 text-center">
+    <div className="dark:bg-night border dark:border-ink rounded-lg p-12 text-center">
       <Inbox
-        className="h-10 w-10 mx-auto dark:text-[#96ff7e] mb-4"
+        className="h-10 w-10 mx-auto dark:text-copper mb-4"
         strokeWidth={1.4}
       />
       <h2 className=" text-[28px] tracking-tight  mb-2">Sem dados ainda</h2>
-      <p className="text-[14px] dark:text-[#96ff7e] max-w-md mx-auto mb-6">
+      <p className="text-[14px] dark:text-copper max-w-md mx-auto mb-6">
         O DRE é montado automaticamente a partir dos seus lançamentos. Importe
         ou adicione manualmente para começar.
       </p>
       <Link
         to="/importar"
-        className="inline-flex items-center gap-2 bg-[#15152f] text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-[#15152f]/90 transition-colors"
+        className="inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-md text-[13.5px] hover:bg-ink/90 transition-colors"
       >
         Importar dados
       </Link>

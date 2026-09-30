@@ -51,7 +51,7 @@ export default function ResetPassword() {
         </div>
         <div className="bg-card border border-border rounded-lg p-8">
           <h1 className="text-[20px] font-medium  mb-1">Redefinir senha</h1>
-          <p className="text-[13px] dark:text-[#96ff7e] mb-6">
+          <p className="text-[13px] dark:text-copper mb-6">
             Escolha uma nova senha pra sua conta.
           </p>
 
@@ -62,7 +62,7 @@ export default function ResetPassword() {
           ) : (
             <form onSubmit={submit} className="flex flex-col gap-3.5">
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] dark:text-[#96ff7e]">
+                <span className="text-[12px] dark:text-copper">
                   Nova senha
                 </span>
                 <input
@@ -74,7 +74,7 @@ export default function ResetPassword() {
                 />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] dark:text-[#96ff7e]">
+                <span className="text-[12px] dark:text-copper">
                   Confirme a senha
                 </span>
                 <input
@@ -88,7 +88,7 @@ export default function ResetPassword() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 h-10 rounded-md bg-[#111164] text-cream text-[13.5px] font-medium hover:bg-[#111164]/90 transition-colors disabled:opacity-60"
+                className="mt-2 h-10 rounded-md bg-ink text-cream text-[13.5px] font-medium hover:bg-ink/90 transition-colors disabled:opacity-60"
               >
                 {submitting ? "Aguarde…" : "Atualizar senha"}
               </button>

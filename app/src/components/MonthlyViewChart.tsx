@@ -238,7 +238,7 @@ export default function MonthlyViewChart({
   chartData?: TrendPoint[];
 }) {
   return (
-    <article className="relative h-full grid grid-cols-12 mb-4 border-b-2 border-[#15152f]/10 dark:border-white/10">
+    <article className="relative h-full grid grid-cols-12 mb-4 border-b-2 border-ink/10 dark:border-white/10">
       <div className="col-span-12">
         <div className="font-semibold mb-2">
           Receita mensal (
@@ -268,7 +268,7 @@ export default function MonthlyViewChart({
                 currentData && (
                   <div
                     key={Math.random()}
-                    className={`${chartData[index] ? "" : "hidden"} col-span-1 rounded-lg py-6 overflow-hidden bg-white dark:bg-[#0b0918] border border-[#e5e5e5] shadow-card dark:shadow-none dark:border-[#171132] animate-fade-up delay-1`}
+                    className={`${chartData[index] ? "" : "hidden"} col-span-1 rounded-lg py-6 overflow-hidden bg-white dark:bg-night border border-[#e5e5e5] shadow-card dark:shadow-none dark:border-ink animate-fade-up delay-1`}
                   >
                     <div
                       className={`min-w-[1400px] md:min-w-[100vw] h-18 px-0 md:px-20 -ml-2 md:ml-[-88px] absolute inset-0 top-12 -left-[calc((100%*${index})+(8px*${index}))]`}

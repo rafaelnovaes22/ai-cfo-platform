@@ -38,7 +38,7 @@ export default function LoanTable() {
         </h2>
       </div>
       <div className="w-full overflow-auto">
-        <div className="min-w-[1400px] w-full -mx-6 overflow-hidden divide-y dark:divide-[#0b0918]/50">
+        <div className="min-w-[1400px] w-full -mx-6 overflow-hidden divide-y dark:divide-night/50">
           <div
             className={`grid grid-cols-12 items-center gap-2 px-6 py-4 transition-colors`}
           >

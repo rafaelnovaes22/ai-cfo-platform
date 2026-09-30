@@ -118,7 +118,7 @@ export default function Transactions() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar descrição..."
-            className="w-full dark:bg-[#0b0918] border dark:border-[#171132] rounded-md pl-9 pr-3 py-2 text-[13px] focus:outline-none focus:border-white/60"
+            className="w-full dark:bg-night border dark:border-ink rounded-md pl-9 pr-3 py-2 text-[13px] focus:outline-none focus:border-white/60"
           />
         </div>
         <Select
@@ -160,9 +160,9 @@ export default function Transactions() {
         <SummaryCard label="Saldo do período" value={balance} tone="neutral" />
       </section>
 
-      <section className="animate-fade-up delay-2 dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg overflow-hidden">
+      <section className="animate-fade-up delay-2 dark:bg-night border dark:border-ink rounded-lg overflow-hidden">
         <table className="w-full text-[13px]">
-          <thead className="bg-gray-200 dark:bg-[#15152f] border-b dark:border-[#171132]">
+          <thead className="bg-gray-200 dark:bg-ink border-b dark:border-ink">
             <tr className="text-left">
               <th className="uppercase text-[11px] tracking-widest !opacity-30 px-5 py-3 font-normal w-[110px]">
                 Data
@@ -185,10 +185,10 @@ export default function Transactions() {
             {filtered.map((t) => (
               <tr
                 key={t.id}
-                className={`border-b dark:border-[#171132]/60 last:border-0 hover:bg-[#15152f]/10 transition-colors ${
+                className={`border-b dark:border-ink/60 last:border-0 hover:bg-ink/10 transition-colors ${
                   t.reviewStatus === "needs_review"
                     ? "dark:bg-amber-950/20"
-                    : "dark:bg-[#15152f]/40"
+                    : "dark:bg-ink/40"
                 }`}
               >
                 <td className="px-5 py-3.5 text-[12px] opacity-60">
@@ -207,7 +207,7 @@ export default function Transactions() {
                     <select
                       value={t.rawCategory}
                       onChange={(e) => handleCorrect(t.id, e.target.value)}
-                      className="dark:bg-[#15152f] border dark:border-[#171132] rounded px-2 py-1 text-[11.5px] w-full focus:outline-none focus:border-[#96ff7e]"
+                      className="dark:bg-ink border dark:border-ink rounded px-2 py-1 text-[11.5px] w-full focus:outline-none focus:border-copper"
                     >
                       {BACKEND_CATEGORIES.map((c) => (
                         <option key={c.key} value={c.key}>
@@ -268,7 +268,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="dark:bg-[#0b0918] border dark:border-[#171132] rounded-md px-3 py-2 text-[12.5px] focus:outline-none focus:border-white/60"
+      className="dark:bg-night border dark:border-ink rounded-md px-3 py-2 text-[12.5px] focus:outline-none focus:border-white/60"
     >
       {options.map((o) => (
         <option key={o.v} value={o.v}>
@@ -294,7 +294,7 @@ function SummaryCard({
     neutral: "",
   }[tone];
   return (
-    <div className="dark:bg-[#0b0918] border dark:border-[#171132] rounded-lg p-5">
+    <div className="dark:bg-night border dark:border-ink rounded-lg p-5">
       <div className="uppercase text-[11px] tracking-widest !opacity-30 mb-3">
         {label}
       </div>

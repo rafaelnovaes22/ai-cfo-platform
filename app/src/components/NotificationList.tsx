@@ -12,7 +12,7 @@ export default function NotificationList({
   notifications: Notification[];
 }) {
   return (
-    <div className="flex flex-col gap-2 bg-white dark:bg-[#1a1a40] p-2">
+    <div className="flex flex-col gap-2 bg-white dark:bg-night p-2">
       {notifications.length > 0 ? (
         notifications.map((notification) => (
           <div

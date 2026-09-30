@@ -37,7 +37,7 @@ export function PipelineProgress({ entryCount }: { entryCount?: number }) {
   if (!status || status === "pending") return null;
 
   return (
-    <div className="rounded-xl border dark:border-[#96ff7e]/20 dark:bg-[#0d0d24] p-6 animate-fade-up">
+    <div className="rounded-xl border dark:border-copper/20 dark:bg-night p-6 animate-fade-up">
       <div className="text-[11px] uppercase tracking-widest opacity-40 mb-5">
         {done ? "Análise concluída" : "Gerando análise"}
       </div>
@@ -99,7 +99,7 @@ export function PipelineProgress({ entryCount }: { entryCount?: number }) {
               inteira para começar a revisar. */}
           <Link
             to="/lancamentos"
-            className="mt-6 w-full flex items-center justify-center gap-2 border dark:border-[#96ff7e]/30 text-[#96ff7e] rounded-lg py-2.5 text-[13px] hover:bg-[#96ff7e]/10 transition-colors"
+            className="mt-6 w-full flex items-center justify-center gap-2 border dark:border-copper/30 text-copper rounded-lg py-2.5 text-[13px] hover:bg-copper/10 transition-colors"
           >
             Revisar lançamentos agora <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -112,7 +112,7 @@ export function PipelineProgress({ entryCount }: { entryCount?: number }) {
       {done && (
         <Link
           to="/dre"
-          className="mt-6 w-full flex items-center justify-center gap-2 bg-[#111164] text-white rounded-lg py-2.5 text-[13px] hover:bg-[#1a1a80] transition-colors"
+          className="mt-6 w-full flex items-center justify-center gap-2 bg-ink text-white rounded-lg py-2.5 text-[13px] hover:bg-[#1a1a80] transition-colors"
         >
           Ver análise completa <ArrowRight className="h-3.5 w-3.5" />
         </Link>

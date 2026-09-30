@@ -68,8 +68,8 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream dark:bg-[#0b0918]">
-        <div className="text-[13px] text-[#96ff7e]">Carregando…</div>
+      <div className="flex min-h-screen items-center justify-center bg-cream dark:bg-night">
+        <div className="text-[13px] text-copper">Carregando…</div>
       </div>
     );
   }
@@ -209,7 +209,7 @@ export default function Auth() {
                     type="text"
                     value={form.name}
                     onChange={update("name")}
-                    className="auth-input !border !border-[#171132]"
+                    className="auth-input !border !border-ink"
                     autoComplete="name"
                   />
                 </Field>
@@ -218,7 +218,7 @@ export default function Auth() {
                     type="text"
                     value={form.tenantName}
                     onChange={update("tenantName")}
-                    className="auth-input !border !border-[#171132]"
+                    className="auth-input !border !border-ink"
                     autoComplete="organization"
                     placeholder="Nome da sua empresa"
                   />
@@ -228,7 +228,7 @@ export default function Auth() {
                     type="text"
                     value={form.phone || ""}
                     onChange={update("phone")}
-                    className="auth-input !border !border-[#171132]"
+                    className="auth-input !border !border-ink"
                     autoComplete="phone"
                     format="(##) #####-####" // Máscara para números de 9 dígitos
                     mask="_" // Opcional: exibe underscores enquanto digita
@@ -248,7 +248,7 @@ export default function Auth() {
                 type="email"
                 value={form.email}
                 onChange={update("email")}
-                className="auth-input !border !border-[#171132]"
+                className="auth-input !border !border-ink"
                 autoComplete="email"
               />
             </Field>
@@ -278,7 +278,7 @@ export default function Auth() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 h-10 rounded-md bg-[#111164] text-cream text-[13.5px] font-medium hover:bg-[#111164]/90 transition-colors disabled:opacity-60"
+              className="mt-2 h-10 rounded-md bg-ink text-cream text-[13.5px] font-medium hover:bg-ink/90 transition-colors disabled:opacity-60"
             >
               {submitting
                 ? "Aguarde…"
@@ -352,7 +352,7 @@ function PasswordInput({
         type={show ? "text" : "password"}
         value={value}
         onChange={onChange}
-        className="auth-input !border !border-[#171132] !pr-10 w-full"
+        className="auth-input !border !border-ink !pr-10 w-full"
         autoComplete={autoComplete}
       />
       <button

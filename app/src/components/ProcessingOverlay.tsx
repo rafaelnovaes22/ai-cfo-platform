@@ -33,7 +33,7 @@ export function ProcessingContent({
       className={`flex flex-col items-center justify-center text-center ${className}`}
     >
       <div className="relative mb-6">
-        <Loader2 className="h-10 w-10 animate-spin text-[#111164] dark:text-[#96ff7e]" />
+        <Loader2 className="h-10 w-10 animate-spin text-ink dark:text-copper" />
       </div>
       <div className="space-y-2 animate-fade-up min-w-[300px]">
         <h2 className="text-xl font-medium tracking-tight">{title}</h2>
@@ -49,7 +49,7 @@ export function ProcessingContent({
               key={i}
               className={`h-1 rounded-full transition-all duration-500 ${
                 i === index
-                  ? "w-8 bg-[#111164] dark:bg-[#96ff7e]"
+                  ? "w-8 bg-ink dark:bg-copper"
                   : "w-2 bg-muted opacity-30"
               }`}
             />
@@ -68,7 +68,7 @@ export default function ProcessingOverlay({
   showDots?: boolean;
 }) {
   return (
-    <div className="absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-cream dark:bg-[#0b0918]">
+    <div className="absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-cream dark:bg-night">
       <ProcessingContent title={title} showDots={showDots} />
     </div>
   );
